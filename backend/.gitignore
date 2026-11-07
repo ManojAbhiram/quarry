@@ -8,3 +8,9 @@ venv/
 dist/
 build/
 .pytest_cache/
+
+# SQLite database files
+quarry.db*
+*.db
+*.db-wal
+*.db-shm

@@ -16,6 +16,7 @@ import os
 # Must run before `app.*` is imported anywhere. pytest imports conftest first.
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-used-in-production-0123456789")
 os.environ.setdefault("SERPER_API_KEY", "test-serper-key")
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./quarry_test.db")
 os.environ.setdefault("MONGODB_URL", "mongodb://localhost:27017/quarry_test?authSource=admin")
 os.environ.setdefault("DATABASE_NAME", "quarry_test")
 # Keep Chromium out of CI runs entirely.
@@ -37,3 +38,15 @@ def client():
     from app.main import app
 
     return TestClient(app)
+
+
+@pytest.fixture
+async def db(tmp_path, monkeypatch):
+    """A fresh SQLite database file per test, with tables created."""
+    from app.core.config import settings
+    from app.db import engine
+
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
+    await engine.connect_db()
+    yield
+    await engine.close_db()
