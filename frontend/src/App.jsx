@@ -16,6 +16,7 @@ import RequestDetails from './pages/RequestDetails'
 import Profile from './pages/Profile'
 import Layout from './components/Layout'
 import LeadLists from './pages/LeadLists'
+import UiLab from './pages/UiLab'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -33,6 +34,7 @@ function AppRoutes() {
       <Route path="/register" element={user ? <Navigate to="/lead-requests" replace /> : <Signup />} />
       <Route path="/forgot-password" element={user ? <Navigate to="/lead-requests" replace /> : <ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      {import.meta.env.DEV && <Route path="/ui-lab" element={<UiLab />} />}
       <Route path="/auth/google/callback" element={<GoogleCallback />} />
 
 
