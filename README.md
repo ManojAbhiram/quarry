@@ -28,3 +28,16 @@ npm run dev
 ```
 
 In development the web app also serves a component showcase at `http://localhost:3000/ui-lab`.
+
+## Tests and checks
+
+```bash
+cd apps/api && uv run pytest          # backend tests (pytest is a dev dependency, so plain `uv sync` keeps it)
+cd apps/api && uv run ruff check app  # lint
+cd apps/web && npm run build          # web build
+```
+
+## Colour palettes
+
+The web app ships seven palettes (Quarry, Midnight, Amethyst, Emerald, Sunset, Rosewood, Graphite). Pick one with the
+palette button in the header; it is saved in the browser. Palettes are defined in `apps/web/src/config/palettes.js`.
