@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import hashlib
+import uuid
 from jose import JWTError, jwt
 import bcrypt
 from fastapi import Depends, HTTPException, Request, status
@@ -36,7 +37,10 @@ def create_access_token(user_id: str) -> str:
 
 def create_refresh_token(user_id: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    return jwt.encode({"sub": user_id, "exp": expire, "type": "refresh"}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    # jti makes every refresh token unique: sessions are keyed by the token hash, so two tokens issued for the
+    # same user in the same second must not be identical.
+    claims = {"sub": user_id, "exp": expire, "type": "refresh", "jti": uuid.uuid4().hex}
+    return jwt.encode(claims, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def create_password_reset_token(user_id: str) -> str:

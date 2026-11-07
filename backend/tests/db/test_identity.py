@@ -82,3 +82,16 @@ async def test_connect_db_purges_expired_sessions(db):
     await engine.close_db()
     await engine.connect_db()  # same DATABASE_URL (file persists between connects)
     assert await TABLES["user_sessions"].get(token_hash="stale") is None
+
+
+def test_refresh_tokens_are_unique_even_in_the_same_second():
+    from app.services.auth import create_refresh_token
+
+    assert len({create_refresh_token("u1") for _ in range(20)}) == 20
+
+
+async def test_login_immediately_after_register_succeeds(api):
+    body = {"email": "fast@example.com", "name": "Fast", "password": "Passw0rd!x", "org_name": "Fast", "org_domain": "fast.com"}
+    assert (await api.post("/api/auth/register", json=body)).status_code == 201
+    resp = await api.post("/api/auth/login", json={"email": body["email"], "password": body["password"]})
+    assert resp.status_code == 200, resp.text
