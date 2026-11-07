@@ -5,13 +5,15 @@ Stores and retrieves intent analysis results per lead, including
 signal cache to avoid redundant Serper queries.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 import logging
 
-from app.db.database import get_db
-from app.db.mongo_ids import id_query
+from app.db.models import TABLES
 
 logger = logging.getLogger("app.db.signals")
+
+_leads = TABLES["leads"]
+_cache = TABLES["serper_cache"]
 
 
 async def save_intent_analysis(
@@ -20,9 +22,8 @@ async def save_intent_analysis(
     intent_data: dict,
 ) -> bool:
     """
-    Save intent analysis results to a specific lead in the leads collection.
+    Save intent analysis results to a specific lead in the leads table.
     """
-    db = get_db()
     from app.db.leads import get_normalized_leads_for_request
     leads = await get_normalized_leads_for_request(request_id)
     if not leads or lead_index < 0 or lead_index >= len(leads):
@@ -57,14 +58,11 @@ async def save_intent_analysis(
     }
 
     try:
-        result = await db.leads.update_one(
-            {"request_id": request_id, "url": lead_url},
-            {"$set": update_fields},
-        )
-
-        if result.matched_count > 0:
+        row = await _leads.get(request_id=request_id, url=lead_url)
+        if row:
+            await _leads.update(row["_id"], update_fields)
             logger.info(
-                "Saved intent analysis to leads collection for lead index %d (url=%s) in request %s "
+                "Saved intent analysis to leads table for lead index %d (url=%s) in request %s "
                 "(score=%d, band=%s, signals=%d)",
                 lead_index, lead_url, request_id,
                 intent_data.get("intent_score", 0),
@@ -72,12 +70,11 @@ async def save_intent_analysis(
                 intent_data.get("total_signals", 0),
             )
             return True
-        else:
-            logger.warning(
-                "No lead document found/modified for intent analysis (request=%s, url=%s)",
-                request_id, lead_url,
-            )
-            return False
+        logger.warning(
+            "No lead document found/modified for intent analysis (request=%s, url=%s)",
+            request_id, lead_url,
+        )
+        return False
 
     except Exception as e:
         logger.error("Failed to save intent analysis: %s", e)
@@ -107,22 +104,13 @@ async def cache_serper_result(
     """
     Cache a Serper query result to avoid redundant API calls.
 
-    Results are stored in a dedicated `serper_cache` collection with a TTL.
+    Results are stored in a dedicated `serper_cache` table; entries expire after `ttl_days`.
     """
-    db = get_db()
-
-    cache_doc = {
-        "query": query,
-        "results": results,
-        "created_at": datetime.now(timezone.utc),
-        "expires_at": datetime.now(timezone.utc),  # TTL index handles expiry
-    }
-
+    now = datetime.utcnow()
     try:
-        await db.serper_cache.update_one(
+        await _cache.upsert(
             {"query": query},
-            {"$set": cache_doc},
-            upsert=True,
+            {"results": results, "created_at": now, "expires_at": now + timedelta(days=ttl_days)},
         )
     except Exception as e:
         logger.warning("Failed to cache Serper result: %s", e)
@@ -132,11 +120,9 @@ async def get_cached_serper_result(query: str) -> list[dict] | None:
     """
     Retrieve a cached Serper result if it exists and hasn't expired.
     """
-    db = get_db()
-
     try:
-        doc = await db.serper_cache.find_one({"query": query})
-        if doc:
+        doc = await _cache.get(query=query)
+        if doc and (doc["expires_at"] is None or doc["expires_at"] > datetime.utcnow()):
             return doc.get("results")
     except Exception as e:
         logger.warning("Failed to read Serper cache: %s", e)

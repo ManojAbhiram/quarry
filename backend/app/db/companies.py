@@ -1,12 +1,11 @@
 from datetime import datetime
 from typing import Optional
-import uuid
-from urllib.parse import urlparse
 
 from app.core.logger import logger
 from app.core.utils import extract_canonical_domain
-from app.db.database import get_db
+from app.db.models import TABLES
 
+_companies = TABLES["companies"]
 
 
 async def upsert_company(company_data: dict) -> Optional[str]:
@@ -14,8 +13,6 @@ async def upsert_company(company_data: dict) -> Optional[str]:
     Upsert a company record by canonical_domain.
     Returns the _id of the upserted company, or None if no domain can be derived.
     """
-    db = get_db()
-
     # Derive canonical_domain from website / source_url
     website = (
         company_data.get("website")
@@ -55,30 +52,19 @@ async def upsert_company(company_data: dict) -> Optional[str]:
     if company_data.get("linkedin_id"):
         update_doc["linkedin_id"] = company_data["linkedin_id"]
 
-    existing = await db.companies.find_one({"canonical_domain": canonical_domain})
+    existing = await _companies.get(canonical_domain=canonical_domain)
     if existing:
-        company_id = str(existing["_id"])
-        await db.companies.update_one(
-            {"_id": existing["_id"]},
-            {"$set": update_doc},
-        )
-        logger.info("Updated company for domain %s (id=%s)", canonical_domain, company_id)
-        return company_id
-    else:
-        company_id = str(uuid.uuid4())
-        update_doc["_id"] = company_id
-        update_doc["created_at"] = now
-        await db.companies.insert_one(update_doc)
-        logger.info("Inserted company for domain %s (id=%s)", canonical_domain, company_id)
-        return company_id
+        await _companies.update(existing["_id"], update_doc)
+        logger.info("Updated company for domain %s (id=%s)", canonical_domain, existing["_id"])
+        return existing["_id"]
+    company_id = await _companies.insert({**update_doc, "created_at": now})
+    logger.info("Inserted company for domain %s (id=%s)", canonical_domain, company_id)
+    return company_id
 
 
 async def get_company_by_domain(domain: str) -> Optional[dict]:
-    db = get_db()
-    canonical = extract_canonical_domain(domain)
-    return await db.companies.find_one({"canonical_domain": canonical})
+    return await _companies.get(canonical_domain=extract_canonical_domain(domain))
 
 
 async def get_company_by_id(company_id: str) -> Optional[dict]:
-    db = get_db()
-    return await db.companies.find_one({"_id": company_id})
+    return await _companies.get(_id=str(company_id))

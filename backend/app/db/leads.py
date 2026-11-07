@@ -1,14 +1,17 @@
 from datetime import datetime
-from typing import List
-import uuid
+from typing import List, Optional
+
+from sqlalchemy import func, select
 
 from app.core.logger import logger
-from app.db.database import get_db
-from app.db.mongo_ids import id_query
-from app.db.companies import upsert_company
-from app.db.lead_enrichments import upsert_lead_enrichment
+from app.db import engine as _engine
+from app.db.companies import get_company_by_id, upsert_company
 from app.db.decision_makers import insert_decision_maker_if_new
+from app.db.lead_enrichments import upsert_lead_enrichment
+from app.db.models import TABLES, Lead as LeadRow
 from app.schemas.leads import Lead
+
+_leads = TABLES["leads"]
 
 
 async def process_and_save_standalone_leads(
@@ -41,18 +44,15 @@ async def process_and_save_standalone_leads(
 async def save_leads_to_db(request_id: str, leads: List[Lead]) -> None:
     if not leads:
         return
-    db = get_db()
     now = datetime.utcnow()
     saved = 0
     try:
         for lead in leads:
             d = lead.model_dump(by_alias=True, exclude_none=True)
             url = d.get("url") or ""
-            existing = await db.leads.find_one({"request_id": request_id, "url": url})
-            if existing:
+            if await _leads.get(request_id=request_id, url=url):
                 continue
-            doc = {
-                "_id": str(uuid.uuid4()),
+            await _leads.insert({
                 "request_id": request_id,
                 "user_id": d.get("user_id", ""),
                 "title": d.get("title", ""),
@@ -65,10 +65,9 @@ async def save_leads_to_db(request_id: str, leads: List[Lead]) -> None:
                 "enrichment_status": "pending",
                 "created_at": now,
                 "updated_at": now,
-            }
-            await db.leads.insert_one(doc)
+            })
             saved += 1
-        logger.info("Saved %d standalone leads to leads collection for request %s", saved, request_id)
+        logger.info("Saved %d standalone leads to leads table for request %s", saved, request_id)
     except Exception as e:
         logger.error("Failed to save leads to database: %s", e)
         raise
@@ -81,7 +80,6 @@ async def save_enriched_leads_to_db(
 ) -> None:
     if not enriched:
         return
-    db = get_db()
     now = datetime.utcnow()
 
     for item in enriched:
@@ -112,23 +110,18 @@ async def save_enriched_leads_to_db(
                 "email_verify_reason": item.get("email_verify_reason"),
                 "updated_at": now,
             }
-            existing_lead = await db.leads.find_one({"request_id": request_id, "url": lead_url})
+            existing_lead = await _leads.get(request_id=request_id, url=lead_url)
             if existing_lead:
-                lead_id = str(existing_lead["_id"])
-                await db.leads.update_one({"_id": existing_lead["_id"]}, {"$set": lead_doc})
+                lead_id = existing_lead["_id"]
+                await _leads.update(lead_id, lead_doc)
             else:
-                lead_id = str(uuid.uuid4())
-                lead_doc["_id"] = lead_id
-                lead_doc["created_at"] = now
-                await db.leads.insert_one(lead_doc)
+                lead_id = await _leads.insert({**lead_doc, "created_at": now})
         except Exception as exc:
-            logger.warning("Failed to upsert lead (url=%s) to leads collection: %s", lead_url, exc)
+            logger.warning("Failed to upsert lead (url=%s) to leads table: %s", lead_url, exc)
 
         company_id: str | None = None
         try:
-            # Deduplication check: look up companies collection by canonical domain first.
-            # upsert_company handles this internally (find-then-update-or-insert),
-            # ensuring exactly one company record per canonical domain across all requests.
+            # upsert_company dedupes by canonical domain: exactly one company record per domain across requests.
             company_id = await upsert_company(item)
             if company_id:
                 logger.info("Company dedup check: domain resolved to company_id=%s for url=%s", company_id, lead_url)
@@ -150,6 +143,48 @@ async def save_enriched_leads_to_db(
     logger.info("Saved %d enriched leads for request %s", len(enriched), request_id)
 
 
+async def get_lead_for_user(lead_id: str, user_id: str) -> Optional[dict]:
+    return await _leads.get(_id=str(lead_id), user_id=str(user_id))
+
+
+async def update_lead_fields(lead_id: str, fields: dict) -> Optional[dict]:
+    return await _leads.update(str(lead_id), fields)
+
+
+async def count_leads_for_request(request_id: str) -> int:
+    stmt = select(func.count()).select_from(LeadRow).where(LeadRow.request_id == request_id)
+    async with _engine.session() as s, s.begin():
+        return (await s.execute(stmt)).scalar_one()
+
+
+async def count_enriched_leads_by_request(request_ids: list[str]) -> dict[str, dict]:
+    """
+    Per request id (only those with enriched leads): {count, avg_score, companies, lead_ids, legacy_dm_count}.
+    `legacy_dm_count` counts decision makers embedded in old-style lead documents.
+    """
+    if not request_ids:
+        return {}
+    rows = await _leads.find(LeadRow.request_id.in_(request_ids), LeadRow.enrichment_status == "enriched")
+    out: dict[str, dict] = {}
+    for row in rows:
+        agg = out.setdefault(
+            row["request_id"],
+            {"count": 0, "scores": [], "companies": [], "lead_ids": [], "legacy_dm_count": 0},
+        )
+        agg["count"] += 1
+        if row.get("match_score") is not None:
+            agg["scores"].append(row["match_score"])
+        title = row.get("title")
+        if title is not None and title not in agg["companies"]:
+            agg["companies"].append(title)
+        agg["lead_ids"].append(row["_id"])
+        agg["legacy_dm_count"] += len(row.get("decision_makers") or [])
+    for agg in out.values():
+        scores = agg.pop("scores")
+        agg["avg_score"] = sum(scores) / len(scores) if scores else None
+    return out
+
+
 async def get_normalized_leads_for_request(request_id: str) -> list[dict]:
     """
     Fetch normalized leads joined with enrichment, company, and decision-maker data.
@@ -158,38 +193,38 @@ async def get_normalized_leads_for_request(request_id: str) -> list[dict]:
     from app.db.lead_enrichments import get_enrichment_for_lead
     from app.db.decision_makers import get_decision_makers_for_lead
 
-    db = get_db()
-    raw_leads = await db.leads.find(
-        {"request_id": request_id, "enrichment_status": "enriched"}
-    ).sort("match_score", -1).to_list(length=None)
+    raw_leads = await _leads.find(
+        LeadRow.request_id == request_id,
+        LeadRow.enrichment_status == "enriched",
+        order_by=LeadRow.match_score.desc(),
+    )
 
     if not raw_leads:
         return []
 
     combined = []
     for nl in raw_leads:
-        lead_id = str(nl.get("_id", ""))
-        enrichment = await get_enrichment_for_lead(lead_id) if lead_id else None
+        lead_id = nl["_id"]
+        enrichment = await get_enrichment_for_lead(lead_id)
         company_doc: dict = {}
         if enrichment and enrichment.get("company_id"):
-            company_doc = await db.companies.find_one({"_id": enrichment["company_id"]}) or {}
+            company_doc = await get_company_by_id(enrichment["company_id"]) or {}
 
-        dms = []
-        if lead_id:
-            raw_dms = await get_decision_makers_for_lead(lead_id)
-            dms = [
-                {
-                    "name": d.get("name"),
-                    "title": d.get("title"),
-                    "linkedin_url": d.get("linkedin_url"),
-                    "email": d.get("email"),
-                    "snippet": d.get("snippet"),
-                    "recent_activity_summary": d.get("recent_activity_summary"),
-                    "recent_posts": d.get("recent_posts") or [],
-                }
-                for d in raw_dms
-            ]
+        raw_dms = await get_decision_makers_for_lead(lead_id)
+        dms = [
+            {
+                "name": d.get("name"),
+                "title": d.get("title"),
+                "linkedin_url": d.get("linkedin_url"),
+                "email": d.get("email"),
+                "snippet": d.get("snippet"),
+                "recent_activity_summary": d.get("recent_activity_summary"),
+                "recent_posts": d.get("recent_posts") or [],
+            }
+            for d in raw_dms
+        ]
 
+        score = nl.get("match_score")
         combined.append({
             "id": lead_id,
             "_id": lead_id,
@@ -200,7 +235,7 @@ async def get_normalized_leads_for_request(request_id: str) -> list[dict]:
             "phone": nl.get("phone"),
             "email_verified": nl.get("email_verified"),
             "email_confidence": nl.get("email_confidence"),
-            "match_score": str(nl.get("match_score", "0")),
+            "match_score": str(score if score is not None else "0"),
             "snippet": nl.get("snippet"),
             "type": nl.get("lead_type", "enriched"),
             "company_name": company_doc.get("company_name") or nl.get("title"),

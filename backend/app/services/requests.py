@@ -3,7 +3,8 @@ from datetime import datetime
 from fastapi import HTTPException
 
 from app.db import requests as db
-from app.db.database import get_db
+from app.db.decision_makers import count_decision_makers_by_lead
+from app.db.leads import count_enriched_leads_by_request
 from app.db.product_intake import get_product_intakes_by_request_ids, upsert_product_intake
 from app.db.icp_profiles import get_icp_profiles_by_request_ids, upsert_icp_profile
 from app.schemas.requests import LeadRequestOut, StatsOut, request_to_out
@@ -31,7 +32,6 @@ async def create_request(user_id, org_id, body) -> dict:
 
 async def _fetch_enrich_map(request_ids: list[str]) -> dict[str, dict]:
     """Batch-fetch product_intake, icp_profiles, and leads counts for a list of request IDs."""
-    _db = get_db()
     intake_map: dict = {}
     icp_map: dict = {}
     counts_map: dict = {}
@@ -45,31 +45,15 @@ async def _fetch_enrich_map(request_ids: list[str]) -> dict[str, dict]:
     for rid, icp in (await get_icp_profiles_by_request_ids(request_ids)).items():
         icp_map[rid] = {k: v for k, v in icp.items() if k not in ("_id", "request_id", "generated_at", "created_at", "updated_at", "queries")}
 
-    async for agg in _db.leads.aggregate([
-        {"$match": {"request_id": {"$in": request_ids}, "enrichment_status": "enriched"}},
-        {"$group": {
-            "_id": "$request_id",
-            "count": {"$sum": 1},
-            "avg_score": {"$avg": "$match_score"},
-            "companies": {"$addToSet": "$title"},
-            "lead_ids": {"$push": {"$toString": "$_id"}},
-            "legacy_dm_count": {"$sum": {"$size": {"$ifNull": ["$decision_makers", []]}}},
-        }},
-    ]):
-        counts_map[agg["_id"]] = agg
+    counts_map = await count_enriched_leads_by_request(request_ids)
 
     all_lead_ids = []
     for agg in counts_map.values():
         all_lead_ids.extend(agg.get("lead_ids", []))
 
     if all_lead_ids:
-        dm_counts = {}
-        async for dm_agg in _db.decision_makers.aggregate([
-            {"$match": {"lead_id": {"$in": all_lead_ids}}},
-            {"$group": {"_id": "$lead_id", "count": {"$sum": 1}}}
-        ]):
-            dm_counts[dm_agg["_id"]] = dm_agg["count"]
-            
+        dm_counts = await count_decision_makers_by_lead(all_lead_ids)
+
         for agg in counts_map.values():
             req_dm_count = agg.get("legacy_dm_count", 0)
             for lid in agg.get("lead_ids", []):

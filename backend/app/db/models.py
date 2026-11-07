@@ -102,8 +102,7 @@ class LeadEnrichment(_Doc, Base):
 class DecisionMaker(_Doc, Base):
     __tablename__ = "decision_makers"
     lead_id: Mapped[str | None] = _s(index=True)
-    request_id: Mapped[str | None] = _s(index=True)
-
+    
 
 class Company(_Doc, Base):
     __tablename__ = "companies"

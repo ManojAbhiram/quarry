@@ -1208,13 +1208,12 @@ async def get_decision_makers_service(request_id: str, user_id) -> dict:
 async def get_request_status_summary(request_id: str, user_id) -> dict:
     from fastapi import HTTPException
     from app.db.requests import get_request_status_doc
-    from app.db.database import get_db as _get_db
+    from app.db.leads import count_leads_for_request
     doc = await get_request_status_doc(request_id, user_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Lead request not found")
 
-    _db = _get_db()
-    leads_count = await _db.leads.count_documents({"request_id": request_id})
+    leads_count = await count_leads_for_request(request_id)
     return {
         "request_id": request_id,
         "status": doc.get("status", "Pending"),

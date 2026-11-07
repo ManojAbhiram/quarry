@@ -11,8 +11,8 @@ from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.logger import logger
-from app.db.database import get_db
-from app.db.mongo_ids import id_query
+from app.db.leads import get_lead_for_user, update_lead_fields
+from app.db.requests import get_request_by_id
 from app.db.signals import save_intent_analysis
 from app.db.users import get_user_serper_key
 from app.schemas.leads import LeadsListResponse
@@ -148,7 +148,6 @@ async def analyze_lead_intent(
     Runs all 5 signal sources in parallel (~7-9 Serper queries) and
     returns the intent score, signal timeline, and AI summary.
     """
-    db = get_db()
     user_id = str(current_user["_id"])
 
     serper_api_key = await get_user_serper_key(user_id)
@@ -159,10 +158,7 @@ async def analyze_lead_intent(
         )
     current_serper_key.set(serper_api_key)
 
-    doc = await db.requests.find_one({
-        **id_query("_id", body.request_id),
-        **id_query("user_id", user_id),
-    })
+    doc = await get_request_by_id(body.request_id, user_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Lead request not found")
 
@@ -226,7 +222,6 @@ async def get_lead_intent(
     Returns cached results if the lead has already been analyzed,
     or a minimal response indicating no analysis has been performed yet.
     """
-    db = get_db()
     user_id = str(current_user["_id"])
 
     from app.services.leads import get_leads_for_request
@@ -339,14 +334,8 @@ async def export_competitors(
 ):
     from app.services.competitor_service import get_competitors
 
-    db = get_db()
     user_id = str(current_user["_id"])
-    doc = await db.requests.find_one(
-        {
-            **id_query("_id", request_id),
-            **id_query("user_id", user_id),
-        }
-    )
+    doc = await get_request_by_id(request_id, user_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Lead request not found")
 
@@ -533,10 +522,9 @@ async def verify_and_save_email(
     Verify the email on a specific lead and persist the result.
     Returns verification badge data.
     """
-    db = get_db()
     user_id = str(current_user["_id"])
 
-    lead = await db.leads.find_one({"_id": lead_id, "user_id": user_id})
+    lead = await get_lead_for_user(lead_id, user_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -547,15 +535,12 @@ async def verify_and_save_email(
     result = await verify_email(email)
 
     # Persist verification result on the lead document
-    await db.leads.update_one(
-        {"_id": lead_id},
-        {"$set": {
-            "email_verified": result["verified"],
-            "email_confidence": result["confidence"],
-            "email_verify_method": result["method"],
-            "email_verify_reason": result["reason"],
-        }},
-    )
+    await update_lead_fields(lead_id, {
+        "email_verified": result["verified"],
+        "email_confidence": result["confidence"],
+        "email_verify_method": result["method"],
+        "email_verify_reason": result["reason"],
+    })
 
     return result
 
