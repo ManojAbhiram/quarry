@@ -1,0 +1,292 @@
+# Quarry backend pipeline: lint -> test -> build image -> scan -> deploy.
+#
+# Deploy strategy (deliberate): this pipeline does NOT `kubectl apply` manifests.
+# It only patches the running Deployment's image via `kubectl set image`. The
+# checked-in manifests were found to be stale relative to the live cluster (they
+# declared Service port 8000 while the live Gateway HTTPRoute resolves against
+# 8080), so a blind apply would have broken production routing. Manifest changes
+# go through the infra repo's manual apply job instead. `kubectl set image`
+# cannot touch Services, ConfigMaps or routing.
+
+stages:
+  - lint
+  - test
+  - build
+  - scan
+  - deploy
+
+variables:
+  # ── Repo-specific: correctly lives in version control ─────────────────────
+  # These describe THIS service and change with the code, so keeping them in the
+  # repo makes them reviewable in diffs and reproducible at any commit.
+
+  # Pinned for reproducibility. Matches .python-version (3.13).
+  PYTHON_IMAGE: "python:3.13-slim"
+
+  K8S_NAMESPACE: "quarry"
+  K8S_DEPLOYMENT: "backend"
+  K8S_CONTAINER: "backend"
+  IMAGE_NAME: "quarry/backend"
+
+  # Required by kubectl >= 1.26 against GKE. A technical requirement, not
+  # environment config, so it stays here.
+  USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
+  DOCKER_DRIVER: overlay2
+
+  # Immutable, traceable tag. CI_COMMIT_SHORT_SHA maps a running pod back to a commit.
+  IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+
+  # ── Environment config: set in GitLab CI/CD settings, NOT here ────────────
+  # GCP_SA_KEY, GCP_PROJECT_ID, GKE_CLUSTER, GKE_REGION, REGISTRY_HOST and
+  # AR_REPOSITORY are defined once on the GROUP
+  # (deeptaai/portfolio-projects/quarry) and inherited by backend, frontend and
+  # infra. Previously each pipeline hardcoded its own copy, so moving the cluster
+  # or region meant editing three repos and risking drift between them.
+  #
+  # IMAGE_REPO is assembled from those group values and resolves to
+  #   asia-south1-docker.pkg.dev/org-infra-471907/ai-works/quarry/backend
+  # The guard below fails the job with a clear message if any piece is missing,
+  # rather than silently pushing to a malformed registry path.
+  IMAGE_REPO: "$REGISTRY_HOST/$GCP_PROJECT_ID/$AR_REPOSITORY/$IMAGE_NAME"
+
+# Hidden key (leading dot) so GitLab does not treat it as a job. Holds a shared
+# shell snippet referenced as a single script step via a YAML anchor.
+.guards:
+  # Fails fast when group-level CI/CD variables are missing or not exposed to this
+  # ref. All six are required even by jobs that only need a subset, because a
+  # half-configured pipeline that fails at deploy is worse than one that fails at
+  # build with an actionable message.
+  require_gcp_vars: &require_gcp_vars |
+    missing=""
+    for v in GCP_SA_KEY GCP_PROJECT_ID GKE_CLUSTER GKE_REGION REGISTRY_HOST AR_REPOSITORY; do
+      val=$(printenv "$v" 2>/dev/null || true)
+      if [ -z "$val" ]; then missing="$missing $v"; fi
+    done
+    if [ -n "$missing" ]; then
+      echo "Missing required CI/CD variable(s):$missing"
+      echo
+      echo "Set them once at GROUP level so all three projects inherit them:"
+      echo "  deeptaai/portfolio-projects/quarry -> Settings -> CI/CD -> Variables"
+      echo
+      echo "If they ARE already set, they are most likely marked Protected while"
+      echo "this ref is not protected. Protect the develop branch and the v* tag"
+      echo "pattern, or Protected variables are never exposed to the job."
+      exit 1
+    fi
+    echo "Required CI/CD variables are present."
+
+default:
+  # Superseded pipelines get cancelled to save runner time. Deploy and rollback
+  # jobs override this to false — cancelling those mid-rollout would leave the
+  # Deployment in a half-updated state.
+  interruptible: true
+
+# ── Reusable Python setup ─────────────────────────────────────────────────────
+.python_base: &python_base
+  image: $PYTHON_IMAGE
+  before_script:
+    - python -m pip install --quiet --upgrade pip
+    - pip install --quiet -r requirements-dev.txt
+  cache:
+    key:
+      files:
+        - requirements-dev.txt
+    paths:
+      - .cache/pip
+
+# ── Lint ──────────────────────────────────────────────────────────────────────
+# Two tiers on purpose. The repo had no lint gate, so the full ruleset reports 65
+# pre-existing findings; blocking on those would leave the pipeline permanently
+# red and force everyone to use --no-verify. The blocking tier is the subset that
+# is green today and only ever catches genuinely broken code.
+lint:blocking:
+  <<: *python_base
+  stage: lint
+  script:
+    # Single-quoted: a bare colon-space inside a double-quoted scalar makes YAML
+    # parse this line as a nested mapping instead of a string.
+    - echo 'Fatal-only gate - syntax errors, undefined names, redefinitions.'
+    - ruff check . --select E9,F821,F811,F822,F823,F631,F632,F702,F706,F707 --output-format concise
+    - echo "Checking formatting drift (report only, does not fail)."
+    - ruff format --check --diff . || true
+
+# Full ruleset (E4,E7,E9,F,B from pyproject.toml). Reports but never blocks.
+# Ratchet: as categories reach zero, move them into lint:blocking's --select.
+lint:advisory:
+  <<: *python_base
+  stage: lint
+  script:
+    - ruff check . --output-format concise --statistics || true
+    - echo "---"
+    - echo "Known pre-existing findings include 8 x F601 duplicate dict keys in"
+    - echo "app/services/tech_stack.py (e.g. SendGrid and Klaviyo are each defined"
+    - echo "twice with DIFFERENT categories, so the first definition is silently"
+    - echo "discarded). These are real bugs, not style noise. See README."
+    - ruff check . --output-format gitlab > gl-code-quality-report.json || true
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
+    expire_in: 1 week
+  allow_failure: true
+
+# ── Test ──────────────────────────────────────────────────────────────────────
+# No MongoDB service is needed: the tests never trigger the FastAPI lifespan hook,
+# so connect_db() is never called. app/core/config.py DOES hard-require SECRET_KEY
+# and SERPER_API_KEY at import time, so tests/conftest.py seeds dummy values before
+# any app import.
+test:pytest:
+  <<: *python_base
+  stage: test
+  script:
+    - pip install --quiet -r requirements.txt
+    - pytest -q --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+    expire_in: 1 week
+
+# ── Build & push ──────────────────────────────────────────────────────────────
+# Uses Docker-in-Docker, which needs a privileged runner. If your runners are
+# unprivileged, swap this job for Kaniko (see README "Unprivileged runners").
+build:image:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  before_script:
+    - *require_gcp_vars
+    # Authenticate to Artifact Registry using the SA key as a Docker password.
+    # Avoids installing the whole gcloud SDK in this job.
+    - cat "$GCP_SA_KEY" | docker login -u _json_key --password-stdin "https://$REGISTRY_HOST"
+  script:
+    - docker pull "$IMAGE_REPO:latest" || echo "No latest tag yet; building without cache."
+    - |
+      docker build \
+        --cache-from "$IMAGE_REPO:latest" \
+        --build-arg BUILDKIT_INLINE_CACHE=1 \
+        --tag "$IMAGE_REPO:$IMAGE_TAG" \
+        --tag "$IMAGE_REPO:latest" \
+        .
+    - docker push "$IMAGE_REPO:$IMAGE_TAG"
+    - docker push "$IMAGE_REPO:latest"
+    # Tag pipelines additionally publish the semver tag.
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        docker tag "$IMAGE_REPO:$IMAGE_TAG" "$IMAGE_REPO:$CI_COMMIT_TAG"
+        docker push "$IMAGE_REPO:$CI_COMMIT_TAG"
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_TAG
+
+# ── Vulnerability scan ────────────────────────────────────────────────────────
+# Advisory: this image bundles Chromium, which reliably carries known CVEs.
+# Blocking on HIGH/CRITICAL would wedge every deploy on day one.
+scan:trivy:
+  stage: scan
+  image:
+    name: aquasec/trivy:0.56.2
+    entrypoint: [""]
+  before_script:
+    - *require_gcp_vars
+    - export GOOGLE_APPLICATION_CREDENTIALS="$GCP_SA_KEY"
+  script:
+    - trivy image --severity HIGH,CRITICAL --exit-code 0 --no-progress "$IMAGE_REPO:$IMAGE_TAG"
+    - trivy image --format template --template "@/contrib/gitlab.tpl" --output gl-container-scanning-report.json "$IMAGE_REPO:$IMAGE_TAG" || true
+  artifacts:
+    reports:
+      container_scanning: gl-container-scanning-report.json
+    expire_in: 1 week
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_TAG
+
+# ── Deploy ────────────────────────────────────────────────────────────────────
+.gcloud_auth: &gcloud_auth
+  image: google/cloud-sdk:alpine
+  before_script:
+    - *require_gcp_vars
+    - gcloud components install kubectl gke-gcloud-auth-plugin --quiet
+    - gcloud auth activate-service-account --key-file="$GCP_SA_KEY"
+    - gcloud config set project "$GCP_PROJECT_ID"
+    - gcloud container clusters get-credentials "$GKE_CLUSTER" --region "$GKE_REGION" --project "$GCP_PROJECT_ID"
+
+.deploy_script: &deploy_script
+  - |
+    echo "Recording current image for rollback reference ..."
+    kubectl -n "$K8S_NAMESPACE" get deployment "$K8S_DEPLOYMENT" \
+      -o jsonpath='{.spec.template.spec.containers[0].image}' || true
+    echo
+  # `--record` is intentionally omitted: it is deprecated and slated for removal
+  # (kubectl warns "Flag --record has been deprecated"). The change-cause
+  # annotation set below records the same provenance in a supported way.
+  - kubectl -n "$K8S_NAMESPACE" set image "deployment/$K8S_DEPLOYMENT" "$K8S_CONTAINER=$IMAGE_REPO:$IMAGE_TAG"
+  - kubectl -n "$K8S_NAMESPACE" annotate "deployment/$K8S_DEPLOYMENT" "kubernetes.io/change-cause=GitLab pipeline $CI_PIPELINE_ID (commit $CI_COMMIT_SHORT_SHA)" --overwrite
+  # Fails the job if the new pods never pass the /api/health readiness probe.
+  - |
+    if ! kubectl -n "$K8S_NAMESPACE" rollout status "deployment/$K8S_DEPLOYMENT" --timeout=300s; then
+      echo "Rollout failed or timed out — rolling back."
+      kubectl -n "$K8S_NAMESPACE" rollout undo "deployment/$K8S_DEPLOYMENT"
+      kubectl -n "$K8S_NAMESPACE" rollout status "deployment/$K8S_DEPLOYMENT" --timeout=300s
+      exit 1
+    fi
+  - kubectl -n "$K8S_NAMESPACE" get pods -l app=backend
+
+# Auto-deploys on every green develop push.
+#
+# WARNING: lead/competitor pipelines run as in-process background tasks, so a
+# rolling deploy kills any run in flight (status is left Pending/Failed in Mongo).
+# Deploy during quiet periods, or move those runs to a queue/worker first.
+deploy:develop:
+  <<: *gcloud_auth
+  stage: deploy
+  # Never cancel a deploy mid-rollout.
+  interruptible: false
+  # Deploying a tag that was never pushed would leave the Deployment pulling a
+  # non-existent image (ImagePullBackOff), so require the build explicitly.
+  needs:
+    - job: build:image
+      artifacts: false
+  script: *deploy_script
+  environment:
+    name: develop
+    url: https://quarry.deeptaai.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+# Production requires an explicit button press.
+deploy:production:
+  <<: *gcloud_auth
+  stage: deploy
+  interruptible: false
+  needs:
+    - job: build:image
+      artifacts: false
+  script: *deploy_script
+  environment:
+    name: production
+    url: https://quarry.deeptaai.com
+  when: manual
+  rules:
+    - if: $CI_COMMIT_TAG
+
+# Manual emergency rollback to the previous ReplicaSet.
+# Deliberately has no `needs`: it must remain runnable even when the build failed.
+rollback:
+  <<: *gcloud_auth
+  stage: deploy
+  interruptible: false
+  needs: []
+  script:
+    - kubectl -n "$K8S_NAMESPACE" rollout undo "deployment/$K8S_DEPLOYMENT"
+    - kubectl -n "$K8S_NAMESPACE" rollout status "deployment/$K8S_DEPLOYMENT" --timeout=300s
+    - kubectl -n "$K8S_NAMESPACE" get pods -l app=backend
+  environment:
+    name: production
+    url: https://quarry.deeptaai.com
+  when: manual
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_TAG

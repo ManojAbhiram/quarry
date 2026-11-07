@@ -1,0 +1,10 @@
+# Dev/CI-only tooling. Never installed into the runtime image.
+#
+# Pinned exactly so a CI run is reproducible and so new ruff releases cannot
+# introduce new findings that fail a previously-green pipeline. Bump
+# deliberately, then re-run `ruff check .` to review any new findings.
+#
+# Install:  pip install -r requirements-dev.txt
+ruff==0.16.1
+pytest==9.1.1
+pytest-asyncio==1.4.0

@@ -1,0 +1,245 @@
+# Quarry frontend pipeline: lint -> build -> image -> scan -> deploy.
+#
+# Deploy strategy matches the backend: this pipeline only patches the running
+# Deployment's image with `kubectl set image`. It never applies manifests, because
+# the checked-in manifests were stale relative to the live cluster (Service port
+# 80 locally vs 8081 in the live Gateway HTTPRoute) and a blind apply would have
+# broken production routing. Manifest changes go through the infra repo.
+
+stages:
+  - lint
+  - build
+  - image
+  - scan
+  - deploy
+
+variables:
+  # ── Repo-specific: correctly lives in version control ─────────────────────
+  # Matches the Dockerfile builder stage (node:20-alpine).
+  NODE_IMAGE: "node:20-alpine"
+
+  K8S_NAMESPACE: "quarry"
+  K8S_DEPLOYMENT: "frontend"
+  K8S_CONTAINER: "frontend"
+  IMAGE_NAME: "quarry/frontend"
+
+  USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
+  DOCKER_DRIVER: overlay2
+  IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+
+  # ── Environment config: set in GitLab CI/CD settings, NOT here ────────────
+  # GCP_SA_KEY, GCP_PROJECT_ID, GKE_CLUSTER, GKE_REGION, REGISTRY_HOST and
+  # AR_REPOSITORY come from GROUP-level variables on
+  # deeptaai/portfolio-projects/quarry, shared by backend, frontend and infra.
+  # Hardcoding them per repo meant three places to edit and silent drift risk.
+  IMAGE_REPO: "$REGISTRY_HOST/$GCP_PROJECT_ID/$AR_REPOSITORY/$IMAGE_NAME"
+
+# Hidden key so GitLab does not treat it as a job.
+.guards:
+  require_gcp_vars: &require_gcp_vars |
+    missing=""
+    for v in GCP_SA_KEY GCP_PROJECT_ID GKE_CLUSTER GKE_REGION REGISTRY_HOST AR_REPOSITORY; do
+      val=$(printenv "$v" 2>/dev/null || true)
+      if [ -z "$val" ]; then missing="$missing $v"; fi
+    done
+    if [ -n "$missing" ]; then
+      echo "Missing required CI/CD variable(s):$missing"
+      echo
+      echo "Set them once at GROUP level so all three projects inherit them:"
+      echo "  deeptaai/portfolio-projects/quarry -> Settings -> CI/CD -> Variables"
+      echo
+      echo "If they ARE already set, they are most likely marked Protected while"
+      echo "this ref is not protected. Protect the develop branch and the v* tag"
+      echo "pattern, or Protected variables are never exposed to the job."
+      exit 1
+    fi
+    echo "Required CI/CD variables are present."
+
+default:
+  # Deploy/rollback jobs override this — see the backend pipeline for rationale.
+  interruptible: true
+
+.node_base: &node_base
+  image: $NODE_IMAGE
+  before_script:
+    # `npm ci` (not `npm install`) so the lockfile is authoritative and the build
+    # is reproducible. It fails loudly if package.json and the lock disagree.
+    - npm ci --no-audit --no-fund
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm
+
+# ── Lint ──────────────────────────────────────────────────────────────────────
+# Blocking tier. eslint.config.js keeps the 94 pre-existing findings at 'warn' and
+# leaves only genuine bug rules at 'error' (no-undef, no-dupe-keys, no-unreachable,
+# no-const-assign, react/jsx-no-undef, react-hooks/rules-of-hooks). Currently
+# 0 errors / 94 warnings, so this passes while still catching broken code.
+lint:blocking:
+  <<: *node_base
+  stage: lint
+  script:
+    # --max-warnings=-1 tolerates warnings; any error still fails the job.
+    - npx eslint . --max-warnings=-1
+
+# Advisory tier: surfaces the warning backlog without blocking.
+lint:advisory:
+  <<: *node_base
+  stage: lint
+  script:
+    - npx eslint . -f stylish || true
+    - |
+      echo "Warning backlog is expected. Categories:"
+      echo "  no-unused-vars (62)  dead imports/vars, tree-shaken by Vite"
+      echo "  no-useless-escape (11)  redundant escapes inside regex [...] classes"
+      echo "  react/no-unescaped-entities (9)  raw apostrophes in JSX"
+      echo "  react-hooks/exhaustive-deps (8)  possible stale closures, needs review"
+      echo "  no-empty (4)"
+  allow_failure: true
+
+# ── Build ─────────────────────────────────────────────────────────────────────
+# Runs the real Vite build before the image build. A broken build fails here in
+# ~20s instead of part-way through a Docker layer.
+build:vite:
+  <<: *node_base
+  stage: build
+  script:
+    - npm run build
+    - test -f dist/index.html || { echo "Build produced no dist/index.html"; exit 1; }
+    - du -sh dist
+  artifacts:
+    paths:
+      - dist
+    expire_in: 1 week
+
+# ── Image ─────────────────────────────────────────────────────────────────────
+# Needs a privileged runner for dind. See README for the Kaniko alternative.
+#
+# The Dockerfile rebuilds from source rather than copying the dist/ artifact
+# above, so the image is self-contained and reproducible from the repo alone.
+build:image:
+  stage: image
+  image: docker:27
+  services:
+    - docker:27-dind
+  before_script:
+    - *require_gcp_vars
+    - cat "$GCP_SA_KEY" | docker login -u _json_key --password-stdin "https://$REGISTRY_HOST"
+  script:
+    - docker pull "$IMAGE_REPO:latest" || echo "No latest tag yet; building without cache."
+    - |
+      docker build \
+        --cache-from "$IMAGE_REPO:latest" \
+        --build-arg BUILDKIT_INLINE_CACHE=1 \
+        --tag "$IMAGE_REPO:$IMAGE_TAG" \
+        --tag "$IMAGE_REPO:latest" \
+        .
+    - docker push "$IMAGE_REPO:$IMAGE_TAG"
+    - docker push "$IMAGE_REPO:latest"
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        docker tag "$IMAGE_REPO:$IMAGE_TAG" "$IMAGE_REPO:$CI_COMMIT_TAG"
+        docker push "$IMAGE_REPO:$CI_COMMIT_TAG"
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_TAG
+
+# ── Scan ──────────────────────────────────────────────────────────────────────
+scan:trivy:
+  stage: scan
+  image:
+    name: aquasec/trivy:0.56.2
+    entrypoint: [""]
+  before_script:
+    - *require_gcp_vars
+    - export GOOGLE_APPLICATION_CREDENTIALS="$GCP_SA_KEY"
+  script:
+    - trivy image --severity HIGH,CRITICAL --exit-code 0 --no-progress "$IMAGE_REPO:$IMAGE_TAG"
+    - trivy image --format template --template "@/contrib/gitlab.tpl" --output gl-container-scanning-report.json "$IMAGE_REPO:$IMAGE_TAG" || true
+  artifacts:
+    reports:
+      container_scanning: gl-container-scanning-report.json
+    expire_in: 1 week
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_TAG
+
+# ── Deploy ────────────────────────────────────────────────────────────────────
+.gcloud_auth: &gcloud_auth
+  image: google/cloud-sdk:alpine
+  before_script:
+    - *require_gcp_vars
+    - gcloud components install kubectl gke-gcloud-auth-plugin --quiet
+    - gcloud auth activate-service-account --key-file="$GCP_SA_KEY"
+    - gcloud config set project "$GCP_PROJECT_ID"
+    - gcloud container clusters get-credentials "$GKE_CLUSTER" --region "$GKE_REGION" --project "$GCP_PROJECT_ID"
+
+.deploy_script: &deploy_script
+  - |
+    echo "Current image (rollback reference):"
+    kubectl -n "$K8S_NAMESPACE" get deployment "$K8S_DEPLOYMENT" \
+      -o jsonpath='{.spec.template.spec.containers[0].image}' || true
+    echo
+  # `--record` is omitted deliberately: deprecated and slated for removal. The
+  # change-cause annotation below records provenance in a supported way.
+  - kubectl -n "$K8S_NAMESPACE" set image "deployment/$K8S_DEPLOYMENT" "$K8S_CONTAINER=$IMAGE_REPO:$IMAGE_TAG"
+  - kubectl -n "$K8S_NAMESPACE" annotate "deployment/$K8S_DEPLOYMENT" "kubernetes.io/change-cause=GitLab pipeline $CI_PIPELINE_ID (commit $CI_COMMIT_SHORT_SHA)" --overwrite
+  - |
+    if ! kubectl -n "$K8S_NAMESPACE" rollout status "deployment/$K8S_DEPLOYMENT" --timeout=300s; then
+      echo "Rollout failed or timed out — rolling back."
+      kubectl -n "$K8S_NAMESPACE" rollout undo "deployment/$K8S_DEPLOYMENT"
+      kubectl -n "$K8S_NAMESPACE" rollout status "deployment/$K8S_DEPLOYMENT" --timeout=300s
+      exit 1
+    fi
+  - kubectl -n "$K8S_NAMESPACE" get pods -l app=frontend
+
+deploy:develop:
+  <<: *gcloud_auth
+  stage: deploy
+  interruptible: false
+  needs:
+    - job: build:image
+      artifacts: false
+  script: *deploy_script
+  environment:
+    name: develop
+    url: https://quarry.deeptaai.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+deploy:production:
+  <<: *gcloud_auth
+  stage: deploy
+  interruptible: false
+  needs:
+    - job: build:image
+      artifacts: false
+  script: *deploy_script
+  environment:
+    name: production
+    url: https://quarry.deeptaai.com
+  when: manual
+  rules:
+    - if: $CI_COMMIT_TAG
+
+# No `needs`: must stay runnable even when the build failed.
+rollback:
+  <<: *gcloud_auth
+  stage: deploy
+  interruptible: false
+  needs: []
+  script:
+    - kubectl -n "$K8S_NAMESPACE" rollout undo "deployment/$K8S_DEPLOYMENT"
+    - kubectl -n "$K8S_NAMESPACE" rollout status "deployment/$K8S_DEPLOYMENT" --timeout=300s
+    - kubectl -n "$K8S_NAMESPACE" get pods -l app=frontend
+  environment:
+    name: production
+    url: https://quarry.deeptaai.com
+  when: manual
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_TAG

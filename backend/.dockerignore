@@ -1,0 +1,15 @@
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+.pytest_cache
+.ruff_cache
+exports
+*.log
+.DS_Store
+Dockerfile
+.dockerignore
+.env
