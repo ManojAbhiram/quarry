@@ -6,14 +6,14 @@ can *detect* on prospects' websites, which has nothing to do with Quarry's own d
 import subprocess
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+REPO = Path(__file__).resolve().parents[3]
 EXCLUDES = [
     ":!docs",
     ":!*uv.lock",
     ":!*package-lock.json",
-    ":!backend/app/services/tech_stack.py",
-    ":!backend/app/services/careers_tech_stack.py",
-    ":!backend/tests/test_no_mongo.py",
+    ":!apps/api/app/services/tech_stack.py",
+    ":!apps/api/app/services/careers_tech_stack.py",
+    ":!apps/api/tests/test_no_mongo.py",
 ]
 
 

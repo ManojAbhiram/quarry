@@ -79,7 +79,7 @@ Interactive Swagger Docs: `http://localhost:8000/docs`
 ## 📁 Repository Structure
 
 ```text
-backend/
+apps/api/
 ├── app/
 │   ├── api/            # REST API controllers & Auth logic
 │   ├── core/           # Security, Logger, and Pydantic Config
@@ -98,7 +98,7 @@ backend/
 ## 📁 Project Structure
 
 ```text
-backend/
+apps/api/
 ├── app/
 
 ---
@@ -131,7 +131,7 @@ uv add <package-name>
 
 ### Database
 
-Tables are created automatically on startup, and expired login sessions are purged then. The data lives in the file named by `DATABASE_URL` (`backend/quarry.db` by default, git-ignored). Delete the file to reset all data.
+Tables are created automatically on startup, and expired login sessions are purged then. The data lives in the file named by `DATABASE_URL` (`apps/api/quarry.db` by default, git-ignored). Delete the file to reset all data.
 
 ---
 

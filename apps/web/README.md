@@ -71,7 +71,7 @@ Access the dashboard at `http://localhost:5173`
 ## 📁 Workspace Architecture
 
 ```text
-frontend/
+apps/web/
 ├── src/
 │   ├── components/     # High-level layout and global UI primitives
 │   ├── context/        # Business logic providers (Auth, Leads, Theme)

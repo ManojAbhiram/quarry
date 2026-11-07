@@ -3,7 +3,7 @@
 ## 1. Module & File Map
 
 ```
-backend/
+apps/api/
 ├── app/
 │   ├── main.py                   FastAPI app, middleware, lifespan, routers
 │   ├── core/

@@ -1,5 +1,5 @@
 [project]
-name = "backend"
+name = "quarry-api"
 version = "0.1.0"
 description = "Quarry AI-powered B2B Lead Generation Backend"
 readme = "README.md"
