@@ -209,7 +209,6 @@ export const api = {
   createLeadRequest: (data) => request('POST', '/requests', data),
 
 
-  clarifyIntake: (data) => request('POST', '/requests/clarify-intake', data),
   suggestChip: (data) => request('POST', '/requests/suggest-chip', data),
   generateStructuredIcp: (data, requestId) => request('POST', `/requests/generate-icp${requestId ? `?request_id=${encodeURIComponent(requestId)}` : ''}`, data),
   checkIcpConsistency: (data) => request('POST', '/requests/check-consistency', data),

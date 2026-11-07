@@ -13,6 +13,7 @@ async def test_user_json_that_mimics_the_datetime_marker_does_not_break_reads(db
 
 
 async def test_add_leads_to_a_list_deleted_midway_returns_none(db, monkeypatch):
+    await TABLES["leads"].insert({"_id": "l1", "request_id": "r", "user_id": "u1", "url": "https://l1.example.com"})
     lst = await ll.create_lead_list("u1", "A")
     ghost = dict(await TABLES["lead_lists"].get(_id=lst["_id"]))
     await TABLES["lead_lists"].delete(lst["_id"])

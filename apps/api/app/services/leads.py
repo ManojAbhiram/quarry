@@ -19,6 +19,8 @@ import time
 import re
 from urllib.parse import urlparse
 
+import httpx
+
 from app.core.config import settings
 from app.core.logger import logger
 from app.core.utils import (
@@ -38,6 +40,7 @@ from app.db.leads import (
 from app.db.requests import (
     add_queries_to_lead_request,
     get_request_by_id,
+    request_exists,
     update_request_status,
 )
 from app.services.llm import (
@@ -226,8 +229,26 @@ async def _generate_and_store_queries(request_id: str, payload: dict) -> list[st
     return queries
 
 
-async def _fetch_all_serper_results(queries: list[str]) -> list[dict]:
-    """Run all Serper queries concurrently and return a flat list of normalised result dicts."""
+def _explain_serper_error(exc: Exception) -> str:
+    """Turn a Serper failure into something the user can act on."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        if code in (401, 403):
+            return "Serper rejected the API key (HTTP %d). Check or replace your Serper key in Profile." % code
+        if code == 429:
+            return "Serper rate limit or credit quota reached (HTTP 429). Wait a while or top up your Serper plan."
+        return "Serper returned an error (HTTP %d)." % code
+    return "Could not reach Serper (%s)." % type(exc).__name__
+
+
+async def _fetch_all_serper_results(queries: list[str]) -> tuple[list[dict], str | None]:
+    """Run all Serper queries concurrently.
+
+    Returns (results, failure_reason). `failure_reason` is set only when no query returned results and at least one
+    failed, so a bad or exhausted key no longer looks like "no results".
+    """
+    errors: list[str] = []
+
     async def _one(query: str) -> list[dict]:
         try:
             data = await fetch_leads_from_serper(query)
@@ -239,10 +260,12 @@ async def _fetch_all_serper_results(queries: list[str]) -> list[dict]:
             return items
         except Exception as exc:
             logger.warning("Serper error for query '%s': %s", query, exc)
+            errors.append(_explain_serper_error(exc))
             return []
 
     batches = await asyncio.gather(*(_one(q) for q in queries))
-    return [item for batch in batches for item in batch]
+    results = [item for batch in batches for item in batch]
+    return results, (errors[0] if errors and not results else None)
 
 
 async def _expand_directories(directory_items: list[dict]) -> list[dict]:
@@ -749,14 +772,19 @@ async def run_lead_pipeline(request_id: str, request_payload: dict) -> list[dict
     # ── Step 1 & 2: Generate + store queries ─────────────────────────────────
     queries = await _generate_and_store_queries(request_id, request_payload)
     if not queries:
-        await update_request_status(request_id, "Failed")
+        await update_request_status(
+            request_id, "Failed", failure_reason="Could not generate search queries. Check your LLM key and your ideal customer profile."
+        )
         return []
 
     # ── Step 3: Search Serper ─────────────────────────────────────────────────
-    raw_results = await _fetch_all_serper_results(queries)
+    raw_results, serper_failure = await _fetch_all_serper_results(queries)
     if not raw_results:
         logger.warning("No Serper results for request %s", request_id)
-        await update_request_status(request_id, "Failed")
+        await update_request_status(
+            request_id, "Failed",
+            failure_reason=serper_failure or "The search returned no results. Try broadening your ideal customer profile.",
+        )
         return []
 
     # ── Step 4: Deduplicate ───────────────────────────────────────────────────
@@ -857,7 +885,7 @@ async def run_lead_pipeline(request_id: str, request_payload: dict) -> list[dict
             if extra_payload["_extra_queries_round"] <= 1:
                 extra_queries = await _generate_and_store_queries(request_id, extra_payload)
                 if extra_queries:
-                    extra_raw = await _fetch_all_serper_results(extra_queries)
+                    extra_raw, _ = await _fetch_all_serper_results(extra_queries)
                     if extra_raw:
                         extra_unique = _deduplicate_urls(extra_raw)
                         extra_standalone, extra_dirs = await process_serper_results_batch(extra_unique)
@@ -899,6 +927,9 @@ async def run_lead_pipeline(request_id: str, request_payload: dict) -> list[dict
         except Exception as exc:
             logger.warning("Signal enrichment failed for request %s: %s", request_id, exc)
 
+        if not await request_exists(request_id):
+            logger.info("Request %s was deleted while running; discarding its results", request_id)
+            return []
         await save_enriched_leads_to_db(request_id, user_id, enriched)
         logger.info("Saved %d final high-quality enriched leads with decision-makers for request %s", len(enriched), request_id)
 
@@ -909,7 +940,6 @@ async def run_lead_pipeline(request_id: str, request_payload: dict) -> list[dict
     logger.info(
         "Request %s completed in %.2fs — %d enriched leads", request_id, duration, len(enriched)
     )
-    logger.info("Final enriched leads for request %s: %s", request_id, enriched)
     return enriched
 
 
@@ -1004,7 +1034,7 @@ async def run_direct_companies_pipeline(
 
     if not unique_companies:
         logger.warning("No companies provided for direct request %s", request_id)
-        await update_request_status(request_id, "Failed")
+        await update_request_status(request_id, "Failed", failure_reason="No companies were provided.")
         return []
 
     logger.info("Resolving %d companies for direct request %s", len(unique_companies), request_id)
@@ -1013,7 +1043,9 @@ async def run_direct_companies_pipeline(
 
     if not enriched:
         logger.warning("No companies could be resolved for direct request %s", request_id)
-        await update_request_status(request_id, "Failed")
+        await update_request_status(
+            request_id, "Failed", failure_reason="None of the companies could be matched to a website. Check the names and try again."
+        )
         return []
 
     # Build a payload that drives decision-maker role extraction. The existing
@@ -1051,6 +1083,9 @@ async def run_direct_companies_pipeline(
     # Attach email deliverability signals (MX-only, fast) before persisting.
     await _verify_lead_emails(enriched)
 
+    if not await request_exists(request_id):
+        logger.info("Request %s was deleted while running; discarding its results", request_id)
+        return []
     await save_enriched_leads_to_db(request_id, user_id, enriched)
 
     duration = round(time.time() - start_time, 2)
@@ -1076,7 +1111,9 @@ async def run_direct_companies_background(
     except BaseException as exc:  # catches asyncio.CancelledError too
         logger.error("Direct-companies pipeline failed for request %s: %s", request_id, exc, exc_info=True)
         try:
-            await update_request_status(request_id, "Failed")
+            await update_request_status(
+                request_id, "Failed", failure_reason="The run stopped unexpectedly (%s). Please try again." % type(exc).__name__
+            )
         except Exception:
             pass
         # Re-raise CancelledError so the event loop can propagate cancellation correctly.
@@ -1143,7 +1180,9 @@ async def run_pipeline_background(
     except BaseException as exc:  # catches asyncio.CancelledError too
         logger.error("Pipeline failed for request %s: %s", request_id, exc, exc_info=True)
         try:
-            await update_request_status(request_id, "Failed")
+            await update_request_status(
+                request_id, "Failed", failure_reason="The run stopped unexpectedly (%s). Please try again." % type(exc).__name__
+            )
         except Exception:
             pass
         # Re-raise CancelledError so the event loop can propagate cancellation correctly.

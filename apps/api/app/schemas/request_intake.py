@@ -21,7 +21,7 @@ class ProductIntakeForm(BaseModel):
     min_headcount: Optional[str] = None
     exclude_list: Optional[str] = None
     request_goal: Optional[str] = None
-    num_leads: Optional[int] = Field(None, description="Target number of leads to generate")
+    num_leads: Optional[int] = Field(None, ge=1, le=200, description="Target number of leads to generate (1-200)")
 
 
 # ── ICP ───────────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ class FindCompetitorsRequest(BaseModel):
 class RequestIntakeCreate(BaseModel):
     product_intake: ProductIntakeForm
     icp_dimensions: StructuredICP
-    num_leads: Optional[int] = Field(10, description="Target number of leads to generate")
+    num_leads: Optional[int] = Field(10, ge=1, le=200, description="Target number of leads to generate (1-200)")
 
 
 class DirectCompaniesCreate(BaseModel):

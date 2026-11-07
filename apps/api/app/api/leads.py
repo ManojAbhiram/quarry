@@ -51,13 +51,6 @@ async def _get_current_user_sse(
         detail="Invalid or expired token",
     )
 
-    x_user_id = request.headers.get("X-User-Id")
-    if x_user_id:
-        user = await get_user_by_id(x_user_id)
-        if user:
-            return user
-        raise credentials_exception
-
     raw_token = credentials.credentials if credentials else token
     if not raw_token:
         raise credentials_exception

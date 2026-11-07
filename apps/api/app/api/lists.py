@@ -116,7 +116,7 @@ async def get_list(
     lead_ids = doc.get("lead_ids") or []
     leads = []
     if lead_ids:
-        raw_leads = await get_leads_by_ids(lead_ids)
+        raw_leads = await get_leads_by_ids(lead_ids, user_id)
         # Build a quick lookup by _id
         by_id = {str(l["_id"]): l for l in raw_leads}
         for lid in lead_ids:
@@ -211,7 +211,7 @@ async def export_list(
     lead_ids = doc.get("lead_ids") or []
     by_id: dict = {}
     if lead_ids:
-        raw_leads = await get_leads_by_ids(lead_ids)
+        raw_leads = await get_leads_by_ids(lead_ids, user_id)
         by_id = {str(l["_id"]): l for l in raw_leads}
 
     headers = [

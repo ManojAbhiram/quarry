@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 
 import httpx
 
 from app.core.config import settings
 from app.core.logger import logger
+from app.core.rate_limit import auth_rate_limit
 from app.db.users import (
     get_user_by_email,
     get_user_by_id,
@@ -37,11 +38,14 @@ from app.schemas.auth import GoogleCallbackRequest, LogoutRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# One message for every failed login, so the response never reveals whether an email is registered.
+INVALID_LOGIN = "Invalid email or password. If you signed up with Google, use Continue with Google."
+
 _GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 _GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 
-@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(auth_rate_limit)])
 async def register(body: RegisterRequest, request: Request):
     if await get_user_by_email(body.email):
         logger.warning("Registration attempt for existing email: %s", body.email)
@@ -80,22 +84,19 @@ async def register(body: RegisterRequest, request: Request):
     return AuthResponse(access_token=access_token, refresh_token=refresh_token, user=user_to_out(doc))
 
 
-@router.post("/login", response_model=AuthResponse)
+@router.post("/login", response_model=AuthResponse, dependencies=[Depends(auth_rate_limit)])
 async def login(body: LoginRequest, request: Request):
     await purge_expired_sessions()
     user = await get_user_by_email(body.email)
     if not user:
         logger.warning("Failed login attempt for email: %s", body.email)
-        raise HTTPException(status_code=401, detail="No account found with this email address.")
+        raise HTTPException(status_code=401, detail=INVALID_LOGIN)
     if not user.get("password_hash"):
         logger.warning("Password login attempted on Google-only account: %s", body.email)
-        raise HTTPException(
-            status_code=401,
-            detail="This account was created with Google Sign-In. Use 'Forgot Password' to set a password and enable email login.",
-        )
+        raise HTTPException(status_code=401, detail=INVALID_LOGIN)
     if not verify_password(body.password, user["password_hash"]):
         logger.warning("Failed login attempt for email: %s", body.email)
-        raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
+        raise HTTPException(status_code=401, detail=INVALID_LOGIN)
 
     logger.info("User logged in: %s", body.email)
     user_id = str(user["_id"])
@@ -147,7 +148,7 @@ async def logout(body: LogoutRequest):
     return None
 
 
-@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+@router.post("/forgot-password", status_code=status.HTTP_200_OK, dependencies=[Depends(auth_rate_limit)])
 async def forgot_password(body: ForgotPasswordRequest):
     user = await get_user_by_email(body.email)
     if user:
@@ -160,7 +161,7 @@ async def forgot_password(body: ForgotPasswordRequest):
     return {"message": "If an account with that email exists, a reset link has been sent."}
 
 
-@router.post("/reset-password", status_code=status.HTTP_200_OK)
+@router.post("/reset-password", status_code=status.HTTP_200_OK, dependencies=[Depends(auth_rate_limit)])
 async def reset_password(body: ResetPasswordRequest):
     user_id = await verify_password_reset_token(body.token)
     user = await get_user_by_id(user_id)
@@ -178,7 +179,7 @@ async def get_google_auth_url():
     return {"url": backend_oauth_start}
 
 
-@router.post("/google/callback", response_model=AuthResponse)
+@router.post("/google/callback", response_model=AuthResponse, dependencies=[Depends(auth_rate_limit)])
 async def google_callback_api(body: GoogleCallbackRequest, request: Request):
     """Exchange a Google authorization code for app JWT tokens."""
     redirect_uri = f"{settings.FRONTEND_URL}/auth/google/callback"

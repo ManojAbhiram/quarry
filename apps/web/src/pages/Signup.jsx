@@ -75,7 +75,7 @@ export default function Signup() {
               Turn product data into <span className="text-primary-600 dark:text-primary-400">qualified leads</span>
             </h2>
             <p className="hidden md:block text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-sm">
-              AI-powered ICP generation, company sourcing, and outreach sequencing for modern GTM teams.
+              AI-powered ICP generation, company sourcing, enrichment and intent signals for modern GTM teams.
             </p>
           </div>
 

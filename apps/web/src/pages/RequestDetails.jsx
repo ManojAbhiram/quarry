@@ -334,6 +334,16 @@ export default function RequestDetails() {
   return (
     <div id="request-details-page" className="animate-fade-in flex flex-col h-full w-full overflow-hidden bg-slate-50/10 dark:bg-[#0f172a]/10">
 
+      {currentRequest?.status === 'Failed' && (
+        <div className="mx-6 mt-4 shrink-0 rounded-2xl border border-rose-200 dark:border-rose-900/40 bg-rose-50/70 dark:bg-rose-900/10 p-4 flex items-start gap-3">
+          <XCircle className="w-5 h-5 text-rose-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-rose-900 dark:text-rose-300">This run failed</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">{currentRequest.failure_reason || 'No further details were recorded.'}</p>
+          </div>
+        </div>
+      )}
+
       {/* Main Core Layout */}
       <div id="details-content" className="flex-1 flex overflow-hidden w-full items-center justify-center h-full">
         {loading ? (
@@ -3241,11 +3251,11 @@ export default function RequestDetails() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => triggerAlert(`Enqueued ${selectedContacts.length} contacts into Outreach Sequence!`, "Outreach Sequence", "success")}
-                        disabled={selectedContacts.length === 0}
+                        disabled
+                        title="Outreach sequencing is not available yet. Export your leads to use them in your outreach tool."
                         className="bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black px-6 py-3 rounded-2xl flex items-center gap-2 shadow-md shadow-violet-200 dark:shadow-none hover:shadow-lg transition-all"
                       >
-                        Add to Outreach Sequence
+                        Outreach sequencing (coming soon)
                         <ChevronRight className="w-4 h-4" />
                       </button>
                     </div>

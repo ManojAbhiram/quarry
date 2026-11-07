@@ -147,11 +147,17 @@ async def get_lead_for_user(lead_id: str, user_id: str) -> Optional[dict]:
     return await _leads.get(_id=str(lead_id), user_id=str(user_id))
 
 
-async def get_leads_by_ids(lead_ids: list[str]) -> list[dict]:
-    """Fetch leads by id (unknown ids are skipped; order is not guaranteed)."""
+async def get_leads_by_ids(lead_ids: list[str], user_id: str | None = None) -> list[dict]:
+    """Fetch leads by id (unknown ids are skipped; order is not guaranteed).
+
+    Pass `user_id` to return only that user's leads: callers acting for a user must always do so.
+    """
     if not lead_ids:
         return []
-    return await _leads.find(LeadRow.id.in_([str(i) for i in lead_ids]))
+    where = [LeadRow.id.in_([str(i) for i in lead_ids])]
+    if user_id is not None:
+        where.append(LeadRow.user_id == str(user_id))
+    return await _leads.find(*where)
 
 
 async def update_lead_fields(lead_id: str, fields: dict) -> Optional[dict]:

@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import HTTPException
 
-from app.db import requests as db
+from app.db import erasure, requests as db
 from app.db.decision_makers import count_decision_makers_by_lead
 from app.db.leads import count_enriched_leads_by_request
 from app.db.product_intake import get_product_intakes_by_request_ids, upsert_product_intake
@@ -95,7 +95,7 @@ async def delete_request(request_id: str, user_id) -> None:
     doc = await db.get_request_by_id(request_id, user_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Lead request not found")
-    deleted = await db.delete_request_by_id(request_id)
+    deleted = await erasure.erase_request(request_id)
     if not deleted:
         raise HTTPException(status_code=500, detail="Failed to delete lead request")
 
@@ -112,8 +112,7 @@ async def update_request(request_id: str, user_id, body) -> LeadRequestOut:
         await upsert_product_intake(request_id, body.product_intake)
     if body.icp_dimensions is not None:
         await upsert_icp_profile(request_id, body.icp_dimensions)
-    if body.status is not None:
-        update_fields["status"] = body.status
+    # `status` is set by the pipeline only; a client-supplied value is ignored on purpose
     if body.title is not None:
         update_fields["title"] = body.title
     if body.description is not None:

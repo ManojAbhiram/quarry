@@ -24,6 +24,10 @@ class Settings:
     # Database (SQLite by default; any SQLAlchemy async URL works)
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./quarry.db")
 
+    # Rate limit for the auth endpoints (attempts per client address and endpoint within the window)
+    AUTH_RATE_LIMIT_ATTEMPTS: int = int(os.getenv("AUTH_RATE_LIMIT_ATTEMPTS", "10"))
+    AUTH_RATE_LIMIT_WINDOW_SECONDS: int = int(os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60"))
+
     # Auth — SECRET_KEY must be explicitly set (no insecure fallback)
     SECRET_KEY: str = _require("SECRET_KEY")
     ALGORITHM: str = "HS256"

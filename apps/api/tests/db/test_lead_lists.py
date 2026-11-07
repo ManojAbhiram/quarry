@@ -1,9 +1,19 @@
 import httpx
+import pytest
 from sqlalchemy import func, select
 
 from app.db import engine, leads
 from app.db import lead_lists as ll
 from app.db.models import TABLES, Lead, LeadListItem
+
+
+@pytest.fixture(autouse=True)
+async def _leads_owned_by_u1(db):
+    """Lists only accept leads the user owns, so give u1 the leads these tests put in lists."""
+    for lead_id in ("l1", "l2", "l3", "shared"):
+        await TABLES["leads"].insert(
+            {"_id": lead_id, "request_id": "r", "user_id": "u1", "url": f"https://{lead_id}.example.com", "title": lead_id}
+        )
 
 
 async def _item_count():
@@ -96,7 +106,7 @@ async def test_list_endpoints_use_membership(db):
     from app.services.auth import get_current_user
 
     await leads.process_and_save_standalone_leads([{"title": "Acme", "url": "https://acme.com"}], "r1", "u1")
-    lead_id = (await TABLES["leads"].find())[0]["_id"]
+    lead_id = next(r["_id"] for r in await TABLES["leads"].find() if r["title"] == "Acme")
     lst = await ll.create_lead_list("u1", "A")
     await ll.add_leads_to_list(lst["_id"], "u1", [lead_id, "ghost-lead"])
     app.dependency_overrides[get_current_user] = lambda: {"_id": "u1", "email": "x@y.z"}

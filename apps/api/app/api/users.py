@@ -1,9 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 
 from app.core.security_crypto import encrypt_secret, decrypt_secret, mask_secret
-from app.db.users import check_email_conflict, delete_user, get_user_by_id, update_user
-from app.db.requests import delete_user_requests
-from app.db.user_sessions import delete_sessions_for_user
+from app.db.erasure import erase_user_data
+from app.db.users import check_email_conflict, get_user_by_id, update_user
 from app.services.auth import get_current_user
 from app.services.serper import validate_serper_key
 from app.schemas import (
@@ -80,6 +79,4 @@ async def delete_serper_key(current_user: dict = Depends(get_current_user)):
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(current_user: dict = Depends(get_current_user)):
     user_id = current_user["_id"]
-    await delete_user(str(user_id))
-    await delete_user_requests(user_id)
-    await delete_sessions_for_user(str(user_id))
+    await erase_user_data(str(user_id))  # the user, their requests, leads, lists and sessions

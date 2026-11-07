@@ -38,6 +38,14 @@ def client():
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    from app.core.rate_limit import limiter
+
+    limiter.reset()
+    yield
+
+
 @pytest.fixture
 async def db(tmp_path, monkeypatch):
     """A fresh SQLite database file per test, with tables created."""

@@ -56,8 +56,15 @@ async def replace_request(request_id: str, doc: dict) -> Optional[dict]:
 
 # ── Functions moved from db/leads.py ─────────────────────────────────────────
 
-async def update_request_status(request_id: str, status: str, time_taken: float | None = None) -> None:
-    update_data = {"status": status, "updated_at": datetime.utcnow()}
+async def update_request_status(
+    request_id: str, status: str, time_taken: float | None = None, failure_reason: str | None = None
+) -> None:
+    # failure_reason is only meaningful for Failed; any other status clears a previous one
+    update_data = {
+        "status": status,
+        "updated_at": datetime.utcnow(),
+        "failure_reason": failure_reason if status == "Failed" else None,
+    }
     if time_taken is not None:
         update_data["time_taken"] = time_taken
     await _reqs.update(str(request_id), update_data)
@@ -86,3 +93,20 @@ async def add_queries_to_lead_request(request_id: str, queries: list[str]) -> No
 
 async def delete_user_requests(user_id) -> None:
     await _reqs.delete_where(Request.user_id == str(user_id))
+
+
+async def request_exists(request_id: str) -> bool:
+    return await _reqs.get(_id=str(request_id)) is not None
+
+
+async def fail_orphaned_requests() -> int:
+    """Mark requests still 'Pending' as Failed. Run at startup: pipelines live in this process, so after a restart
+    nothing is running and every Pending request is an orphan. Returns how many were failed."""
+    orphans = await _reqs.find(Request.status == "Pending")
+    for doc in orphans:
+        await _reqs.update(doc["_id"], {
+            "status": "Failed",
+            "failure_reason": "Interrupted by a server restart. Please run it again.",
+            "updated_at": datetime.utcnow(),
+        })
+    return len(orphans)

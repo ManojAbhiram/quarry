@@ -26,7 +26,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.logger import logger
 from app.db import engine as _engine
-from app.db.models import TABLES, LeadList, LeadListItem
+from app.db.models import TABLES, Lead, LeadList, LeadListItem
 
 _lists = TABLES["lead_lists"]
 
@@ -101,6 +101,9 @@ async def update_lead_list(list_id: str, user_id: str, updates: dict) -> Optiona
 async def add_leads_to_list(list_id: str, user_id: str, lead_ids: list[str]) -> Optional[dict]:
     if await _lists.get(_id=list_id, user_id=user_id) is None:
         return None
+    # only the caller's own leads can be added to their list
+    owned = {r["_id"] for r in await TABLES["leads"].find(Lead.id.in_(list(lead_ids)), Lead.user_id == str(user_id))} if lead_ids else set()
+    lead_ids = [lid for lid in lead_ids if lid in owned]
     now = datetime.utcnow()
     try:
         async with _engine.session() as s, s.begin():

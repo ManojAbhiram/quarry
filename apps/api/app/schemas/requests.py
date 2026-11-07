@@ -32,6 +32,7 @@ class LeadRequestOut(BaseModel):
     business_type: str
     location: str
     status: str
+    failure_reason: Optional[str] = None
     date: str
     ideal_lead_profile: Optional[str] = None
     budget_target_size: Optional[str] = None
@@ -97,6 +98,7 @@ def request_to_out(doc: dict, enrich_data: dict | None = None) -> LeadRequestOut
         business_type=doc.get("business_type", ""),
         location=doc.get("target_location", ""),
         status=display_status,
+        failure_reason=doc.get("failure_reason") if raw_status == "Failed" else None,
         date=date_str,
         ideal_lead_profile=doc.get("ideal_lead_profile"),
         budget_target_size=doc.get("budget_target_size"),

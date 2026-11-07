@@ -288,8 +288,11 @@ export default function LeadRequests() {
               {/* Name */}
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{req.title || 'Untitled'}</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">
-                  {req.description || req.business_type || '—'}
+                <p
+                  className={`text-xs truncate mt-0.5 ${req.status === 'Failed' && req.failure_reason ? 'text-rose-500 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`}
+                  title={req.failure_reason || undefined}
+                >
+                  {req.status === 'Failed' && req.failure_reason ? req.failure_reason : (req.description || req.business_type || '—')}
                 </p>
               </div>
               {/* Status */}

@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.db.engine import connect_db, close_db
+from app.db.requests import fail_orphaned_requests
 from app.api import auth, users, requests, leads, request_intake, competitors, tech_stack
 from app.api import google_auth
 from app.api import organizations
@@ -17,6 +18,9 @@ import traceback
 async def lifespan(app: FastAPI):
     logger.info(f"Starting up {settings.PROJECT_NAME}...")
     await connect_db()
+    orphaned = await fail_orphaned_requests()
+    if orphaned:
+        logger.warning("Marked %d interrupted request(s) as Failed after restart", orphaned)
     yield
     logger.info(f"Shutting down {settings.PROJECT_NAME}...")
     await close_db()

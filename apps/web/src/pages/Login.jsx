@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import {
   Mail, Lock, Eye, EyeOff, ArrowRight,
-  Building2, FileText, Target, Send, Activity
+  Building2, FileText, Target, Activity
 } from 'lucide-react'
 import ThemeToggle from '../components/ThemeToggle'
 import BrandLogo from '../components/BrandLogo'
@@ -110,7 +110,7 @@ export default function Login() {
               Turn product data into <span className="text-primary-600 dark:text-primary-400">qualified leads</span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-sm">
-              AI-powered ICP generation, company sourcing, and outreach sequencing for modern GTM teams.
+              AI-powered ICP generation, company sourcing, enrichment and intent signals for modern GTM teams.
             </p>
           </div>
 
@@ -119,7 +119,7 @@ export default function Login() {
             {[
               { icon: <Target className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, text: "AI-generated Ideal Customer Profiles" },
               { icon: <Building2 className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, text: "Smart company sourcing & enrichment" },
-              { icon: <Send className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, text: "Automated outreach sequencing" },
+              { icon: <FileText className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, text: "Export-ready lead lists (CSV, Excel, PDF)" },
               { icon: <Activity className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, text: "Real-time intent signal analysis" }
             ].map((item, idx) => (
               <div key={idx} className="bg-white/80 dark:bg-[#141b2d]/60 border border-slate-200/50 dark:border-slate-800/80 px-4 py-2.5 rounded-2xl flex items-center gap-3 shadow-sm">
@@ -148,7 +148,7 @@ export default function Login() {
               <span className="text-slate-300 dark:text-slate-700 px-0.5">➔</span>
               <span className="px-1.5 py-0.5 flex items-center gap-1">Enrich</span>
               <span className="text-slate-300 dark:text-slate-700 px-0.5">➔</span>
-              <span className="px-1.5 py-0.5 flex items-center gap-1">Outreach</span>
+              <span className="px-1.5 py-0.5 flex items-center gap-1">Export</span>
             </div>
 
             {/* Premium glassmorphic Meridian Health match discovery window matching Signup quality */}
@@ -169,7 +169,7 @@ export default function Login() {
                   <div className="space-y-0.5 sm:space-y-1">
                     <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      AI Discovery Live
+                      Example result
                     </span>
                     <h4 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white leading-none">Meridian Health</h4>
                     <p className="text-[9px] sm:text-[9.5px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">healthtech.com</p>
@@ -209,16 +209,16 @@ export default function Login() {
             {/* Stats row below card */}
             <div className="grid grid-cols-3 gap-2.5 pt-3.5 border-t border-slate-200/60 dark:border-slate-800/80 shrink-0">
               <div className="flex flex-col">
-                <span className="text-[14px] font-black text-slate-900 dark:text-white leading-none">2,847</span>
-                <span className="text-[9px] text-slate-400 dark:text-slate-555 font-bold mt-1 leading-tight">Companies sourced</span>
+                <span className="text-[14px] font-black text-slate-900 dark:text-white leading-none">6</span>
+                <span className="text-[9px] text-slate-400 dark:text-slate-555 font-bold mt-1 leading-tight">ICP dimensions</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[14px] font-black text-slate-900 dark:text-white leading-none">15,420</span>
-                <span className="text-[9px] text-slate-400 dark:text-slate-555 font-bold mt-1 leading-tight">Contacts enriched</span>
+                <span className="text-[14px] font-black text-slate-900 dark:text-white leading-none">3</span>
+                <span className="text-[9px] text-slate-400 dark:text-slate-555 font-bold mt-1 leading-tight">Export formats</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[14px] font-black text-slate-900 dark:text-white leading-none">893</span>
-                <span className="text-[9px] text-slate-400 dark:text-slate-555 font-bold mt-1 leading-tight">Sequences sent</span>
+                <span className="text-[14px] font-black text-slate-900 dark:text-white leading-none">Your key</span>
+                <span className="text-[9px] text-slate-400 dark:text-slate-555 font-bold mt-1 leading-tight">Bring your own Serper key</span>
               </div>
             </div>
 

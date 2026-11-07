@@ -4,6 +4,7 @@ from contextvars import ContextVar
 import httpx
 
 from app.core.config import settings
+from app.core.logger import logger
 
 # Per-request/per-pipeline Serper key. Entry points (lead pipeline, competitor
 # pipeline, intent analysis) set this from the requesting user's stored key so
@@ -14,7 +15,11 @@ current_serper_key: ContextVar[str | None] = ContextVar("current_serper_key", de
 
 def get_serper_key() -> str:
     """Return the active Serper key: the per-user key if set, else the global one."""
-    return current_serper_key.get() or settings.SERPER_API_KEY
+    key = current_serper_key.get()
+    if key:
+        return key
+    logger.warning("Serper call without a per-user key: falling back to the operator's global key (check the caller)")
+    return settings.SERPER_API_KEY
 
 
 async def fetch_leads_from_serper(query: str) -> dict:
