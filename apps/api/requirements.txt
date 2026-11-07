@@ -5,6 +5,8 @@ requests
 beautifulsoup4
 pydantic[email]
 litellm
+sqlalchemy[asyncio]
+aiosqlite
 playwright
 python-jose[cryptography]
 bcrypt>=4.2.1
