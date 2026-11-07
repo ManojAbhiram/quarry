@@ -16,6 +16,7 @@ from app.db.user_sessions import (
     delete_session,
     delete_session_by_token_hash,
     get_session_by_token_hash,
+    purge_expired_sessions,
 )
 from app.services.auth import (
     hash_password, verify_password, hash_token,
@@ -74,6 +75,7 @@ async def register(body: RegisterRequest, request: Request):
 
 @router.post("/login", response_model=AuthResponse)
 async def login(body: LoginRequest, request: Request):
+    await purge_expired_sessions()
     user = await get_user_by_email(body.email)
     if not user:
         logger.warning("Failed login attempt for email: %s", body.email)

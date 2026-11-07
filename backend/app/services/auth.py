@@ -6,7 +6,6 @@ import bcrypt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from app.db.mongo_ids import id_query
 from app.core.config import settings
 from app.core.logger import logger
 

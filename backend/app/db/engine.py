@@ -61,6 +61,9 @@ async def connect_db() -> None:
     _sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    from app.db.user_sessions import purge_expired_sessions  # circular at import time, like Base above
+
+    await purge_expired_sessions()
     logger.info("Database ready")
 
 

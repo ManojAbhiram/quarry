@@ -1,14 +1,16 @@
 from typing import Optional
 
+from sqlalchemy import or_
+
 from app.core.logger import logger
 from app.core.security_crypto import decrypt_secret
-from app.db.database import get_db
-from app.db.mongo_ids import id_query, id_values
+from app.db.models import TABLES, User
+
+_users = TABLES["users"]
 
 
 async def get_user_by_id(user_id: str) -> Optional[dict]:
-    db = get_db()
-    return await db.users.find_one(id_query("_id", user_id))
+    return await _users.get(_id=str(user_id))
 
 
 async def get_user_serper_key(user_id: str) -> Optional[str]:
@@ -23,36 +25,29 @@ async def get_user_serper_key(user_id: str) -> Optional[str]:
 
 
 async def get_user_by_email(email: str) -> Optional[dict]:
-    db = get_db()
-    return await db.users.find_one({"email": email})
+    return await _users.get(email=email)
 
 
 async def find_user_by_google_or_email(google_id: str, email: str) -> Optional[dict]:
-    db = get_db()
-    return await db.users.find_one({"$or": [{"google_id": google_id}, {"email": email}]})
+    matches = await _users.find(or_(User.google_id == google_id, User.email == email), limit=1)
+    return matches[0] if matches else None
 
 
 async def insert_user(doc: dict) -> tuple[str, dict]:
-    db = get_db()
-    result = await db.users.insert_one(doc)
-    doc["_id"] = result.inserted_id
-    logger.info("Inserted user %s", result.inserted_id)
-    return str(result.inserted_id), doc
+    user_id = await _users.insert(doc)
+    doc["_id"] = user_id
+    logger.info("Inserted user %s", user_id)
+    return user_id, doc
 
 
 async def update_user(user_id: str, updates: dict) -> None:
-    db = get_db()
-    await db.users.update_one(id_query("_id", user_id), {"$set": updates})
+    await _users.update(str(user_id), updates)
 
 
 async def delete_user(user_id: str) -> None:
-    db = get_db()
-    await db.users.delete_one(id_query("_id", user_id))
+    await _users.delete(str(user_id))
 
 
 async def check_email_conflict(email: str, exclude_user_id) -> bool:
-    db = get_db()
-    conflict = await db.users.find_one(
-        {"email": email, "_id": {"$nin": id_values(exclude_user_id)}}
-    )
-    return conflict is not None
+    conflicts = await _users.find(User.email == email, User.id != str(exclude_user_id), limit=1)
+    return bool(conflicts)
