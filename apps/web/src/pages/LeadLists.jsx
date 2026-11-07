@@ -370,7 +370,7 @@ export default function LeadLists() {
   const selectedList = lists.find(l => l._id === selectedListId)
 
   return (
-    <div id="lead-lists-page" className="h-full overflow-y-auto animate-fade-in pb-12 pr-2">
+    <div id="lead-lists-page" className="h-full overflow-y-auto animate-fade-in pb-12 page-container">
       {/* Header */}
       <div className="mb-8 flex items-end justify-between">
         <div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
+import PaletteSwitcher from './PaletteSwitcher'
 import { useLeads } from '../context/LeadContext'
 import BrandLogo from './BrandLogo'
 import {
@@ -281,6 +282,8 @@ export default function Header() {
         </button>
 
 
+
+        <PaletteSwitcher />
 
         {/* Theme Toggle Button */}
         <button

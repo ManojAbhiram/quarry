@@ -50,7 +50,7 @@ export default function Signup() {
       <div className="col-span-12 lg:col-span-5 xl:col-span-5 h-[46vh] lg:h-full bg-gradient-to-b from-[#f1f5f9]/60 to-white dark:from-[#080d19] dark:to-[#060b13] p-6 sm:p-8 xl:p-10 flex flex-col justify-between relative border-b lg:border-b-0 lg:border-r border-slate-200/50 dark:border-slate-800/40 transition-colors duration-300 shrink-0 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         
         {/* Glow decoration mirroring Figma's light layout */}
-        <div className="absolute top-[-20%] left-[-20%] w-[90%] h-[90%] rounded-full bg-gradient-to-br from-indigo-500/10 to-[#5143ec]/5 dark:from-indigo-500/15 dark:to-indigo-600/5 blur-[120px] pointer-events-none transition-all duration-300" />
+        <div className="absolute top-[-20%] left-[-20%] w-[90%] h-[90%] rounded-full bg-gradient-to-br from-indigo-500/10 to-primary-600/5 dark:from-indigo-500/15 dark:to-indigo-600/5 blur-[120px] pointer-events-none transition-all duration-300" />
         <div className="absolute bottom-[-15%] right-[-10%] w-[70%] h-[70%] rounded-full bg-gradient-to-tr from-violet-500/5 to-transparent dark:from-violet-600/10 dark:to-transparent blur-[110px] pointer-events-none transition-all duration-300" />
         
         {/* Decorative soft floating dots */}
@@ -60,7 +60,7 @@ export default function Signup() {
 
         {/* Brand Header */}
         <div className="flex items-center gap-3 relative z-10 animate-fade-in shrink-0">
-          <BrandLogo className="w-8 h-8 rounded-xl shadow-lg shadow-[#5143ec]/30 shrink-0" />
+          <BrandLogo className="w-8 h-8 rounded-xl shadow-lg shadow-primary-600/30 shrink-0" />
           <div>
             <h1 className="text-base font-bold text-slate-900 dark:text-white tracking-tight leading-none">Quarry</h1>
           </div>
@@ -72,7 +72,7 @@ export default function Signup() {
           {/* Main Titles */}
           <div className="space-y-1 sm:space-y-2 animate-slide-up shrink-0" style={{ animationDelay: '0.1s' }}>
             <h2 className="text-lg sm:text-2xl xl:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight">
-              Turn product data into <span className="text-[#5143ec] dark:text-[#818cf8]">qualified leads</span>
+              Turn product data into <span className="text-primary-600 dark:text-primary-400">qualified leads</span>
             </h2>
             <p className="hidden md:block text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-sm">
               AI-powered ICP generation, company sourcing, and outreach sequencing for modern GTM teams.
@@ -82,10 +82,10 @@ export default function Signup() {
           {/* Figma 4-pill Grid - visible on tablets and desktops */}
           <div className="hidden md:grid grid-cols-2 gap-3 max-w-[420px] animate-slide-up shrink-0" style={{ animationDelay: '0.2s' }}>
             {[
-              { icon: <Target className="w-3.5 h-3.5 text-[#5143ec] dark:text-[#818cf8]" />, label: "AI ICP generation" },
-              { icon: <Building2 className="w-3.5 h-3.5 text-[#5143ec] dark:text-[#818cf8]" />, label: "Smart sourcing" },
-              { icon: <Send className="w-3.5 h-3.5 text-[#5143ec] dark:text-[#818cf8]" />, label: "Auto-sequencing" },
-              { icon: <Activity className="w-3.5 h-3.5 text-[#5143ec] dark:text-[#818cf8]" />, label: "Intent analysis" }
+              { icon: <Target className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, label: "AI ICP generation" },
+              { icon: <Building2 className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, label: "Smart sourcing" },
+              { icon: <Send className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, label: "Auto-sequencing" },
+              { icon: <Activity className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, label: "Intent analysis" }
             ].map((pill, idx) => (
               <div key={idx} className="bg-white/90 dark:bg-[#141b2d]/60 border border-slate-200/50 dark:border-slate-800/80 px-3.5 py-2 rounded-2xl flex items-center gap-2 shadow-sm">
                 <span className="shrink-0">{pill.icon}</span>
@@ -112,11 +112,11 @@ export default function Signup() {
                 
                 {/* 5 Indigo Columns */}
                 <div className="flex items-end gap-2.5 sm:gap-3 h-full w-[60%] border-r border-slate-100 dark:border-slate-900 pr-3">
-                  <div className="w-2.5 sm:w-3 bg-[#5143ec]/20 dark:bg-[#5143ec]/30 rounded-t h-[40%]"></div>
-                  <div className="w-2.5 sm:w-3 bg-[#5143ec]/40 dark:bg-[#5143ec]/50 rounded-t h-[70%]"></div>
-                  <div className="w-2.5 sm:w-3 bg-[#5143ec] rounded-t h-[95%] shadow-sm shadow-[#5143ec]/20"></div>
-                  <div className="w-2.5 sm:w-3 bg-[#5143ec]/60 dark:bg-[#5143ec]/70 rounded-t h-[55%]"></div>
-                  <div className="w-2.5 sm:w-3 bg-[#5143ec]/30 dark:bg-[#5143ec]/40 rounded-t h-[30%]"></div>
+                  <div className="w-2.5 sm:w-3 bg-primary-600/20 dark:bg-primary-600/30 rounded-t h-[40%]"></div>
+                  <div className="w-2.5 sm:w-3 bg-primary-600/40 dark:bg-primary-600/50 rounded-t h-[70%]"></div>
+                  <div className="w-2.5 sm:w-3 bg-primary-600 rounded-t h-[95%] shadow-sm shadow-primary-600/20"></div>
+                  <div className="w-2.5 sm:w-3 bg-primary-600/60 dark:bg-primary-600/70 rounded-t h-[55%]"></div>
+                  <div className="w-2.5 sm:w-3 bg-primary-600/30 dark:bg-primary-600/40 rounded-t h-[30%]"></div>
                 </div>
 
                 {/* Right Placeholder Info Rows */}
@@ -142,7 +142,7 @@ export default function Signup() {
                   <div className="flex items-end gap-0.5 sm:gap-1">
                     <div className="w-0.5 sm:w-1 bg-amber-400 rounded-t h-3 sm:h-4"></div>
                     <div className="w-0.5 sm:w-1 bg-emerald-400 rounded-t h-5 sm:h-7"></div>
-                    <div className="w-0.5 sm:w-1 bg-[#5143ec] rounded-t h-4 sm:h-5"></div>
+                    <div className="w-0.5 sm:w-1 bg-primary-600 rounded-t h-4 sm:h-5"></div>
                   </div>
                   <div className="flex flex-col gap-0.5 pb-0.5">
                     <div className="w-4 sm:w-5 h-0.5 bg-slate-200 dark:bg-slate-800 rounded-full"></div>
@@ -167,7 +167,7 @@ export default function Signup() {
       <div className="col-span-12 lg:col-span-7 xl:col-span-7 h-[54vh] lg:h-full flex flex-col justify-center items-center p-6 sm:p-10 relative bg-white dark:bg-[#070b13] transition-colors duration-300 overflow-y-auto shrink-0">
         
         {/* Ambient glow decoration */}
-        <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[#5143ec]/5 dark:bg-[#5143ec]/10 blur-[130px] pointer-events-none transition-colors duration-300" />
+        <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-primary-600/5 dark:bg-primary-600/10 blur-[130px] pointer-events-none transition-colors duration-300" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-500/5 dark:bg-indigo-600/10 blur-[130px] pointer-events-none transition-colors duration-300" />
 
         {/* Theme and Action Bar */}
@@ -201,7 +201,7 @@ export default function Signup() {
                   id="name"
                   type="text"
                   required
-                  className="w-full pl-10 pr-3.5 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-[#5143ec]/20 focus:border-[#5143ec] transition-all text-xs font-semibold"
+                  className="w-full pl-10 pr-3.5 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
                   placeholder="Enter your full name"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -222,7 +222,7 @@ export default function Signup() {
                   id="email"
                   type="email"
                   required
-                  className="w-full pl-10 pr-3.5 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-[#5143ec]/20 focus:border-[#5143ec] transition-all text-xs font-semibold"
+                  className="w-full pl-10 pr-3.5 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
                   placeholder="you@company.com"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -244,7 +244,7 @@ export default function Signup() {
                     id="org_name"
                     type="text"
                     required
-                    className="w-full pl-10 pr-3.5 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-[#5143ec]/20 focus:border-[#5143ec] transition-all text-xs font-semibold"
+                    className="w-full pl-10 pr-3.5 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
                     placeholder="Acme Corp"
                     value={form.org_name}
                     onChange={(e) => setForm({ ...form, org_name: e.target.value })}
@@ -263,7 +263,7 @@ export default function Signup() {
                     id="org_domain"
                     type="text"
                     required
-                    className="w-full pl-10 pr-3.5 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-[#5143ec]/20 focus:border-[#5143ec] transition-all text-xs font-semibold"
+                    className="w-full pl-10 pr-3.5 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
                     placeholder="acme.com"
                     value={form.org_domain}
                     onChange={(e) => setForm({ ...form, org_domain: e.target.value })}
@@ -284,7 +284,7 @@ export default function Signup() {
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   required
-                  className="w-full pl-10 pr-10 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-[#5143ec]/20 focus:border-[#5143ec] transition-all text-xs font-semibold"
+                  className="w-full pl-10 pr-10 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
                   placeholder="Create a strong password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -312,7 +312,7 @@ export default function Signup() {
                   id="confirm"
                   type={showConfirmPassword ? 'text' : 'password'}
                   required
-                  className="w-full pl-10 pr-10 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-655 focus:outline-none focus:ring-2 focus:ring-[#5143ec]/20 focus:border-[#5143ec] transition-all text-xs font-semibold"
+                  className="w-full pl-10 pr-10 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-655 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
                   placeholder="Confirm your password"
                   value={form.confirm}
                   onChange={(e) => setForm({ ...form, confirm: e.target.value })}
@@ -338,7 +338,7 @@ export default function Signup() {
               id="signup-btn"
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-1.5 py-3 sm:py-3.5 px-4 bg-[#5143ec] hover:bg-[#4338ca] text-white rounded-2xl font-bold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-3 sm:mt-4 text-xs shadow-lg shadow-[#5143ec]/20 hover:shadow-[#5143ec]/30"
+              className="w-full flex items-center justify-center gap-1.5 py-3 sm:py-3.5 px-4 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-bold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-3 sm:mt-4 text-xs shadow-lg shadow-primary-600/20 hover:shadow-primary-600/30"
             >
               {loading ? 'Creating account...' : 'Create account'}
               {!loading && <ArrowRight className="w-4 h-4" />}
@@ -347,7 +347,7 @@ export default function Signup() {
 
           <p id="login-link" className="text-xs text-center text-slate-500 dark:text-slate-455 font-bold shrink-0">
             Already have an account?{' '}
-            <Link to="/login" className="text-[#5143ec] dark:text-[#818cf8] font-bold hover:underline transition-colors">
+            <Link to="/login" className="text-primary-600 dark:text-primary-400 font-bold hover:underline transition-colors">
               Sign in
             </Link>
           </p>

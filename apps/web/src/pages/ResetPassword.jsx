@@ -43,7 +43,7 @@ export default function ResetPassword() {
 
       <div className="w-full max-w-[400px] space-y-6 animate-fade-in">
         <div className="space-y-2 text-center">
-          <div className="w-12 h-12 bg-[#5143ec] rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-[#5143ec]/30 mb-4">
+          <div className="w-12 h-12 bg-primary-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-primary-600/30 mb-4">
             <Lock className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Set new password</h1>
@@ -84,7 +84,7 @@ export default function ResetPassword() {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    className="w-full pl-11 pr-10 py-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#5143ec]/20 focus:border-[#5143ec] transition-all text-xs font-semibold"
+                    className="w-full pl-11 pr-10 py-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
                     placeholder="Min. 6 characters"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -108,7 +108,7 @@ export default function ResetPassword() {
                   <input
                     type={showConfirm ? 'text' : 'password'}
                     required
-                    className="w-full pl-11 pr-10 py-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#5143ec]/20 focus:border-[#5143ec] transition-all text-xs font-semibold"
+                    className="w-full pl-11 pr-10 py-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
                     placeholder="Repeat new password"
                     value={form.confirm}
                     onChange={(e) => setForm({ ...form, confirm: e.target.value })}
@@ -130,14 +130,14 @@ export default function ResetPassword() {
               <button
                 type="submit"
                 disabled={loading || !token}
-                className="w-full py-3 px-4 bg-[#5143ec] hover:bg-[#4338ca] text-white rounded-2xl font-bold transition-all text-xs shadow-lg shadow-[#5143ec]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-bold transition-all text-xs shadow-lg shadow-primary-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Updating...' : 'Update password'}
               </button>
             </form>
 
             <div className="text-center">
-              <Link to="/login" className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-[#5143ec] dark:hover:text-[#818cf8] transition-colors">
+              <Link to="/login" className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
                 Back to sign in
               </Link>
             </div>

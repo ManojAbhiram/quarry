@@ -21,9 +21,9 @@ const people = [
 ]
 
 const features = [
-  { title: 'Discover', description: 'Turn an ICP into targeted searches.', link: '#' },
-  { title: 'Enrich', description: 'Scrape sites, extract contacts and signals.', link: '#' },
-  { title: 'Qualify', description: 'Score every company against your profile.', link: '#' },
+  { title: 'Discover', description: 'Turn an ICP into targeted searches.', link: '#discover' },
+  { title: 'Enrich', description: 'Scrape sites, extract contacts and signals.', link: '#enrich' },
+  { title: 'Qualify', description: 'Score every company against your profile.', link: '#qualify' },
 ]
 
 const tabContent = (label) => (

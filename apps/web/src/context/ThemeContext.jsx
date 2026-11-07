@@ -1,5 +1,9 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { STORAGE_KEYS } from '../config/constants';
+import { applyPalette, getSavedPalette } from '../config/palettes';
+
+// Apply the saved palette at import time, before React's first paint, so there is no flash of the default.
+applyPalette(getSavedPalette());
 
 const ThemeContext = createContext();
 
@@ -11,6 +15,12 @@ export function ThemeProvider({ children }) {
     } catch (_) { }
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
+
+  const [palette, setPaletteState] = useState(getSavedPalette);
+  const setPalette = (id) => {
+    applyPalette(id);
+    setPaletteState(id);
+  };
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -38,7 +48,7 @@ export function ThemeProvider({ children }) {
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, palette, setPalette }}>
       {children}
     </ThemeContext.Provider>
   );

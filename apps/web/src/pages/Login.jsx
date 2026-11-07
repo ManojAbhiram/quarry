@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import gsap from 'gsap'
+import { SplitText } from 'gsap/SplitText'
+import { useGSAP } from '@gsap/react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
@@ -8,6 +11,9 @@ import {
 } from 'lucide-react'
 import ThemeToggle from '../components/ThemeToggle'
 import BrandLogo from '../components/BrandLogo'
+import { Spotlight } from '../components/ui/spotlight'
+
+gsap.registerPlugin(SplitText, useGSAP)
 
 export default function Login() {
   const { login } = useAuth()
@@ -20,6 +26,21 @@ export default function Login() {
   )
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const pageRef = useRef(null)
+
+  // Codrops-style heading reveal: letters rise in with a stagger. Skipped for reduced-motion users.
+  useGSAP(
+    () => {
+      const mm = gsap.matchMedia()
+      mm.add('(prefers-reduced-motion: no-preference)', () => {
+        document.fonts.ready.then(() => {
+          const split = SplitText.create('[data-split]', { type: 'chars,words', mask: 'chars', aria: 'auto' })
+          gsap.from(split.chars, { yPercent: 110, opacity: 0, duration: 0.9, ease: 'expo.out', stagger: 0.025, delay: 0.1 })
+        })
+      })
+    },
+    { scope: pageRef },
+  )
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -57,22 +78,24 @@ export default function Login() {
   }
 
   return (
-    <div id="login-page" className="h-screen w-screen max-h-screen overflow-hidden grid grid-cols-12 bg-[#f8fafc] dark:bg-[#060b13] text-slate-900 dark:text-white transition-colors duration-300 font-sans relative">
+    <div id="login-page" ref={pageRef} className="h-screen w-screen max-h-screen overflow-hidden grid grid-cols-12 bg-[#f8fafc] dark:bg-[#060b13] text-slate-900 dark:text-white transition-colors duration-300 font-sans relative">
       
       {/* LEFT COLUMN: Premium Figma-inspired Marketing Showcase (scrollable on overflow, hidden scrollbars) */}
       <div className="col-span-12 lg:col-span-5 xl:col-span-5 h-[46vh] lg:h-full bg-gradient-to-b from-[#f1f5f9]/60 to-white dark:from-[#080d19] dark:to-[#060b13] p-6 sm:p-8 xl:p-10 flex flex-col justify-between relative border-b lg:border-b-0 lg:border-r border-slate-200/50 dark:border-slate-800/40 transition-colors duration-300 shrink-0 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         
         {/* Glow decoration mirroring Figma's light layout */}
-        <div className="absolute top-[-20%] left-[-20%] w-[90%] h-[90%] rounded-full bg-gradient-to-br from-indigo-500/10 to-[#5143ec]/5 dark:from-indigo-500/15 dark:to-indigo-600/5 blur-[120px] pointer-events-none transition-all duration-300" />
+        <div className="absolute top-[-20%] left-[-20%] w-[90%] h-[90%] rounded-full bg-gradient-to-br from-indigo-500/10 to-primary-600/5 dark:from-indigo-500/15 dark:to-indigo-600/5 blur-[120px] pointer-events-none transition-all duration-300" />
         <div className="absolute bottom-[-15%] right-[-10%] w-[70%] h-[70%] rounded-full bg-gradient-to-tr from-amber-500/5 to-transparent dark:from-amber-600/10 dark:to-transparent blur-[110px] pointer-events-none transition-all duration-300" />
         
         {/* Decorative soft floating dots */}
         <div className="absolute top-[20%] right-[10%] w-2 h-2 rounded-full bg-indigo-400/30 blur-[1px] pointer-events-none animate-pulse"></div>
         <div className="absolute bottom-[35%] left-[15%] w-2.5 h-2.5 rounded-full bg-amber-400/20 blur-[1px] pointer-events-none animate-pulse" style={{ animationDelay: '1.5s' }}></div>
 
+        <Spotlight className="-top-40 left-0 md:-top-24 md:left-32 text-primary-400 motion-reduce:hidden" fill="currentColor" />
+
         {/* Brand Header */}
         <div className="flex items-center gap-3 relative z-10 animate-fade-in shrink-0 mb-6 lg:mb-8">
-          <BrandLogo className="w-8 h-8 rounded-xl shadow-lg shadow-[#5143ec]/30 shrink-0" />
+          <BrandLogo className="w-8 h-8 rounded-xl shadow-lg shadow-primary-600/30 shrink-0" />
           <div>
             <h1 className="text-base font-black text-slate-900 dark:text-white tracking-tight leading-none">Quarry</h1>
           </div>
@@ -83,8 +106,8 @@ export default function Login() {
           
           {/* Main Titles */}
           <div className="space-y-2 animate-slide-up shrink-0" style={{ animationDelay: '0.1s' }}>
-            <h2 className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight">
-              Turn product data into <span className="text-[#5143ec] dark:text-[#818cf8]">qualified leads</span>
+            <h2 data-split className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight">
+              Turn product data into <span className="text-primary-600 dark:text-primary-400">qualified leads</span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-sm">
               AI-powered ICP generation, company sourcing, and outreach sequencing for modern GTM teams.
@@ -94,13 +117,13 @@ export default function Login() {
           {/* Figma 4-item list (Visible in all dimensions, fully scrollable if screen size is compact) */}
           <div className="flex flex-col space-y-2.5 max-w-[400px] animate-slide-up shrink-0" style={{ animationDelay: '0.2s' }}>
             {[
-              { icon: <Target className="w-3.5 h-3.5 text-[#5143ec] dark:text-[#818cf8]" />, text: "AI-generated Ideal Customer Profiles" },
-              { icon: <Building2 className="w-3.5 h-3.5 text-[#5143ec] dark:text-[#818cf8]" />, text: "Smart company sourcing & enrichment" },
-              { icon: <Send className="w-3.5 h-3.5 text-[#5143ec] dark:text-[#818cf8]" />, text: "Automated outreach sequencing" },
-              { icon: <Activity className="w-3.5 h-3.5 text-[#5143ec] dark:text-[#818cf8]" />, text: "Real-time intent signal analysis" }
+              { icon: <Target className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, text: "AI-generated Ideal Customer Profiles" },
+              { icon: <Building2 className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, text: "Smart company sourcing & enrichment" },
+              { icon: <Send className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, text: "Automated outreach sequencing" },
+              { icon: <Activity className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />, text: "Real-time intent signal analysis" }
             ].map((item, idx) => (
               <div key={idx} className="bg-white/80 dark:bg-[#141b2d]/60 border border-slate-200/50 dark:border-slate-800/80 px-4 py-2.5 rounded-2xl flex items-center gap-3 shadow-sm">
-                <div className="w-7 h-7 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-[#5143ec] dark:text-[#818cf8] flex items-center justify-center shrink-0">
+                <div className="w-7 h-7 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-primary-600 dark:text-primary-400 flex items-center justify-center shrink-0">
                   {item.icon}
                 </div>
                 <span className="text-[11.5px] font-bold text-slate-700 dark:text-slate-200 leading-none">
@@ -115,7 +138,7 @@ export default function Login() {
             
             {/* Step badges row */}
             <div className="flex items-center gap-1 bg-slate-100/40 dark:bg-slate-900/30 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800/40 text-[9px] font-bold text-slate-500 dark:text-slate-400 shrink-0 w-fit">
-              <span className="bg-[#5143ec] text-white px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-sm">
+              <span className="bg-primary-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-sm">
                 <FileText className="w-2.5 h-2.5" /> Input
               </span>
               <span className="text-slate-300 dark:text-slate-700 px-0.5">➔</span>
@@ -168,7 +191,7 @@ export default function Login() {
                   
                   {/* Glowing match circle score */}
                   <div className="text-center space-y-0.5">
-                    <span className="block text-sm sm:text-lg font-black text-[#5143ec] dark:text-[#818cf8] leading-none">92%</span>
+                    <span className="block text-sm sm:text-lg font-black text-primary-600 dark:text-primary-400 leading-none">92%</span>
                     <span className="block text-[7px] sm:text-[8px] font-extrabold text-slate-400 uppercase tracking-wider">match</span>
                   </div>
 
@@ -178,7 +201,7 @@ export default function Login() {
 
               {/* Progress bar matching */}
               <div className="w-full h-1 sm:h-1.5 bg-slate-100 dark:bg-slate-800/60 rounded-full overflow-hidden mt-3 sm:mt-4 shrink-0">
-                <div className="h-full w-[92%] bg-[#5143ec] rounded-full" />
+                <div className="h-full w-[92%] bg-primary-600 rounded-full" />
               </div>
 
             </div>
@@ -212,7 +235,7 @@ export default function Login() {
       <div className="col-span-12 lg:col-span-7 xl:col-span-7 h-[54vh] lg:h-full flex flex-col justify-center items-center p-6 sm:p-10 relative bg-white dark:bg-[#070b13] transition-colors duration-300 overflow-hidden shrink-0">
         
         {/* Ambient glow decoration */}
-        <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[#5143ec]/5 dark:bg-[#5143ec]/10 blur-[130px] pointer-events-none transition-colors duration-300" />
+        <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-primary-600/5 dark:bg-primary-600/10 blur-[130px] pointer-events-none transition-colors duration-300" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-500/5 dark:bg-indigo-600/10 blur-[130px] pointer-events-none transition-colors duration-300" />
 
         {/* Theme and Action Bar */}
@@ -246,7 +269,7 @@ export default function Login() {
                   id="email"
                   type="email"
                   required
-                  className="w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-[#5143ec]/20 focus:border-[#5143ec] transition-all text-xs font-semibold"
+                  className="w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
                   placeholder="you@company.com"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -260,7 +283,7 @@ export default function Login() {
                 <label className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 tracking-wide" htmlFor="password">
                   Password
                 </label>
-                <Link to="/forgot-password" className="text-[11px] sm:text-xs font-bold text-[#5143ec] dark:text-[#818cf8] hover:underline transition-colors">
+                <Link to="/forgot-password" className="text-[11px] sm:text-xs font-bold text-primary-600 dark:text-primary-400 hover:underline transition-colors">
                   Forgot password?
                 </Link>
               </div>
@@ -272,7 +295,7 @@ export default function Login() {
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   required
-                  className="w-full pl-10 sm:pl-11 pr-10 sm:pr-11 py-2.5 sm:py-3.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-[#5143ec]/20 focus:border-[#5143ec] transition-all text-xs font-semibold"
+                  className="w-full pl-10 sm:pl-11 pr-10 sm:pr-11 py-2.5 sm:py-3.5 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
                   placeholder="Enter your password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -324,7 +347,7 @@ export default function Login() {
                     </button>
                     <Link
                       to="/forgot-password"
-                      className="flex-1 flex items-center justify-center py-2 px-3 bg-[#5143ec]/10 border border-[#5143ec]/20 text-[#5143ec] dark:text-[#818cf8] rounded-xl font-bold text-[10px] sm:text-[11px] hover:bg-[#5143ec]/15 transition-all text-center"
+                      className="flex-1 flex items-center justify-center py-2 px-3 bg-primary-600/10 border border-primary-600/20 text-primary-600 dark:text-primary-400 rounded-xl font-bold text-[10px] sm:text-[11px] hover:bg-primary-600/15 transition-all text-center"
                     >
                       Set a password →
                     </Link>
@@ -341,7 +364,7 @@ export default function Login() {
               id="login-btn"
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-1.5 py-3 sm:py-4 px-4 bg-[#5143ec] hover:bg-[#4338ca] text-white rounded-2xl font-bold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-4 sm:mt-6 text-xs shadow-lg shadow-[#5143ec]/20 hover:shadow-[#5143ec]/30"
+              className="w-full flex items-center justify-center gap-1.5 py-3 sm:py-4 px-4 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-bold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-4 sm:mt-6 text-xs shadow-lg shadow-primary-600/20 hover:shadow-primary-600/30"
             >
               {loading ? 'Signing in...' : 'Sign in'}
               {!loading && <ArrowRight className="w-4 h-4" />}
@@ -372,7 +395,7 @@ export default function Login() {
 
           <p id="signup-link" className="text-xs text-center text-slate-500 dark:text-slate-455 font-bold shrink-0">
             Don't have an account?{' '}
-            <Link to="/register" className="text-[#5143ec] dark:text-[#818cf8] font-bold hover:underline transition-colors">
+            <Link to="/register" className="text-primary-600 dark:text-primary-400 font-bold hover:underline transition-colors">
               Sign up for free
             </Link>
           </p>

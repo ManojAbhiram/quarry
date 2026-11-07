@@ -33,7 +33,7 @@ export default function ForgotPassword() {
 
       <div className="w-full max-w-[400px] space-y-6 animate-fade-in">
         <div className="space-y-2 text-center">
-          <div className="w-12 h-12 bg-[#5143ec] rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-[#5143ec]/30 mb-4">
+          <div className="w-12 h-12 bg-primary-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-primary-600/30 mb-4">
             <Mail className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Forgot password?</h1>
@@ -53,7 +53,7 @@ export default function ForgotPassword() {
             </div>
             <Link
               to="/login"
-              className="inline-flex items-center gap-2 text-sm font-bold text-[#5143ec] dark:text-[#818cf8] hover:underline"
+              className="inline-flex items-center gap-2 text-sm font-bold text-primary-600 dark:text-primary-400 hover:underline"
             >
               <ArrowLeft className="w-4 h-4" /> Back to sign in
             </Link>
@@ -73,7 +73,7 @@ export default function ForgotPassword() {
                     id="email"
                     type="email"
                     required
-                    className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#5143ec]/20 focus:border-[#5143ec] transition-all text-xs font-semibold"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
                     placeholder="you@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -91,7 +91,7 @@ export default function ForgotPassword() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 px-4 bg-[#5143ec] hover:bg-[#4338ca] text-white rounded-2xl font-bold transition-all text-xs shadow-lg shadow-[#5143ec]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-bold transition-all text-xs shadow-lg shadow-primary-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Sending...' : 'Send reset link'}
               </button>
@@ -100,7 +100,7 @@ export default function ForgotPassword() {
             <div className="text-center">
               <Link
                 to="/login"
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-[#5143ec] dark:hover:text-[#818cf8] transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
               >
                 <ArrowLeft className="w-3.5 h-3.5" /> Back to sign in
               </Link>

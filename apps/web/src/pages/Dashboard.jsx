@@ -1,7 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../context/LeadContext'
 import { useNavigate } from 'react-router-dom'
+import { GlowingEffect } from '../components/ui/glowing-effect'
+import { useStaggerIn } from '../components/motion/useStaggerIn'
 import {
   FileText, Clock, CheckCircle2, XCircle, ArrowRight,
   Zap, Loader2, FileSearch, Sparkles, Target, Users, TrendingUp,
@@ -9,11 +11,13 @@ import {
 
 function StatCard({ id, label, value, icon, gradient, onClick }) {
   return (
+    <div data-reveal>
     <div
       id={id}
       onClick={onClick}
       className="card-hover p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/50 dark:border-slate-800/50 shadow-soft dark:shadow-2xl flex items-start justify-between group cursor-pointer transition-all duration-300 relative overflow-hidden"
     >
+      <GlowingEffect spread={40} glow disabled={false} proximity={64} inactiveZone={0.01} borderWidth={2} />
       <div className="relative z-10">
         <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{label}</p>
         <p className="text-2xl font-bold text-slate-800 dark:text-white mt-2 tracking-tight">{value}</p>
@@ -23,6 +27,7 @@ function StatCard({ id, label, value, icon, gradient, onClick }) {
       </div>
       <div className={`absolute -bottom-4 -right-4 w-24 h-24 bg-gradient-to-br ${gradient} rounded-full blur-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-500`} />
     </div>
+    </div>
   )
 }
 
@@ -30,6 +35,8 @@ export default function Dashboard() {
   const { user } = useAuth()
   const { stats, requests, refreshRequests } = useLeads()
   const navigate = useNavigate()
+  const pageRef = useRef(null)
+  useStaggerIn(pageRef)
 
   useEffect(() => {
     refreshRequests()
@@ -41,9 +48,9 @@ export default function Dashboard() {
   ) || null
 
   return (
-    <div id="dashboard-page" className="h-full overflow-y-auto animate-fade-in pb-12 pr-2">
+    <div id="dashboard-page" ref={pageRef} className="h-full overflow-y-auto animate-fade-in pb-12 page-container">
       {/* Header */}
-      <div id="dashboard-header" className="mb-10 flex items-end justify-between">
+      <div id="dashboard-header" data-reveal className="mb-10 flex items-end justify-between">
         <div>
           <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Overview</h1>
           <p className="text-base text-slate-500 dark:text-slate-400 mt-2 font-medium">
@@ -55,7 +62,7 @@ export default function Dashboard() {
       {/* Stats */}
       <div id="summary" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         <StatCard id="summary-total" label="Total Generations" value={stats.totalLeads}
-          gradient="from-blue-500 to-indigo-600"
+          gradient="from-primary-500 to-accent-600"
           icon={<FileText className="w-6 h-6 text-white" />}
           onClick={() => navigate('/lead-requests', { state: { filter: 'All' } })}
         />

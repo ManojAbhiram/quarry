@@ -14,6 +14,7 @@ export const STORAGE_KEYS = {
   TOKEN: 'token',
   REFRESH_TOKEN: 'refresh_token',
   THEME: 'theme',
+  PALETTE: 'palette',
 }
 
 // UI timing in milliseconds (values match previous in-component literals).

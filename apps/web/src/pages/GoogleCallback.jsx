@@ -50,7 +50,7 @@ export default function GoogleCallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-[#060b13]">
       <div className="text-center space-y-3 animate-fade-in">
-        <div className="w-10 h-10 border-4 border-[#5143ec] border-t-transparent rounded-full animate-spin mx-auto" />
+        <div className="w-10 h-10 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto" />
         <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Completing sign in…</p>
       </div>
     </div>
