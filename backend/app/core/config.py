@@ -1,10 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-# override=False so real environment variables (e.g. those injected by Docker
-# Compose) take precedence over the .env file. This lets the compose
-# MONGODB_URL override point the backend at the "mongodb" service hostname.
-# Local `make dev` is unaffected (no conflicting shell vars → .env still loads).
+# override=False so real environment variables take precedence over the .env file.
 load_dotenv(override=False)
 
 

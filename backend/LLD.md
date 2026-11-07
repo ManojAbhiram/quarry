@@ -48,8 +48,6 @@ backend/
 │   └── leads.py                  Legacy direct-scrape router (not mounted)
 ├── .env                          Local secrets (git-ignored)
 ├── .env.example                  Template for onboarding
-├── docker-compose.yml            MongoDB + backend containers
-├── Dockerfile                    python:3.12-slim image
 ├── pyproject.toml                uv/pip dependencies
 └── requirements.txt              Pip-compatible dependency list
 ```

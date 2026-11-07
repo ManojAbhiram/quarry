@@ -154,4 +154,3 @@ db.requests.createIndex({ "_id": 1, "user_id": 1 })
 | Auth | JWT (python-jose) + bcrypt |
 | Schema validation | Pydantic v2 |
 | Package manager | uv |
-| Container | Docker + Docker Compose |

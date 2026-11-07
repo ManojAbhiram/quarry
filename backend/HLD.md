@@ -258,21 +258,12 @@ Client fetches results:
 .env  →  uvicorn app.main:app --reload
          │
          └── requires MongoDB at localhost:27017
-             (start with: docker compose up mongodb)
+             (local install or a MongoDB Atlas cluster)
 ```
 
-### Docker Compose (full stack)
+### Hosted / production
 
-```
-docker-compose.yml
-  │
-  ├── quarry-mongodb   mongo:7    port: 27017 (internal only)
-  │     volume: mongo_data
-  │
-  └── quarry-backend   python:3.12-slim   port: 8000 → 8000
-        env_file: .env
-        depends_on: mongodb (healthcheck)
-```
+No deployment setup yet — to be decided.
 
 ### Production Checklist
 
@@ -280,7 +271,7 @@ docker-compose.yml
 - [ ] Set `ACCESS_TOKEN_EXPIRE_MINUTES` to ≤ 60
 - [ ] Set `ALLOWED_ORIGINS` to your actual frontend domain(s)
 - [ ] Use MongoDB Atlas or secured replica set (not default credentials)
-- [ ] Put the API behind a reverse proxy (nginx / Caddy) with TLS
+- [ ] Put the API behind a reverse proxy with TLS
 - [ ] Add MongoDB indexes (see LLD §6)
 - [ ] Set up log aggregation and alerting
 
