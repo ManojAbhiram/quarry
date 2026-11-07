@@ -1,4 +1,4 @@
-"""SQLAlchemy models: one table per former Mongo collection (see docstore.DocTable for the mapping)."""
+"""SQLAlchemy models: one table per document collection (see docstore.DocTable for the mapping)."""
 from datetime import datetime
 
 from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, String, UniqueConstraint
@@ -119,7 +119,7 @@ class LeadList(_Doc, Base):
 
 
 class LeadListItem(Base):
-    """Membership of a lead in a list (replaces the lead_ids array of the old Mongo lead_lists documents)."""
+    """Membership of a lead in a list (one row per lead in a list)."""
 
     __tablename__ = "lead_list_items"
     list_id: Mapped[str] = mapped_column(ForeignKey("lead_lists.id", ondelete="CASCADE"), primary_key=True)

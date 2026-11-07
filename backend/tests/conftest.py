@@ -8,7 +8,7 @@ in CI without real credentials.
 
 These are throwaway values. Nothing here reaches a real external service: the tests
 below never trigger the FastAPI lifespan hook, so `connect_db()` is never called and
-no MongoDB instance is needed.
+no database file is created.
 """
 
 import os
@@ -17,8 +17,6 @@ import os
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-used-in-production-0123456789")
 os.environ.setdefault("SERPER_API_KEY", "test-serper-key")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./quarry_test.db")
-os.environ.setdefault("MONGODB_URL", "mongodb://localhost:27017/quarry_test?authSource=admin")
-os.environ.setdefault("DATABASE_NAME", "quarry_test")
 # Keep Chromium out of CI runs entirely.
 os.environ.setdefault("ENABLE_PLAYWRIGHT", "false")
 
@@ -30,7 +28,7 @@ def client():
     """A TestClient that does NOT run startup/shutdown events.
 
     Instantiating TestClient as a context manager would fire the lifespan hook and
-    attempt a real MongoDB connection. Constructing it directly skips lifespan, so
+    open the real database. Constructing it directly skips lifespan, so
     these stay true unit tests with no database dependency.
     """
     from fastapi.testclient import TestClient

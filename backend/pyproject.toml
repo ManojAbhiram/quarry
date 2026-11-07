@@ -8,7 +8,6 @@ dependencies = [
     "bcrypt>=4.2.1",
     "fastapi>=0.111.0",
     "groq>=1.1.2",
-    "motor>=3.6.0",
     "pydantic[email]>=2.9.2",
     "python-dotenv>=1.0.1",
     "python-jose[cryptography]>=3.3.0",

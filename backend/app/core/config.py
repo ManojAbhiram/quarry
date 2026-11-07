@@ -23,11 +23,6 @@ class Settings:
 
     # Database (SQLite by default; any SQLAlchemy async URL works)
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./quarry.db")
-    MONGODB_URL: str = os.getenv(
-        "MONGODB_URL",
-        "mongodb://quarry:quarry_secret@localhost:27017/quarry?authSource=admin",
-    )
-    DATABASE_NAME: str = os.getenv("DATABASE_NAME", "quarry")
 
     # Auth — SECRET_KEY must be explicitly set (no insecure fallback)
     SECRET_KEY: str = _require("SECRET_KEY")

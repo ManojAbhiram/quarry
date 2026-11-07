@@ -5,7 +5,6 @@ requests
 beautifulsoup4
 pydantic[email]
 litellm
-motor
 playwright
 python-jose[cryptography]
 bcrypt>=4.2.1

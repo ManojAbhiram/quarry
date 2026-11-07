@@ -2,7 +2,7 @@
 Lead generation pipeline — end-to-end flow:
 
   1.  Generate search queries from the ICP context (Groq)
-  2.  Store queries in MongoDB
+  2.  Store queries on the request
   3.  Search Google via Serper API for each query
   4.  Deduplicate discovered URLs
   5.  Classify URLs: standalone (company site) vs directory (aggregator/list)
@@ -11,7 +11,7 @@ Lead generation pipeline — end-to-end flow:
   8.  For each standalone URL:
         a. Fetch homepage + discover /contact /about /team sub-pages
         b. Extract structured lead data via Groq (email, phone, company, …)
-  9.  Save all enriched leads to MongoDB
+  9.  Save all enriched leads to the database
   10. Mark the request as Completed (or Failed on error)
 """
 import asyncio

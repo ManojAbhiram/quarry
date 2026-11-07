@@ -53,7 +53,7 @@ The engine operates through a high-performance asynchronous pipeline that ensure
 
 ### 1. Requirements
 - Python 3.12+ & [uv](https://docs.astral.sh/uv/)
-- MongoDB (Local or Atlas)
+- Nothing else for the database: Quarry uses a local SQLite file (`quarry.db`), created on first start
 - Serper API Key (Google Search)
 - Groq or OpenRouter API Key (AI Inference)
 
@@ -83,7 +83,7 @@ backend/
 ├── app/
 │   ├── api/            # REST API controllers & Auth logic
 │   ├── core/           # Security, Logger, and Pydantic Config
-│   ├── db/             # MongoDB Motor driver and Lead operations
+│   ├── db/             # SQLite (SQLAlchemy async) engine, models and repositories
 │   ├── schemas/        # Type-safe Pydantic models
 │   └── services/       # Core Business Logic
 │       ├── leads.py    # Master Pipeline Orchestrator
@@ -110,8 +110,7 @@ backend/
 | `SECRET_KEY` | **Yes** | — | JWT signing secret — use a 32-byte random hex string |
 | `GROQ_API_KEY` | **Yes** | — | Groq API key — [console.groq.com](https://console.groq.com) |
 | `SERPER_API_KEY` | **Yes** | — | Serper key — [serper.dev](https://serper.dev) |
-| `MONGODB_URL` | No | `mongodb://quarry:...@localhost:27017/quarry` | MongoDB connection string |
-| `DATABASE_NAME` | No | `quarry` | MongoDB database name |
+| `DATABASE_URL` | No | `sqlite+aiosqlite:///./quarry.db` | SQLAlchemy async database URL (SQLite file by default; e.g. `postgresql+asyncpg://...` also works) |
 | `GROQ_MODEL` | No | `llama-3.3-70b-versatile` | Model for query generation |
 | `GROQ_MODEL_MINI` | No | `llama-3.1-8b-instant` | Model for classification + extraction |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `60` | JWT lifetime |
@@ -130,15 +129,9 @@ The server **will not start** without the three required variables — this prev
 uv add <package-name>
 ```
 
-### Recommended MongoDB indexes
+### Database
 
-Run once after first deployment:
-
-```javascript
-db.users.createIndex({ "email": 1 }, { unique: true })
-db.requests.createIndex({ "user_id": 1, "created_at": -1 })
-db.requests.createIndex({ "_id": 1, "user_id": 1 })
-```
+Tables are created automatically on startup, and expired login sessions are purged then. The data lives in the file named by `DATABASE_URL` (`backend/quarry.db` by default, git-ignored). Delete the file to reset all data.
 
 ---
 
@@ -147,7 +140,7 @@ db.requests.createIndex({ "_id": 1, "user_id": 1 })
 | Layer | Technology |
 | ----- | ---------- |
 | API framework | FastAPI + uvicorn |
-| Database | MongoDB (motor async driver) |
+| Database | SQLite via SQLAlchemy 2.0 async (`aiosqlite`) |
 | LLM inference | Groq (llama-3.3-70b, llama-3.1-8b) |
 | Web search | Serper API (Google) |
 | Web scraping | httpx (async) + BeautifulSoup4 |

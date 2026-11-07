@@ -9,7 +9,7 @@ Quarry is an AI-powered B2B lead generation backend. Given an **Ideal Customer P
 3. Classifies each URL (company site vs aggregator/directory)
 4. Scrapes each company website, navigating to contact/about/team sub-pages
 5. Extracts structured lead data (email, phone, company name, contact person) using an LLM
-6. Persists all results in MongoDB
+6. Persists all results in a SQLite database
 
 Clients interact through a REST API. The pipeline runs asynchronously in the background so the HTTP response returns immediately with a `request_id` the client polls.
 
@@ -67,9 +67,9 @@ Clients interact through a REST API. The pipeline runs asynchronously in the bac
              ┌──────────────────────────────────────────────────────────┘
              ▼
    ┌─────────────────────────────────────────────┐
-   │              MongoDB (motor async)          │
+   │       SQLite (SQLAlchemy async)             │
    │                                             │
-   │  Collections:                               │
+   │  Tables:                                    │
    │    users      — registered accounts         │
    │    requests   — lead requests + results     │
    └─────────────────────────────────────────────┘
@@ -103,9 +103,10 @@ Clients interact through a REST API. The pipeline runs asynchronously in the bac
 
 | Module | Responsibility |
 |--------|----------------|
-| `database.py` | Motor async client — `connect_db`, `close_db`, `get_db` |
-| `leads.py` | All MongoDB read/write functions for `requests` collection |
-| `mongo_ids.py` | ObjectId ↔ string normalisation — handles mixed-ID queries |
+| `engine.py` | Async SQLAlchemy engine/session — `connect_db`, `close_db`, `session` |
+| `models.py` | One table per document collection (key columns + JSON `data`) and the `TABLES` registry |
+| `docstore.py` | `DocTable` — generic document↔row mapping used by every repository |
+| `leads.py`, `requests.py`, `users.py`, … | Repository functions per table |
 
 ### 3.4 Scraper Package  (`scraper/`)
 
@@ -146,7 +147,7 @@ Client sends:
 ──────────────────────────────────────────────────────────────────────
 STEP 1  API layer (leads.py)
   • Validates body against CompleteLeadRequest schema
-  • Calls insert_complete_lead_request() → creates MongoDB doc
+  • Calls insert_complete_lead_request() → creates the request row
     {_id, title, business_type, target_location, ideal_lead_profile,
      user_id, status:"Pending", created_at}
   • Registers _run_pipeline_background() as a BackgroundTask
@@ -158,7 +159,7 @@ STEP 2  Pipeline: Query Generation  (services/leads.py + services/groq.py)
   • Groq returns 5 targeted queries:
     ["list of private engineering colleges Tamil Nadu",
      "top engineering colleges in Chennai",  ...]
-  • Queries saved to MongoDB ($push → queries array)
+  • Queries appended to the request's `queries` list
 
 ──────────────────────────────────────────────────────────────────────
 STEP 3  Pipeline: Web Search  (services/serper.py)
@@ -182,7 +183,7 @@ STEP 5  Pipeline: Directory Expansion  (services/scraper.py)
 
 ──────────────────────────────────────────────────────────────────────
 STEP 6  Pipeline: Basic Lead Save  (db/leads.py)
-  • Saves pre-enrichment standalone items to MongoDB
+  • Saves pre-enrichment standalone items to the leads table
     (title, url, snippet — no contact data yet)
 
 ──────────────────────────────────────────────────────────────────────
@@ -207,9 +208,7 @@ STEP 8  Pipeline: Lead Extraction  (services/groq.py)
 
 ──────────────────────────────────────────────────────────────────────
 STEP 9  Pipeline: Save Enriched Leads  (db/leads.py)
-  • Enriched leads appended to MongoDB request doc
-    ($push → enriched_leads array)
-  • Flag has_enriched: true set on the doc
+  • Enriched leads upserted into the leads table (with company, enrichment and decision-maker rows)
 
 ──────────────────────────────────────────────────────────────────────
 STEP 10  Pipeline: Complete  (db/leads.py)
@@ -233,7 +232,7 @@ Client fetches results:
 |---------|---------|------|
 | **Groq API** | LLM inference (query gen, URL classification, lead extraction) | `GROQ_API_KEY` header |
 | **Serper API** | Google search — returns organic results JSON | `X-API-KEY` header |
-| **MongoDB** | Persistent storage for users, requests, leads | Connection string in `MONGODB_URL` |
+| **SQLite** | Persistent storage for users, requests, leads | `DATABASE_URL` (file path by default) |
 | **OpenRouter** *(optional)* | Free LLM models for direct-URL scrape endpoint | `OPENROUTER_API_KEY` |
 | **OpenAI / Claude / Gemini / Grok / Perplexity** *(optional)* | Paid fallback providers for direct-URL scrape endpoint | Individual API keys |
 
@@ -257,8 +256,7 @@ Client fetches results:
 ```
 .env  →  uvicorn app.main:app --reload
          │
-         └── requires MongoDB at localhost:27017
-             (local install or a MongoDB Atlas cluster)
+         └── creates ./quarry.db (SQLite) on first start; nothing to install
 ```
 
 ### Hosted / production
@@ -270,9 +268,8 @@ No deployment setup yet — to be decided.
 - [ ] Set `SECRET_KEY` to a cryptographically random 32-byte hex string
 - [ ] Set `ACCESS_TOKEN_EXPIRE_MINUTES` to ≤ 60
 - [ ] Set `ALLOWED_ORIGINS` to your actual frontend domain(s)
-- [ ] Use MongoDB Atlas or secured replica set (not default credentials)
+- [ ] For multi-instance hosting, switch `DATABASE_URL` to Postgres (SQLite is a single-writer local file)
 - [ ] Put the API behind a reverse proxy with TLS
-- [ ] Add MongoDB indexes (see LLD §6)
 - [ ] Set up log aggregation and alerting
 
 ---
@@ -282,7 +279,7 @@ No deployment setup yet — to be decided.
 | Concern | Design Decision |
 |---------|----------------|
 | **Latency** | Pipeline runs as background task — HTTP returns in < 200ms |
-| **Concurrency** | FastAPI + Motor (async) — single process handles many concurrent requests |
+| **Concurrency** | FastAPI + SQLAlchemy async (SQLite, WAL mode) — single process handles many concurrent requests |
 | **Scalability** | Stateless API process — can horizontally scale behind a load balancer |
 | **Reliability** | Background task catches all exceptions, sets status = "Failed" |
 | **Observability** | Structured logging with timestamps and log levels to stdout |

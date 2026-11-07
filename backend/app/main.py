@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.db.database import connect_db, close_db
+from app.db.engine import connect_db, close_db
 from app.api import auth, users, requests, leads, request_intake, competitors, tech_stack
 from app.api import google_auth
 from app.api import organizations

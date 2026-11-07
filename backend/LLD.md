@@ -10,9 +10,10 @@ backend/
 │   │   ├── config.py             Settings class — all env vars with validation
 │   │   └── logger.py             Root logger configuration
 │   ├── db/
-│   │   ├── database.py           Motor async client singleton
-│   │   ├── leads.py              All read/write operations on requests collection
-│   │   └── mongo_ids.py          ObjectId ↔ string query helpers
+│   │   ├── engine.py             Async SQLAlchemy engine + session (SQLite PRAGMAs)
+│   │   ├── models.py             Tables + TABLES registry
+│   │   ├── docstore.py           DocTable: document↔row helper
+│   │   └── leads.py (and other repositories)  Read/write functions per table
 │   ├── api/
 │   │   ├── auth.py               POST /register  POST /login
 │   │   ├── users.py              GET/PUT /me  PUT /me/password  DELETE /me
@@ -384,83 +385,9 @@ async def save_enriched_leads_to_db(
 async def get_lead_request(request_id: str, user_id: str) -> dict | None
 ```
 
-### `app/db/mongo_ids.py`
+### Data model (`app/db/models.py`)
 
-```python
-def id_query(field: str, value: Any) -> dict
-    """Build {field: {$in: [ObjectId, string]}} for mixed-ID tolerance."""
-
-def normalize_object_id(value: Any) -> Any
-    """Convert valid ObjectId strings to ObjectId; others unchanged."""
-
-def id_values(value: Any) -> list
-    """Return [ObjectId, string] representations — used in $nin queries."""
-```
-
----
-
-## 6. Pipeline Step Detail
-
-```
-run_lead_pipeline(request_id, payload)
-│
-├── [1] generate_sales_queries(payload)          — async Groq call
-│         model: llama-3.3-70b-versatile
-│         max_tokens: 1000
-│         response_format: json_object
-│         output: SearchQueryList.queries
-│
-├── [2] add_queries_to_lead_request(...)          — MongoDB $push
-│
-├── [3] fetch_leads_from_serper(query) × N        — async httpx POST
-│         endpoint: https://google.serper.dev/search
-│         extracts: organic[].{title, link, snippet}
-│         normalises: link → url
-│
-├── [4] _deduplicate_urls(results)                — O(n) set dedup
-│
-├── [5] process_serper_results_batch(urls)        — sync Groq call
-│         classify_results_batch():
-│           model: llama-3.1-8b-instant
-│           max_tokens: 2000
-│           response_format: json_object
-│           builds class_map: {url → site_type}
-│           splits: standalone_items / directory_items
-│
-├── [6] _expand_directories(directory_items)      — thread executor
-│         scrape_directory_links(url):
-│           sync requests.get → BeautifulSoup
-│           returns same-domain hrefs
-│         re-classifies expanded links via Groq
-│         deduplicates again
-│
-├── [7] process_and_save_standalone_leads(...)    — MongoDB $push
-│         saves Lead(url, title, snippet, type="standalone")
-│
-├── [8] _scrape_and_extract(standalone, ctx, ...)
-│     │
-│     ├── for each url:
-│     │     scrape_url_with_discovery(url):      — async httpx
-│     │       GET homepage → _discover_subpages() → GET sub-pages
-│     │       _clean_html() × all pages
-│     │       join + cap at 12,000 chars
-│     │
-│     └── loop.run_in_executor(extract_leads_from_pages, pages, ctx):
-│               for each page:
-│                 extract_lead_from_page(text, url, ctx):
-│                   model: llama-3.1-8b-instant
-│                   max_tokens: 1000
-│                   extracts: company_name, website, industry, location,
-│                             contact_name, contact_title, contact_email,
-│                             contact_phone, description, buying_signals,
-│                             match_score (0–100)
-│
-├── [9] save_enriched_leads_to_db(...)            — MongoDB $push enriched_leads
-│         maps extracted dict → storage schema
-│         sets has_enriched: true
-│
-└── [10] update_request_status("Completed")       — MongoDB $set status
-```
+Each table has a string `id` primary key, a few real columns (those used in filters, joins, sorting or unique constraints), and a JSON `data` column holding every other field. `DocTable` (`app/db/docstore.py`) maps flat dicts (with `_id`) to rows. `lead_lists` memberships live in `lead_list_items(list_id, lead_id, added_at)`.
 
 ---
 
@@ -485,8 +412,7 @@ All values read from `.env` via `python-dotenv`.
 | `SECRET_KEY` | **Yes** | — | JWT signing secret (min 32 random chars) |
 | `GROQ_API_KEY` | **Yes** | — | Groq API key |
 | `SERPER_API_KEY` | **Yes** | — | Serper (Google Search) API key |
-| `MONGODB_URL` | No | `mongodb://quarry:quarry_secret@localhost:27017/quarry?authSource=admin` | MongoDB connection string |
-| `DATABASE_NAME` | No | `quarry` | MongoDB database name |
+| `DATABASE_URL` | No | `sqlite+aiosqlite:///./quarry.db` | SQLAlchemy async database URL |
 | `GROQ_MODEL` | No | `llama-3.3-70b-versatile` | Model for query generation |
 | `GROQ_MODEL_MINI` | No | `llama-3.1-8b-instant` | Model for classification + extraction |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `60` | JWT lifetime |
@@ -517,16 +443,6 @@ The three Required keys are validated at startup by `_require()` in `config.py` 
 
 ---
 
-## 10. Suggested MongoDB Indexes
+## 10. Indexes
 
-Run once after first deployment:
-
-```javascript
-// users collection
-db.users.createIndex({ "email": 1 }, { unique: true })
-
-// requests collection
-db.requests.createIndex({ "user_id": 1, "created_at": -1 })
-db.requests.createIndex({ "_id": 1, "user_id": 1 })
-db.requests.createIndex({ "status": 1 })
-```
+Indexes and unique constraints are declared on the models in `app/db/models.py` and created with the tables at startup. There is nothing to run by hand.

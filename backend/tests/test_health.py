@@ -1,16 +1,12 @@
 """Smoke tests: the app imports, wires up, and serves /api/health.
 
-These are intentionally shallow. The repo had no tests at all, so the goal is a
-CI gate that catches the failure mode that actually bites during deploys — an
-import error, a bad route prefix, or a broken health endpoint shipping to the
-cluster, where it would fail the readiness probe and stall the rollout.
-
-Both k8s Deployments probe /api/health, so a regression there breaks deploys.
+These are intentionally shallow: they catch an import error, a bad route prefix, or a
+broken health endpoint before it ships.
 """
 
 
 def test_health_returns_ok(client):
-    """The readiness/liveness probe target used by k8s must return 200."""
+    """The health endpoint must return 200."""
     response = client.get("/api/health")
 
     assert response.status_code == 200
@@ -20,13 +16,8 @@ def test_health_returns_ok(client):
     assert "version" in body
 
 
-def test_health_path_matches_k8s_probe_path():
-    """Guard the probe path contract.
-
-    infra/k8s/base/backend.yaml hardcodes httpGet.path=/api/health. If API_V1_STR
-    changes, the probes silently start 404ing and every rollout hangs. Fail here
-    instead of discovering it during a deploy.
-    """
+def test_health_path_is_stable():
+    """Clients and monitors rely on /api/health; changing API_V1_STR would silently move it."""
     from app.core.config import settings
 
     assert f"{settings.API_V1_STR}/health" == "/api/health"

@@ -38,7 +38,7 @@ async def get_session_by_token_hash(token_hash: str) -> Optional[dict]:
 
 
 async def purge_expired_sessions() -> int:
-    """Delete expired sessions (replaces the Mongo TTL index). Returns how many were removed."""
+    """Delete expired sessions (there is no automatic expiry in SQLite). Returns how many were removed."""
     removed = await _sessions.delete_where(UserSession.expires_at <= datetime.utcnow())
     if removed:
         logger.info("Purged %d expired sessions", removed)
