@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.logger import logger
 from app.db import engine as _engine
@@ -101,16 +102,19 @@ async def add_leads_to_list(list_id: str, user_id: str, lead_ids: list[str]) -> 
     if await _lists.get(_id=list_id, user_id=user_id) is None:
         return None
     now = datetime.utcnow()
-    async with _engine.session() as s, s.begin():
-        existing = set(
-            (await s.execute(select(LeadListItem.lead_id).where(LeadListItem.list_id == list_id))).scalars().all()
-        )
-        new_ids = [lid for lid in dict.fromkeys(lead_ids) if lid not in existing]
-        # +i microseconds keeps the order of this batch stable when sorting by added_at
-        s.add_all(
-            LeadListItem(list_id=list_id, lead_id=lid, added_at=now + timedelta(microseconds=i))
-            for i, lid in enumerate(new_ids)
-        )
+    try:
+        async with _engine.session() as s, s.begin():
+            existing = set(
+                (await s.execute(select(LeadListItem.lead_id).where(LeadListItem.list_id == list_id))).scalars().all()
+            )
+            new_ids = [lid for lid in dict.fromkeys(lead_ids) if lid not in existing]
+            # +i microseconds keeps the order of this batch stable when sorting by added_at
+            s.add_all(
+                LeadListItem(list_id=list_id, lead_id=lid, added_at=now + timedelta(microseconds=i))
+                for i, lid in enumerate(new_ids)
+            )
+    except IntegrityError:  # the list was deleted between the ownership check and the insert
+        return None
     await _lists.update(list_id, {"updated_at": now})
     return await get_lead_list_by_id(list_id, user_id)
 

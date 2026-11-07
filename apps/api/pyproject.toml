@@ -27,11 +27,14 @@ dependencies = [
     "aiosmtplib>=3.0.0",
 ]
 
-# Dev/CI tooling is declared in requirements-dev.txt rather than a
-# [dependency-groups] table on purpose: adding a group here would invalidate the
-# committed uv.lock, and `uv sync --frozen` would start failing until someone
-# regenerates it. Keeping dev deps in a pip-installable file leaves uv.lock valid
-# and mirrors the existing requirements.txt/pyproject split.
+# Dev tooling lives in a dependency group so a plain `uv sync` installs it (pytest, ruff). CI that prefers pip
+# can still use requirements-dev.txt; keep the two in step.
+[dependency-groups]
+dev = [
+    "pytest>=9.1",
+    "pytest-asyncio>=1.4",
+    "ruff>=0.16",
+]
 
 [tool.ruff]
 target-version = "py313"

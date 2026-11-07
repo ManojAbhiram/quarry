@@ -45,7 +45,10 @@ def _json_default(obj):
 
 def _json_hook(d: dict):
     if len(d) == 1 and "$dt" in d:
-        return datetime.fromisoformat(d["$dt"])
+        try:
+            return datetime.fromisoformat(d["$dt"])
+        except (TypeError, ValueError):
+            return d  # user data that merely looks like our marker: leave it alone
     return d
 
 

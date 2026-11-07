@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request, status
+from sqlalchemy.exc import IntegrityError
 
 import httpx
 
@@ -47,7 +48,10 @@ async def register(body: RegisterRequest, request: Request):
         raise HTTPException(status_code=400, detail="Email already registered")
 
     logger.info("Registering new user: %s", body.email)
-    org_doc = await create_organization(body.org_name, body.org_domain)
+    try:
+        org_doc = await create_organization(body.org_name, body.org_domain)
+    except IntegrityError:
+        raise HTTPException(status_code=400, detail="Organization domain already registered") from None
     org_id = str(org_doc["_id"])
 
     doc = {
@@ -59,7 +63,10 @@ async def register(body: RegisterRequest, request: Request):
         "job_title": None,
         "phone": None,
     }
-    user_id, doc = await insert_user(doc)
+    try:
+        user_id, doc = await insert_user(doc)
+    except IntegrityError:  # lost a race against a concurrent signup with the same email
+        raise HTTPException(status_code=400, detail="Email already registered") from None
     access_token = create_access_token(user_id)
     refresh_token = create_refresh_token(user_id)
 
