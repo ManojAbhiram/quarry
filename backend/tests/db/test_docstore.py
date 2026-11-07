@@ -59,3 +59,23 @@ async def test_25_concurrent_inserts_no_lock_errors(db):
         *[leads.insert({"request_id": "r1", "url": f"https://e{i}.com", "title": str(i)}) for i in range(25)]
     )
     assert len(set(ids)) == 25
+
+
+async def test_replace_overwrites_whole_document(db):
+    reqs = TABLES["requests"]
+    rid = await reqs.insert({"user_id": "u1", "status": "Draft", "title": "old", "extra": 1})
+    await reqs.replace(rid, {"user_id": "u1", "status": "Pending", "title": "new"})
+    got = await reqs.get(_id=rid)
+    assert got["title"] == "new" and got["status"] == "Pending"
+    assert "extra" not in got
+
+
+async def test_modify_applies_function_atomically(db):
+    reqs = TABLES["requests"]
+    rid = await reqs.insert({"user_id": "u1", "queries": ["a"]})
+
+    def add(doc):
+        return {"queries": doc.get("queries", []) + ["b"]}
+
+    await asyncio.gather(*[reqs.modify(rid, add) for _ in range(5)])
+    assert len((await reqs.get(_id=rid))["queries"]) == 6

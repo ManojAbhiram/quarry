@@ -1,15 +1,17 @@
-from app.db.database import get_db
-from app.core.logger import logger
 from datetime import datetime
 import uuid
+
+from app.core.logger import logger
+from app.db.models import TABLES
+
+_competitors = TABLES["competitors"]
 
 
 async def insert_competitors_request(request_data: dict, user_id: str) -> str:
     """
-    Insert a new lead request document into the competitors collection (legacy product-similarity pipeline).
+    Insert a new lead request document into the competitors table (legacy product-similarity pipeline).
     Returns the string _id of the inserted document.
     """
-    db = get_db()
     request_data["user_id"] = str(user_id)
 
     req_id = request_data.pop("id", None) or str(uuid.uuid4())
@@ -20,37 +22,14 @@ async def insert_competitors_request(request_data: dict, user_id: str) -> str:
     if "status" not in request_data:
         request_data["status"] = "Pending"
 
-    await db.competitors.insert_one(request_data)
+    await _competitors.insert(request_data)
     logger.info("Inserted competitors request %s for user %s", req_id, user_id)
     return str(req_id)
 
 
 async def create_competitor_run(request_id: str, user_id: str, product_description: str = "") -> None:
-    """
-    Upsert a run-level document in competitor_test keyed by request_id.
-    Sets status to Pending on first creation; does not overwrite an existing doc.
-    Also creates/updates a corresponding competitor_analyses document.
-    """
-    db = get_db()
-    now = datetime.utcnow()
-
-    # Legacy competitor_test collection (backward compat)
-    await db.competitor_test.update_one(
-        {"_id": request_id},
-        {
-            "$setOnInsert": {
-                "_id": request_id,
-                "request_id": request_id,
-                "user_id": str(user_id),
-                "status": "Pending",
-                "created_at": now,
-            }
-        },
-        upsert=True,
-    )
+    """Create (or reuse) the competitor_analyses document for a pipeline run, status Pending."""
     logger.info("Competitor run created for request_id=%s (status=Pending)", request_id)
-
-    # Also write to competitor_analyses (new normalized collection)
     try:
         from app.db.competitor_analyses import upsert_competitor_analysis
         await upsert_competitor_analysis(
@@ -64,21 +43,8 @@ async def create_competitor_run(request_id: str, user_id: str, product_descripti
 
 
 async def update_competitor_run_status(request_id: str, status: str) -> None:
-    """
-    Update the status of the run-level document in competitor_test.
-    Also mirrors the status into competitor_analyses.
-    """
-    db = get_db()
-    now = datetime.utcnow()
-
-    # Legacy competitor_test collection (backward compat)
-    await db.competitor_test.update_one(
-        {"_id": request_id},
-        {"$set": {"status": status, "updated_at": now}},
-    )
+    """Update the status of a pipeline run (stored on its competitor_analyses document)."""
     logger.info("Competitor run %s -> status=%s", request_id, status)
-
-    # Mirror into competitor_analyses
     try:
         from app.db.competitor_analyses import update_competitor_analysis_status
         await update_competitor_analysis_status(request_id, status)

@@ -22,24 +22,15 @@ async def find_competitors(request_id: str, product_description: str, user_id: s
 
 async def get_competitors(request_id: str, user_id: str) -> dict:
     """Retrieve stored competitor results from competitor_analyses + competitors (ERD schema)."""
-    from app.db.database import get_db
-    db = get_db()
+    from app.db.competitor_analyses import get_competitor_analysis_for_user, list_competitors_for_analysis
 
-    analysis = await db.competitor_analyses.find_one(
-        {"request_id": request_id, "user_id": user_id}
-    )
+    analysis = await get_competitor_analysis_for_user(request_id, user_id)
     if not analysis:
-        # Legacy fallback: check competitor_test embedded array
-        legacy = await db.competitor_test.find_one({"_id": request_id, "user_id": user_id})
-        if legacy and legacy.get("competitors"):
-            return {"status": legacy.get("status"), "competitors": legacy["competitors"]}
         raise HTTPException(status_code=404, detail="No competitor data found for this request_id")
 
-    competitors = await db.competitors.find(
-        {"analysis_id": str(analysis["_id"])}
-    ).sort("match_score", -1).to_list(length=None)
+    competitors = await list_competitors_for_analysis(analysis["_id"])
 
-    # Strip internal Mongo fields
+    # Strip internal fields
     for c in competitors:
         c.pop("_id", None)
         c.pop("analysis_id", None)

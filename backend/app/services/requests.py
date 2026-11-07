@@ -4,14 +4,13 @@ from fastapi import HTTPException
 
 from app.db import requests as db
 from app.db.database import get_db
-from app.db.mongo_ids import normalize_object_id
-from app.db.product_intake import upsert_product_intake
-from app.db.icp_profiles import upsert_icp_profile
+from app.db.product_intake import get_product_intakes_by_request_ids, upsert_product_intake
+from app.db.icp_profiles import get_icp_profiles_by_request_ids, upsert_icp_profile
 from app.schemas.requests import LeadRequestOut, StatsOut, request_to_out
 
 
 async def create_request(user_id, org_id, body) -> dict:
-    uid = normalize_object_id(user_id)
+    uid = str(user_id)
     doc = {
         "title": body.name,
         "description": body.description,
@@ -40,11 +39,11 @@ async def _fetch_enrich_map(request_ids: list[str]) -> dict[str, dict]:
     if not request_ids:
         return {}
 
-    async for pi in _db.product_intake.find({"request_id": {"$in": request_ids}}):
-        intake_map[pi["request_id"]] = {k: v for k, v in pi.items() if k not in ("_id", "request_id", "created_at", "updated_at")}
+    for rid, pi in (await get_product_intakes_by_request_ids(request_ids)).items():
+        intake_map[rid] = {k: v for k, v in pi.items() if k not in ("_id", "request_id", "created_at", "updated_at")}
 
-    async for icp in _db.icp_profiles.find({"request_id": {"$in": request_ids}}):
-        icp_map[icp["request_id"]] = {k: v for k, v in icp.items() if k not in ("_id", "request_id", "generated_at", "created_at", "updated_at", "queries")}
+    for rid, icp in (await get_icp_profiles_by_request_ids(request_ids)).items():
+        icp_map[rid] = {k: v for k, v in icp.items() if k not in ("_id", "request_id", "generated_at", "created_at", "updated_at", "queries")}
 
     async for agg in _db.leads.aggregate([
         {"$match": {"request_id": {"$in": request_ids}, "enrichment_status": "enriched"}},

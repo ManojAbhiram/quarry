@@ -75,6 +75,27 @@ class DocTable:
             self._apply(row, fields)
             return self._to_doc(row)
 
+    async def replace(self, id: str, doc: dict) -> Optional[dict]:
+        """Overwrite the whole document: fields absent from `doc` are dropped (key columns become NULL)."""
+        keys, data = self._split(doc)
+        async with _engine.session() as s, s.begin():
+            row = await s.get(self.model, id)
+            if row is None:
+                return None
+            for k in self.key_columns:
+                setattr(row, k, keys.get(k))
+            row.data = data
+            return self._to_doc(row)
+
+    async def modify(self, id: str, fn) -> Optional[dict]:
+        """Read-modify-write in one transaction: `fn(doc) -> fields to set`. Atomic under SQLite's write lock."""
+        async with _engine.session() as s, s.begin():
+            row = await s.get(self.model, id)
+            if row is None:
+                return None
+            self._apply(row, fn(self._to_doc(row)))
+            return self._to_doc(row)
+
     async def upsert(self, match: dict, doc: dict) -> str:
         async with _engine.session() as s, s.begin():
             row = (await s.execute(select(self.model).where(*self._eq(match)).limit(1))).scalars().first()

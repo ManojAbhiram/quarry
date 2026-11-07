@@ -18,8 +18,7 @@ from app.core.utils import normalize_urls_list
 
 from app.db.competitor_analyses import upsert_competitor_analysis
 from app.db.icp_profiles import upsert_icp_profile
-from app.db.requests import insert_complete_lead_request
-from app.db.mongo_ids import id_query
+from app.db.requests import get_request_by_id, insert_complete_lead_request, replace_request
 from app.db.product_intake import upsert_product_intake
 from app.schemas.request_intake import (
     RequestIntakeCreate,
@@ -243,16 +242,10 @@ async def create_request(
     draft_id: Optional[str] = None,
 ) -> str:
     """Persist the request (new or from draft) and return the request_id."""
-    from app.db.database import get_db
-
-    db = get_db()
     created_at = datetime.utcnow()
 
     if draft_id:
-        doc = await db.requests.find_one({
-            **id_query("_id", draft_id),
-            **id_query("user_id", user_id),
-        })
+        doc = await get_request_by_id(draft_id, user_id)
         if not doc:
             raise HTTPException(status_code=404, detail="Draft request not found")
         created_at = doc.get("created_at", created_at)
@@ -271,7 +264,7 @@ async def create_request(
     if draft_id:
         request_doc["user_id"] = user_id
         request_doc["_id"] = doc["_id"]
-        await db.requests.replace_one({"_id": doc["_id"]}, request_doc)
+        await replace_request(doc["_id"], request_doc)
         request_id = str(doc["_id"])
         logger.info("Updated draft %s → Pending", request_id)
     else:
@@ -301,9 +294,6 @@ async def create_direct_companies_request(
     roles are stored on the request doc for provenance; the pipeline receives
     them directly via the launch endpoint.
     """
-    from app.db.database import get_db
-
-    db = get_db()
     created_at = datetime.utcnow()
 
     title = (body.title or "").strip()
@@ -329,16 +319,13 @@ async def create_direct_companies_request(
     }
 
     if draft_id:
-        doc = await db.requests.find_one({
-            **id_query("_id", draft_id),
-            **id_query("user_id", user_id),
-        })
+        doc = await get_request_by_id(draft_id, user_id)
         if not doc:
             raise HTTPException(status_code=404, detail="Draft request not found")
         request_doc["created_at"] = doc.get("created_at", created_at)
         request_doc["user_id"] = user_id
         request_doc["_id"] = doc["_id"]
-        await db.requests.replace_one({"_id": doc["_id"]}, request_doc)
+        await replace_request(doc["_id"], request_doc)
         logger.info("Updated draft %s → Pending (direct companies)", doc["_id"])
         return str(doc["_id"])
 

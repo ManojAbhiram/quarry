@@ -22,7 +22,6 @@ from bs4 import BeautifulSoup
 
 from app.core.config import settings
 from app.core.utils import normalize_url
-from app.db.database import get_db
 from app.db.competitors import create_competitor_run, update_competitor_run_status
 from app.services.llm import _llm_json_completion
 from app.services.scraper import scrape_url_with_discovery
@@ -1067,16 +1066,6 @@ async def enrich_and_store_competitors(
             enriched.append(result)
 
     if enriched:
-        db = get_db()
-        try:
-            await db.competitor_test.update_one(
-                {"_id": request_id},
-                {"$set": {"competitors": enriched, "updated_at": datetime.utcnow()}},
-            )
-            logger.info("[enrich] Stored %d competitors into competitor_test doc (request_id=%s)", len(enriched), request_id)
-        except Exception as exc:
-            logger.error("[enrich] Failed to store competitors to competitor_test: %s", exc)
-
         # Save to the new normalized schema
         try:
             from app.db.competitor_analyses import get_competitor_analysis, save_competitors_to_analysis

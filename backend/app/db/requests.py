@@ -2,81 +2,69 @@ from datetime import datetime
 from typing import Optional
 import uuid
 
+from sqlalchemy import func, select
+
 from app.core.logger import logger
-from app.db.database import get_db
-from app.db.mongo_ids import id_query, normalize_object_id
+from app.db import engine as _engine
+from app.db.models import TABLES, Request
+
+_reqs = TABLES["requests"]
 
 
 async def get_request_by_id(request_id: str, user_id) -> Optional[dict]:
-    db = get_db()
-    return await db.requests.find_one({
-        **id_query("_id", request_id),
-        **id_query("user_id", user_id),
-    })
+    return await _reqs.get(_id=str(request_id), user_id=str(user_id))
 
 
 async def get_request_status_doc(request_id: str, user_id) -> Optional[dict]:
-    db = get_db()
-    return await db.requests.find_one(
-        {
-            **id_query("_id", request_id),
-            **id_query("user_id", user_id),
-        },
-        {"status": 1, "queries": 1},
-    )
+    doc = await get_request_by_id(request_id, user_id)
+    if doc is None:
+        return None
+    out = {"_id": doc["_id"], "status": doc.get("status")}
+    if "queries" in doc:
+        out["queries"] = doc["queries"]
+    return out
 
 
 async def list_user_requests(user_id) -> list[dict]:
-    db = get_db()
-    cursor = db.requests.find(id_query("user_id", user_id)).sort("updated_at", -1)
-    return [doc async for doc in cursor]
+    return await _reqs.find(Request.user_id == str(user_id), order_by=Request.updated_at.desc())
 
 
 async def get_user_request_stats(user_id) -> dict[str, int]:
-    db = get_db()
-    uid = normalize_object_id(user_id)
-    pipeline = [
-        {"$match": id_query("user_id", uid)},
-        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
-    ]
-    return {doc["_id"]: doc["count"] async for doc in db.requests.aggregate(pipeline)}
+    stmt = select(Request.status, func.count()).where(Request.user_id == str(user_id)).group_by(Request.status)
+    async with _engine.session() as s, s.begin():
+        return {status: count for status, count in (await s.execute(stmt)).all()}
 
 
 async def create_draft_request(doc: dict) -> str:
-    db = get_db()
-    result = await db.requests.insert_one(doc)
-    logger.info("Created draft request %s", result.inserted_id)
-    return str(result.inserted_id)
+    request_id = await _reqs.insert(doc)
+    logger.info("Created draft request %s", request_id)
+    return request_id
 
 
 async def delete_request_by_id(request_id: str) -> bool:
-    db = get_db()
-    result = await db.requests.delete_one(id_query("_id", request_id))
-    return result.deleted_count > 0
+    return await _reqs.delete(str(request_id))
 
 
 async def update_request_fields(request_id: str, update_fields: dict) -> Optional[dict]:
-    db = get_db()
-    await db.requests.update_one(id_query("_id", request_id), {"$set": update_fields})
-    return await db.requests.find_one(id_query("_id", request_id))
+    return await _reqs.update(str(request_id), update_fields)
+
+
+async def replace_request(request_id: str, doc: dict) -> Optional[dict]:
+    """Overwrite a request document entirely (used when a draft is promoted to a full request)."""
+    return await _reqs.replace(str(request_id), doc)
 
 
 # ── Functions moved from db/leads.py ─────────────────────────────────────────
 
 async def update_request_status(request_id: str, status: str, time_taken: float | None = None) -> None:
-    db = get_db()
     update_data = {"status": status, "updated_at": datetime.utcnow()}
     if time_taken is not None:
         update_data["time_taken"] = time_taken
-    await db.requests.update_one(
-        id_query("_id", request_id),
-        {"$set": update_data},
-    )
+    await _reqs.update(str(request_id), update_data)
     logger.info("Request %s -> status=%s (time_taken=%s)", request_id, status, time_taken)
 
 
 async def insert_complete_lead_request(request_data: dict, user_id: str) -> str:
-    db = get_db()
     request_data["user_id"] = str(user_id)
 
     req_id = request_data.pop("id", None) or str(uuid.uuid4())
@@ -87,19 +75,14 @@ async def insert_complete_lead_request(request_data: dict, user_id: str) -> str:
     if "status" not in request_data:
         request_data["status"] = "Pending"
 
-    await db.requests.insert_one(request_data)
+    await _reqs.insert(request_data)
     logger.info("Inserted lead request %s for user %s", req_id, user_id)
     return str(req_id)
 
 
 async def add_queries_to_lead_request(request_id: str, queries: list[str]) -> None:
-    db = get_db()
-    await db.requests.update_one(
-        id_query("_id", request_id),
-        {"$push": {"queries": {"$each": queries}}},
-    )
+    await _reqs.modify(str(request_id), lambda doc: {"queries": [*(doc.get("queries") or []), *queries]})
 
 
 async def delete_user_requests(user_id) -> None:
-    db = get_db()
-    await db.requests.delete_many(id_query("user_id", user_id))
+    await _reqs.delete_where(Request.user_id == str(user_id))
