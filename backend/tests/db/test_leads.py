@@ -186,3 +186,22 @@ async def test_verify_email_persists_on_lead_via_api(db, monkeypatch):
     assert resp.status_code == 200, resp.text
     got = await leads.get_lead_for_user(lead_id, "u1")
     assert got["email_verified"] is True and got["email_confidence"] == 0.9
+
+
+async def test_concurrent_readers_and_writers_lose_nothing(db):
+    """25 pipeline workers saving leads into one request while the results page keeps reading it:
+    no 'database is locked', no silently lost rows."""
+    import asyncio
+
+    async def worker(i):
+        items = [
+            {**ENRICHED, "company_name": f"C{i}-{j}", "source_url": f"https://c{i}-{j}.com",
+             "website": f"https://c{i}-{j}.com", "buying_signals": "x" * 2000,
+             "decision_makers": [{"name": "a", "linkedin_url": f"l{i}-{j}"}]}
+            for j in range(4)
+        ]
+        await leads.save_enriched_leads_to_db("r1", "u1", items)
+        await leads.get_normalized_leads_for_request("r1")
+
+    await asyncio.gather(*[worker(i) for i in range(25)])
+    assert await leads.count_leads_for_request("r1") == 100

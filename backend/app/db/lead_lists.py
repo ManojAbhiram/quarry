@@ -42,7 +42,7 @@ async def _attach_lead_ids(docs: list[dict]) -> list[dict]:
         .where(LeadListItem.list_id.in_(list(by_list)))
         .order_by(LeadListItem.added_at, LeadListItem.lead_id)
     )
-    async with _engine.session() as s, s.begin():
+    async with _engine.read_session() as s, s.begin():
         for list_id, lead_id in (await s.execute(stmt)).all():
             by_list[list_id]["lead_ids"].append(lead_id)
     return docs
@@ -142,7 +142,7 @@ async def delete_lead_list(list_id: str, user_id: str) -> bool:
 
 async def get_lists_for_lead(lead_id: str, user_id: str) -> list[dict]:
     stmt = select(LeadListItem.list_id).where(LeadListItem.lead_id == lead_id)
-    async with _engine.session() as s, s.begin():
+    async with _engine.read_session() as s, s.begin():
         list_ids = (await s.execute(stmt)).scalars().all()
     if not list_ids:
         return []

@@ -51,7 +51,7 @@ async def count_decision_makers_by_lead(lead_ids: list[str]) -> dict[str, int]:
         .where(DecisionMaker.lead_id.in_(lead_ids))
         .group_by(DecisionMaker.lead_id)
     )
-    async with _engine.session() as s, s.begin():
+    async with _engine.read_session() as s, s.begin():
         return {lead_id: count for lead_id, count in (await s.execute(stmt)).all()}
 
 

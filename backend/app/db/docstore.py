@@ -54,7 +54,7 @@ class DocTable:
         return new_id
 
     async def get(self, **eq) -> Optional[dict]:
-        async with _engine.session() as s, s.begin():
+        async with _engine.read_session() as s, s.begin():
             row = (await s.execute(select(self.model).where(*self._eq(eq)).limit(1))).scalars().first()
             return self._to_doc(row) if row else None
 
@@ -64,7 +64,7 @@ class DocTable:
             stmt = stmt.order_by(order_by)
         if limit is not None:
             stmt = stmt.limit(limit)
-        async with _engine.session() as s, s.begin():
+        async with _engine.read_session() as s, s.begin():
             return [self._to_doc(r) for r in (await s.execute(stmt)).scalars().all()]
 
     async def update(self, id: str, fields: dict) -> Optional[dict]:

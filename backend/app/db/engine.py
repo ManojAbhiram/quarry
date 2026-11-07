@@ -1,4 +1,5 @@
 """SQLAlchemy async engine + session factory for the SQLite database."""
+import asyncio
 import json
 from datetime import datetime
 
@@ -10,6 +11,30 @@ from app.core.logger import logger
 
 engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
+_read_sessionmaker: async_sessionmaker[AsyncSession] | None = None
+_write_lock: asyncio.Lock | None = None
+
+
+class _WriteSession(AsyncSession):
+    """A session that holds the process-wide write lock for the whole `async with` block.
+
+    SQLite allows one writer at a time. Queueing writers on an asyncio.Lock (first come, first served) avoids
+    relying on SQLite's sleep-and-retry busy handler, which is not fair and can time out under load.
+    """
+
+    async def __aenter__(self):
+        await _write_lock.acquire()
+        try:
+            return await super().__aenter__()
+        except BaseException:
+            _write_lock.release()
+            raise
+
+    async def __aexit__(self, *exc_info):
+        try:
+            return await super().__aexit__(*exc_info)
+        finally:
+            _write_lock.release()
 
 
 def _json_default(obj):
@@ -34,7 +59,7 @@ def json_loads(s: str):
 
 async def connect_db() -> None:
     """Create the engine and any missing tables. Safe to call again after close_db()."""
-    global engine, _sessionmaker
+    global engine, _sessionmaker, _read_sessionmaker, _write_lock
     from app.db.models import Base  # imported here: models -> docstore -> engine would be circular
 
     url = settings.DATABASE_URL
@@ -45,20 +70,26 @@ async def connect_db() -> None:
 
         @event.listens_for(engine.sync_engine, "connect")
         def _sqlite_pragmas(dbapi_conn, _record):
-            # isolation_level=None + BEGIN IMMEDIATE (below): a transaction takes the write lock up front,
-            # so concurrent writers queue on busy_timeout instead of failing with "database is locked".
+            # isolation_level=None: we issue BEGIN ourselves (see _sqlite_begin below).
             dbapi_conn.isolation_level = None
             cur = dbapi_conn.cursor()
             cur.execute("PRAGMA journal_mode=WAL")
             cur.execute("PRAGMA foreign_keys=ON")
-            cur.execute("PRAGMA busy_timeout=5000")
+            cur.execute("PRAGMA busy_timeout=30000")
             cur.close()
 
         @event.listens_for(engine.sync_engine, "begin")
         def _sqlite_begin(conn):
-            conn.exec_driver_sql("BEGIN IMMEDIATE")
+            # Writers take the write lock up front (IMMEDIATE); readers use a plain deferred transaction so WAL
+            # lets them run alongside the single writer instead of queueing behind it.
+            if conn.get_execution_options().get("read_only"):
+                conn.exec_driver_sql("BEGIN")
+            else:
+                conn.exec_driver_sql("BEGIN IMMEDIATE")
 
-    _sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+    _write_lock = asyncio.Lock()
+    _sessionmaker = async_sessionmaker(engine, class_=_WriteSession, expire_on_commit=False)
+    _read_sessionmaker = async_sessionmaker(engine.execution_options(read_only=True), expire_on_commit=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     from app.db.user_sessions import purge_expired_sessions  # circular at import time, like Base above
@@ -68,16 +99,25 @@ async def connect_db() -> None:
 
 
 async def close_db() -> None:
-    global engine, _sessionmaker
+    global engine, _sessionmaker, _read_sessionmaker, _write_lock
     if engine is not None:
         await engine.dispose()
         logger.info("Database closed")
     engine = None
     _sessionmaker = None
+    _read_sessionmaker = None
+    _write_lock = None
 
 
 def session() -> AsyncSession:
-    """Use as `async with session() as s, s.begin(): ...`."""
+    """Write session: `async with session() as s, s.begin(): ...`. Holds the write lock for the whole block."""
     if _sessionmaker is None:
         raise RuntimeError("Database not connected: call connect_db() first")
     return _sessionmaker()
+
+
+def read_session() -> AsyncSession:
+    """Read-only session (deferred transaction, no write lock). Do not write through it."""
+    if _read_sessionmaker is None:
+        raise RuntimeError("Database not connected: call connect_db() first")
+    return _read_sessionmaker()

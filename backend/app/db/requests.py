@@ -31,7 +31,7 @@ async def list_user_requests(user_id) -> list[dict]:
 
 async def get_user_request_stats(user_id) -> dict[str, int]:
     stmt = select(Request.status, func.count()).where(Request.user_id == str(user_id)).group_by(Request.status)
-    async with _engine.session() as s, s.begin():
+    async with _engine.read_session() as s, s.begin():
         return {status: count for status, count in (await s.execute(stmt)).all()}
 
 

@@ -160,7 +160,7 @@ async def update_lead_fields(lead_id: str, fields: dict) -> Optional[dict]:
 
 async def count_leads_for_request(request_id: str) -> int:
     stmt = select(func.count()).select_from(LeadRow).where(LeadRow.request_id == request_id)
-    async with _engine.session() as s, s.begin():
+    async with _engine.read_session() as s, s.begin():
         return (await s.execute(stmt)).scalar_one()
 
 
