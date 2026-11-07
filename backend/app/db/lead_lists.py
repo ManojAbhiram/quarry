@@ -1,30 +1,51 @@
 """
 Lead Lists DB layer
 ====================
-MongoDB CRUD operations for the `lead_lists` collection.
+CRUD for the `lead_lists` table plus its membership table `lead_list_items`.
 
-Schema
-------
+Documents returned by this module look like:
 {
-    _id:        str (UUID),
-    user_id:    str,
-    name:       str,
-    color:      str,  # hex color for UI badge
+    _id:         str (UUID),
+    user_id:     str,
+    name:        str,
+    color:       str,  # hex color for UI badge
     description: str | None,
-    lead_ids:   [str],   # list of lead _id values
-    created_at: datetime,
-    updated_at: datetime,
+    lead_ids:    [str],   # lead ids in the order they were added (read from lead_list_items)
+    created_at:  datetime,
+    updated_at:  datetime,
 }
 """
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
+from sqlalchemy import delete, select
+
 from app.core.logger import logger
-from app.db.database import get_db
+from app.db import engine as _engine
+from app.db.models import TABLES, LeadList, LeadListItem
+
+_lists = TABLES["lead_lists"]
+
+
+async def _attach_lead_ids(docs: list[dict]) -> list[dict]:
+    """Fill each list document's `lead_ids` from the membership table (insertion order)."""
+    for d in docs:
+        d["lead_ids"] = []
+    if not docs:
+        return docs
+    by_list = {d["_id"]: d for d in docs}
+    stmt = (
+        select(LeadListItem.list_id, LeadListItem.lead_id)
+        .where(LeadListItem.list_id.in_(list(by_list)))
+        .order_by(LeadListItem.added_at, LeadListItem.lead_id)
+    )
+    async with _engine.session() as s, s.begin():
+        for list_id, lead_id in (await s.execute(stmt)).all():
+            by_list[list_id]["lead_ids"].append(lead_id)
+    return docs
 
 
 # ---------------------------------------------------------------------------
@@ -32,19 +53,17 @@ from app.db.database import get_db
 # ---------------------------------------------------------------------------
 
 async def create_lead_list(user_id: str, name: str, color: str = "#6366f1", description: Optional[str] = None) -> dict:
-    db = get_db()
     now = datetime.utcnow()
     doc = {
-        "_id": str(uuid.uuid4()),
         "user_id": user_id,
         "name": name,
         "color": color,
         "description": description,
-        "lead_ids": [],
         "created_at": now,
         "updated_at": now,
     }
-    await db.lead_lists.insert_one(doc)
+    doc["_id"] = await _lists.insert(doc)
+    doc["lead_ids"] = []
     logger.info("Created lead list '%s' for user %s", name, user_id)
     return doc
 
@@ -54,14 +73,15 @@ async def create_lead_list(user_id: str, name: str, color: str = "#6366f1", desc
 # ---------------------------------------------------------------------------
 
 async def get_lead_lists_for_user(user_id: str) -> list[dict]:
-    db = get_db()
-    cursor = db.lead_lists.find({"user_id": user_id}).sort("created_at", -1)
-    return await cursor.to_list(length=None)
+    docs = await _lists.find(LeadList.user_id == user_id, order_by=LeadList.created_at.desc())
+    return await _attach_lead_ids(docs)
 
 
 async def get_lead_list_by_id(list_id: str, user_id: str) -> Optional[dict]:
-    db = get_db()
-    return await db.lead_lists.find_one({"_id": list_id, "user_id": user_id})
+    doc = await _lists.get(_id=list_id, user_id=user_id)
+    if doc is None:
+        return None
+    return (await _attach_lead_ids([doc]))[0]
 
 
 # ---------------------------------------------------------------------------
@@ -69,42 +89,40 @@ async def get_lead_list_by_id(list_id: str, user_id: str) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 
 async def update_lead_list(list_id: str, user_id: str, updates: dict) -> Optional[dict]:
-    db = get_db()
-    updates["updated_at"] = datetime.utcnow()
-    result = await db.lead_lists.update_one(
-        {"_id": list_id, "user_id": user_id},
-        {"$set": updates},
-    )
-    if result.matched_count == 0:
+    if await _lists.get(_id=list_id, user_id=user_id) is None:
         return None
+    fields = {k: v for k, v in updates.items() if k not in ("lead_ids", "_id", "user_id")}
+    fields["updated_at"] = datetime.utcnow()
+    await _lists.update(list_id, fields)
     return await get_lead_list_by_id(list_id, user_id)
 
 
 async def add_leads_to_list(list_id: str, user_id: str, lead_ids: list[str]) -> Optional[dict]:
-    db = get_db()
-    result = await db.lead_lists.update_one(
-        {"_id": list_id, "user_id": user_id},
-        {
-            "$addToSet": {"lead_ids": {"$each": lead_ids}},
-            "$set": {"updated_at": datetime.utcnow()},
-        },
-    )
-    if result.matched_count == 0:
+    if await _lists.get(_id=list_id, user_id=user_id) is None:
         return None
+    now = datetime.utcnow()
+    async with _engine.session() as s, s.begin():
+        existing = set(
+            (await s.execute(select(LeadListItem.lead_id).where(LeadListItem.list_id == list_id))).scalars().all()
+        )
+        new_ids = [lid for lid in dict.fromkeys(lead_ids) if lid not in existing]
+        # +i microseconds keeps the order of this batch stable when sorting by added_at
+        s.add_all(
+            LeadListItem(list_id=list_id, lead_id=lid, added_at=now + timedelta(microseconds=i))
+            for i, lid in enumerate(new_ids)
+        )
+    await _lists.update(list_id, {"updated_at": now})
     return await get_lead_list_by_id(list_id, user_id)
 
 
 async def remove_leads_from_list(list_id: str, user_id: str, lead_ids: list[str]) -> Optional[dict]:
-    db = get_db()
-    result = await db.lead_lists.update_one(
-        {"_id": list_id, "user_id": user_id},
-        {
-            "$pullAll": {"lead_ids": lead_ids},
-            "$set": {"updated_at": datetime.utcnow()},
-        },
-    )
-    if result.matched_count == 0:
+    if await _lists.get(_id=list_id, user_id=user_id) is None:
         return None
+    async with _engine.session() as s, s.begin():
+        await s.execute(
+            delete(LeadListItem).where(LeadListItem.list_id == list_id, LeadListItem.lead_id.in_(lead_ids))
+        )
+    await _lists.update(list_id, {"updated_at": datetime.utcnow()})
     return await get_lead_list_by_id(list_id, user_id)
 
 
@@ -113,9 +131,9 @@ async def remove_leads_from_list(list_id: str, user_id: str, lead_ids: list[str]
 # ---------------------------------------------------------------------------
 
 async def delete_lead_list(list_id: str, user_id: str) -> bool:
-    db = get_db()
-    result = await db.lead_lists.delete_one({"_id": list_id, "user_id": user_id})
-    return result.deleted_count > 0
+    if await _lists.get(_id=list_id, user_id=user_id) is None:
+        return False
+    return await _lists.delete(list_id)  # membership rows go with it (ON DELETE CASCADE)
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +141,10 @@ async def delete_lead_list(list_id: str, user_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 async def get_lists_for_lead(lead_id: str, user_id: str) -> list[dict]:
-    db = get_db()
-    cursor = db.lead_lists.find({"user_id": user_id, "lead_ids": lead_id})
-    return await cursor.to_list(length=None)
+    stmt = select(LeadListItem.list_id).where(LeadListItem.lead_id == lead_id)
+    async with _engine.session() as s, s.begin():
+        list_ids = (await s.execute(stmt)).scalars().all()
+    if not list_ids:
+        return []
+    docs = await _lists.find(LeadList.id.in_(list_ids), LeadList.user_id == user_id)
+    return await _attach_lead_ids(docs)

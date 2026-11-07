@@ -124,6 +124,7 @@ class LeadListItem(Base):
     __tablename__ = "lead_list_items"
     list_id: Mapped[str] = mapped_column(ForeignKey("lead_lists.id", ondelete="CASCADE"), primary_key=True)
     lead_id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)  # preserves list order
 
 
 class SerperCache(_Doc, Base):

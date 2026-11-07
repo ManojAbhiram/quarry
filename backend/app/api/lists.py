@@ -22,8 +22,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
-from app.db.database import get_db
 from app.db import lead_lists as db_lists
+from app.db.leads import get_leads_by_ids
 from app.services.auth import get_current_user
 from app.services.export_service import generate_csv, generate_xlsx
 
@@ -113,12 +113,10 @@ async def get_list(
         raise HTTPException(status_code=404, detail="List not found")
 
     # Enrich with lead details
-    db = get_db()
     lead_ids = doc.get("lead_ids") or []
     leads = []
     if lead_ids:
-        cursor = db.leads.find({"_id": {"$in": lead_ids}})
-        raw_leads = await cursor.to_list(length=None)
+        raw_leads = await get_leads_by_ids(lead_ids)
         # Build a quick lookup by _id
         by_id = {str(l["_id"]): l for l in raw_leads}
         for lid in lead_ids:
@@ -210,11 +208,10 @@ async def export_list(
     if not doc:
         raise HTTPException(status_code=404, detail="List not found")
 
-    db = get_db()
     lead_ids = doc.get("lead_ids") or []
     by_id: dict = {}
     if lead_ids:
-        raw_leads = await db.leads.find({"_id": {"$in": lead_ids}}).to_list(length=None)
+        raw_leads = await get_leads_by_ids(lead_ids)
         by_id = {str(l["_id"]): l for l in raw_leads}
 
     headers = [
