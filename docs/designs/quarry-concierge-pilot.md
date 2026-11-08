@@ -67,7 +67,7 @@ Existing web service. No new distribution work for the pilot; lists are delivere
 - Reaching 5-10 people in the target niche (founder's network or outreach).
 - Legal input on the data-broker question before any shared or retained database.
 - The chosen Sheet UI needs backend work before it can be built: `services/email_verification.py:82` returns a boolean `verified`, so Verified/Likely/Risky labels, checked-at dates and a launch estimate do not exist yet (CEO review C2). Build the UI only after the conversations.
-- Scraper private-address guard before Quarry runs on any server (see `TODOS.md`).
+- Private-address guard before Quarry runs on any server: done for `scraper.py` (`app/core/url_guard.py`); the other outbound fetchers are tracked in `TODOS.md`.
 
 ## The Assignment
 Before writing any code: list 10 people you can reach who build B2B lead lists today (agency owners, freelance SDRs, founders doing their own outbound). Message 5 of them this week asking for a 20-minute call. In each call, ask them to show you how they built their last list, and write down the tools, hours and cost. Do not demo Quarry. Goal for the week: 3 calls booked and at least 1 done.

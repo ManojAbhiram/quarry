@@ -9,11 +9,11 @@ from collections import defaultdict
 from urllib.parse import unquote, urljoin, urlparse
 
 import httpx
-import requests
 from bs4 import BeautifulSoup
 
 from app.core.config import settings
 from app.core.logger import logger
+from app.core.url_guard import UnsafeURLError, httpx_request_guard, playwright_route_guard, safe_get
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -534,6 +534,7 @@ async def _fetch_with_playwright(url: str) -> str:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page(extra_http_headers=HEADERS)
+            await page.route("**/*", playwright_route_guard)
             await page.goto(url, timeout=25000, wait_until="networkidle")
             html = await page.content()
             await browser.close()
@@ -583,6 +584,9 @@ async def scrape_url_with_discovery(url: str) -> tuple[str, dict]:
                     return ""
                 if attempt < retries:
                     await asyncio.sleep(2 ** attempt)
+            except UnsafeURLError as exc:
+                logger.warning("Blocked unsafe URL %s: %s", fetch_url, exc)
+                return ""  # never retry a blocked address
             except httpx.TimeoutException:
                 logger.debug("Timeout on %s (attempt %d/%d)", fetch_url, attempt + 1, retries + 1)
                 if attempt < retries:
@@ -598,6 +602,7 @@ async def scrape_url_with_discovery(url: str) -> tuple[str, dict]:
         headers=HEADERS,
         timeout=settings.SCRAPE_TIMEOUT + 10,  # extra buffer
         follow_redirects=True,
+        event_hooks={"request": [httpx_request_guard]},
     ) as client:
 
         # ── Homepage ──────────────────────────────────────────────────────────
@@ -671,7 +676,7 @@ async def scrape_url_with_discovery(url: str) -> tuple[str, dict]:
 def scrape_url(url: str) -> str:
     """Fetch a single URL and return cleaned text. Sync."""
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=settings.SCRAPE_TIMEOUT, allow_redirects=True)
+        resp = safe_get(url, headers=HEADERS, timeout=settings.SCRAPE_TIMEOUT)
         resp.raise_for_status()
         text, _ = _clean_html(resp.text)
         return text
@@ -683,10 +688,7 @@ def scrape_url(url: str) -> str:
 def scrape_directory_links(directory_url: str) -> list[str]:
     """Scrape a directory page and return external standalone links."""
     try:
-        resp = requests.get(
-            directory_url, headers=HEADERS,
-            timeout=settings.SCRAPE_TIMEOUT, allow_redirects=True,
-        )
+        resp = safe_get(directory_url, headers=HEADERS, timeout=settings.SCRAPE_TIMEOUT)
         resp.raise_for_status()
         # Decode safely — same defence as async scraper
         raw = resp.content
