@@ -41,7 +41,7 @@ export function ToastProvider({ children }) {
           <div
             key={t.id}
             role={t.type === 'error' ? 'alert' : 'status'}
-            className={clsx('pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-md border bg-surface p-3 text-sm text-ink shadow-lg', TONES[t.type])}
+            className={clsx('pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl border bg-surface/90 p-4 text-sm text-ink shadow-xl backdrop-blur-xl', TONES[t.type])}
           >
             <p className="flex-1 break-words">{t.message}</p>
             <button type="button" aria-label="Dismiss" onClick={() => dismiss(t.id)} className="rounded p-0.5 text-muted hover:bg-head hover:text-ink">

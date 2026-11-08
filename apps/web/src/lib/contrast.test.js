@@ -23,13 +23,21 @@ describe('contrastRatio', () => {
 })
 
 describe('every shipped palette is readable (WCAG AA, 4.5:1)', () => {
-  it.each(PALETTES.map((p) => [p.id]))('%s: white text on its 600 button and its 400 text on a dark surface', (id) => {
+  it.each(PALETTES.map((p) => [p.id]))('%s: white text on its button shade and its 400 text on a dark surface', (id) => {
     const vars = paletteVars(id)
-    expect(contrastRatio('#ffffff', vars['--p-600'])).toBeGreaterThanOrEqual(AA)
+    // Buttons use the palette's own --p-btn shade (600, or 700 where 600 is too light for white text).
+    expect(contrastRatio('#ffffff', vars['--p-btn'])).toBeGreaterThanOrEqual(AA)
     expect(contrastRatio(vars['--p-400'], DARK_SURFACE)).toBeGreaterThanOrEqual(AA)
   })
 
-  it('ships a small, checkable set', () => {
-    expect(PALETTES.length).toBeLessThanOrEqual(5)
+  it('has a hover shade that is at least as dark as the button shade', () => {
+    for (const { id } of PALETTES) {
+      const vars = paletteVars(id)
+      expect(contrastRatio('#ffffff', vars['--p-btn-hover'])).toBeGreaterThanOrEqual(contrastRatio('#ffffff', vars['--p-btn']))
+    }
+  })
+
+  it('ships all seven palettes', () => {
+    expect(PALETTES.map((p) => p.id)).toEqual(['quarry', 'midnight', 'amethyst', 'emerald', 'sunset', 'rose', 'graphite'])
   })
 })

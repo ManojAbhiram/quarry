@@ -29,8 +29,8 @@ export default function HelpDrawer({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-[60]">
-      <div className="absolute inset-0 bg-ink/40" onClick={onClose} aria-hidden="true" />
-      <aside role="dialog" aria-modal="true" aria-labelledby="help-title" className="absolute inset-y-0 right-0 flex h-full w-full max-w-md flex-col border-l border-line bg-surface shadow-xl">
+      <div className="absolute inset-0 bg-ink/45 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <aside role="dialog" aria-modal="true" aria-labelledby="help-title" className="absolute inset-y-0 right-0 flex h-full w-full max-w-md flex-col border-l border-line bg-surface/95 shadow-2xl backdrop-blur-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 id="help-title" className="text-base font-semibold text-ink">
             Help center

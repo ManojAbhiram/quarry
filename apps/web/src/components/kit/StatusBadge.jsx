@@ -21,7 +21,7 @@ export default function StatusBadge({ status, className }) {
   const known = STATUSES[String(status || '').toLowerCase()]
   const { label, tone, Icon, spin } = known || { label: String(status || 'Unknown'), tone: 'info', Icon: Clock }
   return (
-    <span data-status={known ? String(status).toLowerCase() : 'unknown'} className={clsx('inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold', TONES[tone], className)}>
+    <span data-status={known ? String(status).toLowerCase() : 'unknown'} className={clsx('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ring-current/15', TONES[tone], className)}>
       <Icon aria-hidden="true" className={clsx('h-3.5 w-3.5', spin && 'animate-spin')} />
       {label}
     </span>

@@ -89,54 +89,64 @@
     }
   }
 
-  /* A bordered panel. Flat: no glass, no shadow stack. */
+  /* Frosted panel: translucent surface, soft border, gentle shadow. */
+  .glass {
+    @apply bg-surface/70 backdrop-blur-xl border border-white/60 dark:border-line/60 shadow-soft;
+  }
+
   .card {
-    @apply bg-surface rounded-lg border border-line overflow-hidden;
+    @apply bg-surface/85 backdrop-blur-2xl rounded-2xl border border-white/70 dark:border-line/60 shadow-soft overflow-hidden transition-[background-color,border-color,box-shadow,transform] duration-300;
   }
 
   .card-hover:hover {
-    @apply border-primary-400;
+    @apply shadow-lift -translate-y-1 border-primary-300/60;
   }
 
+  /* Accent gradient text for hero headings. */
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary-700 via-primary-600 to-accent-500 bg-clip-text text-transparent dark:from-primary-300 dark:via-primary-400 dark:to-accent-300;
+  }
+
+  /* Primary button: gradient between the palette's AA-safe button shade and its hover shade, with a soft glow. */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md border border-primary-600 bg-primary-600 text-white text-sm font-semibold transition-colors hover:bg-primary-700 hover:border-primary-700 dark:bg-primary-400 dark:border-primary-400 dark:text-app dark:hover:bg-primary-300 dark:hover:border-primary-300 disabled:opacity-60 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 h-11 px-6 rounded-xl bg-gradient-to-br from-btn to-btn-hover text-white text-sm font-semibold shadow-lg shadow-primary-600/25 transition-all duration-200 hover:shadow-lift hover:brightness-110 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md border border-line bg-surface text-ink text-sm font-semibold transition-colors hover:bg-head disabled:opacity-60 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 h-11 px-6 rounded-xl border border-line bg-surface/80 backdrop-blur-md text-ink text-sm font-semibold shadow-sm transition-all duration-200 hover:bg-surface hover:shadow-md active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed;
   }
 
   .input {
-    @apply w-full h-10 px-3 bg-surface border border-line rounded-md text-sm text-ink placeholder:text-muted/80 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-colors;
+    @apply w-full h-11 px-4 bg-surface/80 border border-line rounded-xl text-sm text-ink placeholder:text-muted/80 focus:outline-none focus:border-primary-400 focus:ring-4 focus:ring-primary-500/10 transition-all duration-200;
   }
 
   .label {
-    @apply block text-sm font-semibold text-ink mb-1.5;
+    @apply block text-sm font-semibold text-ink mb-2 tracking-tight;
   }
 
-  /* Status badges: text plus a tint, never colour alone. */
+  /* Status badges: pills with text and a tint, never colour alone. */
   .badge-pending {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-warn-soft text-warn;
+    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-warn-soft text-warn ring-1 ring-inset ring-warn/20;
   }
 
   .badge-completed {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-ok-soft text-ok;
+    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-ok-soft text-ok ring-1 ring-inset ring-ok/20;
   }
 
   .badge-failed {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-bad-soft text-bad;
+    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-bad-soft text-bad ring-1 ring-inset ring-bad/20;
   }
 
   .nav-link {
-    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-head hover:text-ink transition-colors cursor-pointer;
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-muted hover:bg-head hover:text-ink transition-all duration-200 cursor-pointer;
   }
 
   .nav-link-active {
-    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm font-semibold bg-primary-50 text-primary-800 dark:bg-primary-950/60 dark:text-primary-300;
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold bg-primary-50 text-primary-800 ring-1 ring-primary-200/70 shadow-sm dark:bg-primary-950/60 dark:text-primary-300 dark:ring-primary-900/60;
   }
 
   .field-input {
-    @apply w-full px-3 py-2 text-sm bg-surface border border-line rounded-md text-ink placeholder:text-muted/80 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-colors;
+    @apply w-full px-4 py-2.5 text-sm bg-surface/80 border border-line rounded-xl text-ink placeholder:text-muted/80 focus:outline-none focus:border-primary-400 focus:ring-4 focus:ring-primary-500/10 transition-all;
   }
 }
 

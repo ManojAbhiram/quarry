@@ -11,7 +11,7 @@ import PaletteSwitcher from './PaletteSwitcher'
 import HelpDrawer from './HelpDrawer'
 
 const ICON_BUTTON =
-  'flex h-9 w-9 items-center justify-center rounded-md border border-line bg-surface text-muted transition-colors hover:bg-head hover:text-ink'
+  'flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface/80 text-muted shadow-sm transition-all duration-200 hover:bg-surface hover:text-ink hover:shadow-md active:scale-95'
 
 const NAV = [
   { to: '/lead-requests', label: 'Requests', also: '/request/' },
@@ -33,8 +33,8 @@ function NavItem({ to, label, also, pathname }) {
       to={to}
       aria-current={active ? 'page' : undefined}
       className={clsx(
-        'whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-        active ? 'bg-primary-50 font-semibold text-primary-800 dark:bg-primary-950/60 dark:text-primary-300' : 'text-muted hover:bg-head hover:text-ink',
+        'whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium transition-all duration-200',
+        active ? 'bg-primary-50 font-semibold text-primary-800 shadow-sm ring-1 ring-primary-200/70 dark:bg-primary-950/60 dark:text-primary-300 dark:ring-primary-900/60' : 'text-muted hover:bg-head hover:text-ink',
       )}
     >
       {label}
@@ -101,10 +101,10 @@ export default function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-4 py-2.5 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-30 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/70 bg-surface/80 px-4 py-3 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
         <Link to="/lead-requests" className="flex shrink-0 items-center gap-2" aria-label="Quarry home">
-          <BrandLogo className="h-7 w-7 shrink-0 rounded-md" />
-          <span className="hidden text-base font-bold tracking-tight text-ink sm:block">Quarry</span>
+          <BrandLogo className="h-8 w-8 shrink-0 rounded-xl shadow-md shadow-primary-500/25" />
+          <span className="hidden text-lg font-black tracking-tight text-ink sm:block">Quarry</span>
         </Link>
 
         <nav aria-label="Main" className="order-last -mx-1 flex w-full items-center gap-1 overflow-x-auto md:order-none md:mx-0 md:w-auto">
@@ -117,7 +117,7 @@ export default function Header() {
           <Menu
             label={`Switch request, current: ${activeRequest.title || 'Untitled request'}`}
             align="left"
-            buttonClassName="flex max-w-[11rem] items-center gap-1.5 rounded-md border border-line bg-head px-2.5 py-1.5 text-xs font-semibold text-ink sm:max-w-[16rem]"
+            buttonClassName="flex max-w-[11rem] items-center gap-1.5 rounded-xl border border-line bg-surface/80 px-3 py-2 text-xs font-semibold text-ink shadow-sm sm:max-w-[16rem]"
             panelClassName="w-72 py-1"
             button={
               <>
@@ -154,7 +154,7 @@ export default function Header() {
           </Menu>
         )}
 
-        <div className="ml-auto hidden w-full max-w-xs items-center gap-2 rounded-md border border-line bg-surface px-3 focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/20 md:flex lg:max-w-sm">
+        <div className="ml-auto hidden min-w-[9rem] max-w-xs flex-1 items-center gap-2 rounded-xl border border-line bg-surface/80 px-3.5 shadow-sm transition-all focus-within:border-primary-400 focus-within:ring-4 focus-within:ring-primary-500/10 md:flex lg:max-w-sm">
           <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" />
           <input
             ref={searchRef}
@@ -170,8 +170,8 @@ export default function Header() {
           </kbd>
         </div>
 
-        <div className="ml-auto flex items-center gap-2 md:ml-0">
-          <Link to="/new-request" className="btn-primary !h-9 !px-3">
+        <div className="ml-auto flex items-center gap-2">
+          <Link to="/new-request" className="btn-primary !h-9 !px-3.5">
             <Plus aria-hidden="true" className="h-4 w-4" />
             <span className="sr-only sm:not-sr-only">New request</span>
           </Link>
@@ -235,7 +235,7 @@ export default function Header() {
 
           <Menu
             label="Account menu"
-            buttonClassName="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-primary-50 text-xs font-bold text-primary-800 dark:bg-primary-950/60 dark:text-primary-300"
+            buttonClassName="flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-gradient-to-br from-primary-100 to-accent-200 text-xs font-bold text-primary-800 shadow-sm ring-1 ring-primary-200/60 transition-all hover:ring-4 hover:ring-primary-500/15 active:scale-95 dark:border-line dark:from-primary-950 dark:to-accent-900 dark:text-primary-300 dark:ring-primary-900/60"
             panelClassName="w-64 py-1"
             button={initialsOf(user?.name || user?.email)}
           >

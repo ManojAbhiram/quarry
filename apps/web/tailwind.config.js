@@ -15,6 +15,9 @@ export default {
         // Palette-driven (see src/config/palettes.js). The legacy indigo/violet/purple names used across the
         // pages follow the palette too, so every screen re-themes without editing class names.
         primary: fromVar('p'),
+        // Button shade (white text, WCAG AA per palette) and its hover shade. See src/config/palettes.js.
+        btn: 'rgb(var(--p-btn) / <alpha-value>)',
+        'btn-hover': 'rgb(var(--p-btn-hover) / <alpha-value>)',
         indigo: fromVar('p'),
         accent: fromVar('a'),
         violet: fromVar('a'),
@@ -39,6 +42,7 @@ export default {
       boxShadow: {
         'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
         'glow': '0 0 15px rgb(var(--p-500) / 0.5)',
+        'lift': '0 14px 40px -12px rgb(var(--p-600) / 0.35)',
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-out forwards',
