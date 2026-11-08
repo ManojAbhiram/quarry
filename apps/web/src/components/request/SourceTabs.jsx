@@ -1,8 +1,21 @@
 import { useRef, useState } from 'react'
-import { PenLine, Globe, FileText, Sparkles, Upload, X, CheckCircle2, Loader2, ChevronDown, Link2 } from 'lucide-react'
+import clsx from 'clsx'
+import { PenLine, Globe, FileText, Sparkles, Upload, X, CheckCircle2, Loader2 } from 'lucide-react'
 import { api } from '../../api'
+import { Button, Field } from '../kit'
 
 const AI_CHIPS = ['Add target audience', 'Add integrations', 'Add pricing model', 'Expand pain points']
+
+const TABS = [
+  { id: 'describe', label: 'Describe', Icon: PenLine },
+  { id: 'website', label: 'Website', Icon: Globe },
+  { id: 'documents', label: 'Documents', Icon: FileText },
+]
+
+function formatSize(bytes) {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`
+}
 
 export default function SourceTabs({
   activeTab,
@@ -20,20 +33,17 @@ export default function SourceTabs({
   onRemoveFile,
   errors,
   productName = '',
-  productCategory = ''
+  productCategory = '',
+  disabled = false,
 }) {
   const fileInputRef = useRef(null)
   const [generatingChip, setGeneratingChip] = useState(null)
-
-  const tabs = [
-    { id: 'describe', label: 'Describe', icon: <PenLine className="w-3.5 h-3.5" /> },
-    { id: 'website', label: 'Website', icon: <Globe className="w-3.5 h-3.5" /> },
-    { id: 'documents', label: 'Documents', icon: <FileText className="w-3.5 h-3.5" /> },
-  ]
+  const [chipError, setChipError] = useState('')
 
   const handleChipClick = async (chip) => {
     if (generatingChip) return
     setGeneratingChip(chip)
+    setChipError('')
     try {
       const res = await api.suggestChip({
         chip_type: chip,
@@ -42,184 +52,182 @@ export default function SourceTabs({
         current_description: description || '',
       })
       if (res && res.suggestion) {
-        const cleanSuggestion = res.suggestion.trim()
-        const newText = description 
-          ? `${description.trim()}\n\n${cleanSuggestion}`
-          : cleanSuggestion
-        onDescriptionChange(newText)
+        const clean = res.suggestion.trim()
+        onDescriptionChange(description ? `${description.trim()}\n\n${clean}` : clean)
       }
-    } catch (err) {
-      console.error('Failed to generate suggestion:', err)
+    } catch {
+      // Fall back to a prompt the user can finish by hand, and say so.
       onDescriptionChange((description ? description + '\n' : '') + chip + ': ')
+      setChipError("Couldn't generate a suggestion, so a prompt was added for you to fill in.")
     } finally {
       setGeneratingChip(null)
     }
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl overflow-hidden">
-      {/* Tab bar */}
-      <div className="flex border-b border-slate-200/80 dark:border-slate-700/60">
-        {tabs.map(t => (
+    <section className="card">
+      <div role="tablist" aria-label="Where to read your product from" className="flex border-b border-line">
+        {TABS.map(({ id, label, Icon }) => (
           <button
-            key={t.id}
+            key={id}
+            id={`source-tab-${id}`}
             type="button"
-            onClick={() => onTabChange(t.id)}
-            className={`flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              activeTab === t.id
-                ? 'border-violet-600 text-violet-700 dark:text-violet-400 bg-violet-50/50 dark:bg-violet-900/10'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
+            role="tab"
+            aria-selected={activeTab === id}
+            aria-controls={`source-panel-${id}`}
+            onClick={() => onTabChange(id)}
+            className={clsx(
+              '-mb-px flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors sm:flex-none sm:px-5',
+              activeTab === id ? 'border-primary-600 text-primary-800 dark:border-primary-400 dark:text-primary-300' : 'border-transparent text-muted hover:text-ink',
+            )}
           >
-            {t.icon}{t.label}
+            <Icon aria-hidden="true" className="h-4 w-4" />
+            {label}
           </button>
         ))}
       </div>
 
-      {/* Describe */}
       {activeTab === 'describe' && (
-        <div className="p-5 space-y-4">
-          <textarea
-            rows={8}
+        <div role="tabpanel" id="source-panel-describe" aria-labelledby="source-tab-describe" className="space-y-4 p-5">
+          <Field
+            as="textarea"
+            rows={7}
+            label="Product description"
             placeholder="Describe what your product does, who it helps, and how it creates value."
             value={description}
-            onChange={e => onDescriptionChange(e.target.value)}
-            className="w-full px-4 py-3 bg-transparent border-0 outline-none text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 resize-none"
+            disabled={disabled}
+            onChange={(e) => onDescriptionChange(e.target.value)}
           />
-          {/* AI suggestions chips */}
-          <div className="border-t border-slate-100 dark:border-slate-800 pt-4 flex flex-wrap gap-2">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 self-center">AI Suggestions</span>
-            {AI_CHIPS.map(chip => {
-              const isGenerating = generatingChip === chip
-              return (
-                <button
-                  key={chip}
-                  type="button"
-                  disabled={!!generatingChip}
-                  onClick={() => handleChipClick(chip)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-all active:scale-95 disabled:opacity-60 cursor-pointer select-none
-                    ${isGenerating 
-                      ? 'bg-violet-100 text-violet-850 dark:bg-violet-900/40 dark:text-violet-300 border-violet-400 animate-pulse' 
-                      : 'bg-violet-50 dark:bg-violet-900/20 text-violet-750 dark:text-violet-400 border-violet-200 dark:border-violet-800/50 hover:bg-violet-100 dark:hover:bg-violet-900/30'
-                    }
-                  `}
-                >
-                  {isGenerating ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-3 h-3 text-violet-650" />
-                  )}
-                  {isGenerating ? 'Generating...' : chip}
-                </button>
-              )
-            })}
+          <div className="border-t border-line pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-muted">AI suggestions</span>
+              {AI_CHIPS.map((chip) => {
+                const busy = generatingChip === chip
+                return (
+                  <button
+                    key={chip}
+                    type="button"
+                    disabled={disabled || !!generatingChip}
+                    aria-busy={busy || undefined}
+                    onClick={() => handleChipClick(chip)}
+                    className="inline-flex h-10 items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-xs font-semibold text-ink transition-colors hover:bg-head disabled:opacity-60 sm:h-8"
+                  >
+                    {busy ? <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" /> : <Sparkles aria-hidden="true" className="h-3 w-3 text-muted" />}
+                    {busy ? 'Generating…' : chip}
+                  </button>
+                )
+              })}
+            </div>
+            {chipError && (
+              <p role="alert" className="mt-2 text-xs font-medium text-warn">
+                {chipError}
+              </p>
+            )}
           </div>
         </div>
       )}
 
-      {/* Website */}
       {activeTab === 'website' && (
-        <div className="p-5 space-y-4">
-          {errors?.website && (
-            <p className="text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 px-3 py-2 rounded-lg">{errors.website}</p>
-          )}
-          <div className="flex gap-2">
-            <div className="flex-1 relative">
-              <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Enter website URL to scrape..."
-                value={websiteUrlInput}
-                onChange={e => onWebsiteUrlInputChange(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), onScrape())}
-                className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 transition-all"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={onScrape}
-              disabled={scraping}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-all disabled:opacity-60"
-            >
-              {scraping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
-              Scrape
-            </button>
+        <div role="tabpanel" id="source-panel-website" aria-labelledby="source-tab-website" className="space-y-4 p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+            <Field
+              className="flex-1"
+              label="Website URL"
+              type="text"
+              inputMode="url"
+              placeholder="example.com"
+              value={websiteUrlInput}
+              disabled={disabled || scraping}
+              error={errors?.website}
+              hint="Quarry reads the page and fills in what it can find."
+              onChange={(e) => onWebsiteUrlInputChange(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), !scraping && onScrape())}
+            />
+            <Button className="sm:mt-[1.625rem]" loading={scraping} disabled={disabled} onClick={onScrape}>
+              {!scraping && <Globe aria-hidden="true" className="h-4 w-4" />}
+              {scraping ? 'Scraping…' : 'Scrape'}
+            </Button>
           </div>
 
           {scrapedUrls.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{scrapedUrls.length} of 3 URLs added</p>
+            <ul className="space-y-2">
               {scrapedUrls.map((item, i) => (
-                <ScrapedUrlItem key={i} item={item} onRemove={() => onRemoveUrl(i)} />
+                <li key={`${item.url}-${i}`} className="rounded-md border border-line">
+                  <div className="flex items-center gap-3 px-3 py-2">
+                    <CheckCircle2 aria-hidden="true" className="h-4 w-4 shrink-0 text-ok" />
+                    <span title={item.url} className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+                      {item.url}
+                    </span>
+                    <button type="button" aria-label={`Remove ${item.url}`} onClick={() => onRemoveUrl(i)} className="flex h-10 w-10 items-center justify-center rounded-md text-muted hover:bg-head hover:text-bad sm:h-8 sm:w-8">
+                      <X aria-hidden="true" className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {item.summary && (
+                    <div className="border-t border-line px-3 py-2">
+                      <p className="text-xs font-semibold text-muted">Extracted summary</p>
+                      <p className="mt-1 line-clamp-3 break-words text-xs text-ink">{item.summary}</p>
+                    </div>
+                  )}
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </div>
       )}
 
-      {/* Documents */}
       {activeTab === 'documents' && (
-        <div className="p-5 space-y-4">
+        <div role="tabpanel" id="source-panel-documents" aria-labelledby="source-tab-documents" className="space-y-4 p-5">
           <div
-            className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 text-center hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer relative"
-            onClick={() => fileInputRef.current?.click()}
-            onDrop={e => { e.preventDefault(); const f = Array.from(e.dataTransfer.files); onFilesChange(prev => [...prev, ...f]) }}
-            onDragOver={e => e.preventDefault()}
+            className="rounded-md border border-dashed border-line p-6 text-center"
+            onDrop={(e) => {
+              e.preventDefault()
+              if (!disabled) onFilesChange((prev) => [...prev, ...Array.from(e.dataTransfer.files)])
+            }}
+            onDragOver={(e) => e.preventDefault()}
           >
-            <input ref={fileInputRef} type="file" accept=".txt,.pdf,.docx,.pptx" multiple className="hidden" onChange={e => onFilesChange(prev => [...prev, ...Array.from(e.target.files)])} />
-            <Upload className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Drag and drop files here</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">or click to browse from your computer</p>
-            <button type="button" className="mt-3 text-sm font-semibold text-violet-600 dark:text-violet-400 hover:text-violet-700">Select Files</button>
-            <p className="text-[10px] text-slate-400 mt-2">Files are processed securely. We never store raw document content.</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              aria-label="Choose documents"
+              accept=".txt,.pdf,.docx,.pptx"
+              multiple
+              className="sr-only"
+              tabIndex={-1}
+              onChange={(e) => {
+                onFilesChange((prev) => [...prev, ...Array.from(e.target.files)])
+                e.target.value = ''
+              }}
+            />
+            <Upload aria-hidden="true" className="mx-auto mb-2 h-6 w-6 text-muted" />
+            <p className="text-sm text-ink">Drop files here, or</p>
+            <Button variant="secondary" size="sm" className="mt-2" disabled={disabled} onClick={() => fileInputRef.current?.click()}>
+              Choose files
+            </Button>
+            <p className="mt-2 text-xs text-muted">.txt, .pdf, .docx or .pptx. They are read when you generate the ICP.</p>
           </div>
 
           {uploadedFiles.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Uploaded Documents</p>
+            <ul className="space-y-2">
               {uploadedFiles.map((f, i) => (
-                <div key={i} className="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700/60">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{f.name}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Extraction complete</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-xs text-slate-400">{(f.size / 1024 / 1024).toFixed(1)} MB</span>
-                    <button type="button" onClick={() => onRemoveFile(i)} className="text-slate-400 hover:text-rose-500 transition-colors"><X className="w-4 h-4" /></button>
-                  </div>
-                </div>
+                <li key={`${f.name}-${i}`} className="flex items-center justify-between gap-3 rounded-md border border-line px-3 py-2">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <FileText aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" />
+                    <span title={f.name} className="truncate text-sm font-medium text-ink">
+                      {f.name}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs tabular-nums text-muted">{formatSize(f.size)}</span>
+                    <button type="button" aria-label={`Remove ${f.name}`} onClick={() => onRemoveFile(i)} className="flex h-10 w-10 items-center justify-center rounded-md text-muted hover:bg-head hover:text-bad sm:h-8 sm:w-8">
+                      <X aria-hidden="true" className="h-4 w-4" />
+                    </button>
+                  </span>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-function ScrapedUrlItem({ item, onRemove }) {
-  const conf = item.confidence || 0
-  const confColor = conf >= 90 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-  return (
-    <div className="border border-slate-200 dark:border-slate-700/60 rounded-xl overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3">
-        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1 truncate">{item.url}</span>
-        {/* <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${confColor}`}>{conf}% confidence</span> */}
-        <button type="button" onClick={onRemove} className="text-slate-400 hover:text-rose-500 transition-colors"><X className="w-4 h-4" /></button>
-      </div>
-      {item.summary && (
-        <div className="px-4 pb-3">
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Extracted Summary</p>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">{item.summary}</p>
-        </div>
-      )}
-    </div>
+    </section>
   )
 }

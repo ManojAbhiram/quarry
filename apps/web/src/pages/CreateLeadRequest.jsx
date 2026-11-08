@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import clsx from 'clsx'
+import { ArrowRight, Building2, Sparkles } from 'lucide-react'
 import { api } from '../api'
 import { useLeads } from '../context/LeadContext'
-import { ArrowRight, Loader2, ChevronDown, Sparkles, Building2, CheckCircle2 } from 'lucide-react'
+import { Button, Field, PageHeader } from '../components/kit'
+import SearchKeyNotice, { useSearchKey } from './requests/SearchKeyNotice'
 
 const FLOW_TYPES = [
   {
@@ -19,25 +22,13 @@ const FLOW_TYPES = [
   },
 ]
 
-const PRIMARY_GOALS = [
-  'Generate Pipeline',
-  'Account Expansion',
-  'Book Meetings',
-  'Competitive Displacement',
-  'Brand Awareness',
-]
-
-const TEAM_SIZES = [
-  '1–10',
-  '11–50',
-  '51–200',
-  '201–500',
-  '500+',
-]
+const PRIMARY_GOALS = ['Generate Pipeline', 'Account Expansion', 'Book Meetings', 'Competitive Displacement', 'Brand Awareness']
+const TEAM_SIZES = ['1–10', '11–50', '51–200', '201–500', '500+']
 
 export default function CreateLeadRequest() {
   const navigate = useNavigate()
   const { refreshRequests, requests } = useLeads()
+  const searchKey = useSearchKey()
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -45,16 +36,19 @@ export default function CreateLeadRequest() {
   const [teamSize, setTeamSize] = useState('')
   const [flowType, setFlowType] = useState('icp')
   const [loading, setLoading] = useState(false)
+  const [nameError, setNameError] = useState('')
   const [error, setError] = useState('')
 
   const hasRequests = requests && requests.length > 0
 
   const handleCreate = async (e) => {
     e.preventDefault()
+    if (loading) return
     if (!name.trim()) {
-      setError('Lead Request name is required.')
+      setNameError('Request name is required.')
       return
     }
+    setNameError('')
     setError('')
     setLoading(true)
     try {
@@ -67,69 +61,37 @@ export default function CreateLeadRequest() {
       })
       await refreshRequests()
       // Route to the matching workflow based on the selected flow type.
-      if (flowType === 'direct_companies') {
-        navigate(`/request/${result.id}/companies`)
-      } else {
-        navigate(`/request/${result.id}/intake`)
-      }
+      navigate(flowType === 'direct_companies' ? `/request/${result.id}/companies` : `/request/${result.id}/intake`)
     } catch (err) {
-      setError(err.message || 'Failed to create lead request.')
-    } finally {
+      setError(err?.isNetworkError ? "Couldn't reach Quarry. Check your connection and try again." : err?.message || 'Failed to create the request.')
       setLoading(false)
     }
   }
 
-  const handleSkip = () => {
-    navigate('/lead-requests')
-  }
-
   return (
-    <div className="h-full w-full relative overflow-y-auto flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-slate-50 dark:from-[#0f172a] dark:via-[#1a1f35] dark:to-[#0f172a]">
-      {/* Pastel gradient blobs */}
-      <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-gradient-to-br from-blue-200/50 to-indigo-200/30 dark:from-blue-900/20 dark:to-indigo-900/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/3 -right-32 w-80 h-80 bg-gradient-to-bl from-pink-200/40 to-purple-200/30 dark:from-pink-900/15 dark:to-purple-900/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-16 left-1/3 w-96 h-72 bg-gradient-to-tr from-amber-200/40 to-yellow-100/30 dark:from-amber-900/15 dark:to-yellow-900/10 rounded-full blur-3xl" />
-        {/* Decorative dots */}
-        <div className="absolute top-1/4 left-12 w-2.5 h-2.5 rounded-full bg-yellow-300/70 dark:bg-yellow-500/40" />
-        <div className="absolute top-1/2 left-8 w-2 h-2 rounded-full bg-indigo-400/60 dark:bg-indigo-400/30" />
-        <div className="absolute top-2/3 right-16 w-2 h-2 rounded-full bg-slate-300/80 dark:bg-slate-500/40" />
-        <div className="absolute bottom-1/4 right-1/4 w-2 h-2 rounded-full bg-blue-300/60 dark:bg-blue-400/30" />
-        <div className="absolute top-1/3 left-1/4 w-1.5 h-1.5 rounded-full bg-pink-300/60 dark:bg-pink-400/30" />
-      </div>
+    <div className="page-container h-full overflow-y-auto pb-12">
+      <div className="mx-auto max-w-2xl">
+        <PageHeader
+          title={hasRequests ? 'New request' : 'Create your first request'}
+          description={
+            hasRequests
+              ? 'Name the search and choose how to find leads. You add the details in the next step.'
+              : 'Welcome to Quarry. Name your first search and choose how to find leads. You add the details in the next step.'
+          }
+        />
 
-      {/* Card */}
-      <div className="relative z-10 w-full max-w-2xl mx-auto px-4 py-10 animate-fade-in">
-        {/* Heading */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            {hasRequests ? 'Create Lead Request' : 'Create Your First Lead Request'}
-          </h1>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-lg leading-relaxed">
-            {hasRequests
-              ? 'Specify your target B2B criteria, ideal team profiles, and value drivers to launch a customized high-intent lead search.'
-              : 'Welcome to Quarry! Start by creating your first lead generation request. Choose a template or start from scratch.'}
-          </p>
-        </div>
+        <SearchKeyNotice state={searchKey} className="mb-5" />
 
-        {/* Form Card */}
-        <form
-          onSubmit={handleCreate}
-          className="bg-white dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/80 dark:border-slate-700/60 rounded-2xl shadow-lg p-8 space-y-6"
-        >
-          {/* Error */}
+        <form onSubmit={handleCreate} noValidate className="card space-y-6 p-5 sm:p-6">
           {error && (
-            <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/50 rounded-xl text-rose-700 dark:text-rose-400 text-sm font-medium">
+            <div role="alert" className="rounded-md bg-bad-soft p-3 text-sm font-medium text-bad">
               {error}
             </div>
           )}
 
-          {/* Flow type selector */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-              How do you want to find leads? <span className="text-rose-500">*</span>
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <fieldset>
+            <legend className="label">How do you want to find leads?</legend>
+            <div role="radiogroup" aria-label="How do you want to find leads?" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {FLOW_TYPES.map((f) => {
                 const Icon = f.icon
                 const selected = flowType === f.id
@@ -137,135 +99,84 @@ export default function CreateLeadRequest() {
                   <button
                     key={f.id}
                     type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={loading}
                     onClick={() => setFlowType(f.id)}
-                    className={`relative text-left p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                      selected
-                        ? 'border-violet-500 bg-violet-50/60 dark:bg-violet-950/20'
-                        : 'border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-700 bg-white dark:bg-slate-800/40'
-                    }`}
-                  >
-                    {selected && (
-                      <CheckCircle2 className="absolute top-3 right-3 w-4 h-4 text-violet-600" />
+                    className={clsx(
+                      'rounded-lg border p-4 text-left transition-colors disabled:opacity-60',
+                      selected ? 'border-primary-600 bg-primary-50 dark:border-primary-400 dark:bg-primary-950/60' : 'border-line bg-surface hover:bg-head',
                     )}
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-2 ${selected ? 'bg-violet-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300'}`}>
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{f.title}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{f.description}</p>
+                  >
+                    <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+                      <Icon aria-hidden="true" className={clsx('h-4 w-4', selected ? 'text-primary-700 dark:text-primary-300' : 'text-muted')} />
+                      {f.title}
+                    </span>
+                    <span className="mt-1.5 block text-xs text-muted">{f.description}</span>
                   </button>
                 )
               })}
             </div>
-          </div>
+          </fieldset>
 
-          {/* Lead Request Name */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-              Lead Request name <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="lead-request-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Q3 Enterprise Outreach"
-              className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 transition-all"
-            />
-            <p className="text-xs text-slate-400 dark:text-slate-500">This will appear in your lead request selector.</p>
-          </div>
-
-          {/* Description */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-              Description
-            </label>
-            <textarea
-              id="lead-request-description"
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is the goal of this lead request?"
-              className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 transition-all resize-none"
-            />
-          </div>
-
-          {/* Primary goal + Target team size — 2 columns (ICP flow only) */}
-          {flowType === 'icp' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* Primary Goal */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Primary goal
-              </label>
-              <div className="relative">
-                <select
-                  id="primary-goal"
-                  value={primaryGoal}
-                  onChange={(e) => setPrimaryGoal(e.target.value)}
-                  className="w-full appearance-none px-4 py-2.5 pr-10 rounded-xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 transition-all cursor-pointer"
-                >
-                  <option value="">Select a goal</option>
-                  {PRIMARY_GOALS.map((g) => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-
-            {/* Target Team Size */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Target team size
-              </label>
-              <div className="relative">
-                <select
-                  id="target-team-size"
-                  value={teamSize}
-                  onChange={(e) => setTeamSize(e.target.value)}
-                  className="w-full appearance-none px-4 py-2.5 pr-10 rounded-xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 transition-all cursor-pointer"
-                >
-                  <option value="">Select team size</option>
-                  {TEAM_SIZES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-          </div>
-          )}
-        </form>
-
-        {/* Actions — outside the card, below */}
-        <div className="flex items-center justify-end gap-3 mt-6">
-          <button
-            type="button"
-            onClick={handleSkip}
-            className="px-5 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer select-none"
-          >
-            {hasRequests ? 'Cancel' : 'Skip for now'}
-          </button>
-          <button
-            type="button"
-            onClick={handleCreate}
+          <Field
+            id="lead-request-name"
+            label="Request name"
+            required
+            value={name}
             disabled={loading}
-            id="create-lead-request-btn"
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-violet-600 hover:bg-violet-700 active:scale-95 text-white text-sm font-semibold rounded-xl shadow-md shadow-violet-500/20 transition-all disabled:opacity-60"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              <>
-                Create Lead Request
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
-        </div>
+            maxLength={200}
+            placeholder="e.g. Q3 Enterprise Outreach"
+            hint="Shown in your list of requests."
+            error={nameError}
+            onChange={(e) => {
+              setName(e.target.value)
+              if (nameError) setNameError('')
+            }}
+          />
+
+          <Field
+            id="lead-request-description"
+            as="textarea"
+            rows={3}
+            label="Description"
+            value={description}
+            disabled={loading}
+            placeholder="What is the goal of this request?"
+            onChange={(e) => setDescription(e.target.value)}
+          />
+
+          {flowType === 'icp' && (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <Field id="primary-goal" as="select" label="Primary goal" value={primaryGoal} disabled={loading} onChange={(e) => setPrimaryGoal(e.target.value)}>
+                <option value="">Select a goal</option>
+                {PRIMARY_GOALS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </Field>
+              <Field id="target-team-size" as="select" label="Target team size" value={teamSize} disabled={loading} onChange={(e) => setTeamSize(e.target.value)}>
+                <option value="">Select team size</option>
+                {TEAM_SIZES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </Field>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-5">
+            <Button variant="ghost" disabled={loading} onClick={() => navigate('/lead-requests')}>
+              {hasRequests ? 'Cancel' : 'Skip for now'}
+            </Button>
+            <Button type="submit" id="create-lead-request-btn" loading={loading}>
+              {loading ? 'Creating…' : 'Create request'}
+              {!loading && <ArrowRight aria-hidden="true" className="h-4 w-4" />}
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   )
