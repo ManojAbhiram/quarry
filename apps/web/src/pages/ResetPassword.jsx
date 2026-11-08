@@ -1,149 +1,92 @@
-import { useState } from 'react'
-import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { Lock, Eye, EyeOff, CheckCircle2 } from 'lucide-react'
-import ThemeToggle from '../components/ThemeToggle'
+import { useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { CheckCircle2 } from 'lucide-react'
 import { api } from '../api'
+import { Button, Field, ErrorState } from '../components/kit'
+import { AuthLayout, FormAlert, PasswordField, MIN_PASSWORD, describeError, useForm } from './auth/authKit'
+
+function ExpiredLink({ message }) {
+  return (
+    <AuthLayout title="Reset password">
+      <div className="rounded-lg border border-line bg-surface">
+        <ErrorState title="This reset link can't be used" message={message} className="py-10" />
+        <div className="px-6 pb-8 text-center">
+          <Link to="/forgot-password" className="btn-primary">
+            Request a new link
+          </Link>
+        </div>
+      </div>
+    </AuthLayout>
+  )
+}
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token') || ''
-  const navigate = useNavigate()
-
-  const [form, setForm] = useState({ password: '', confirm: '' })
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
   const [done, setDone] = useState(false)
+  const [tokenError, setTokenError] = useState('')
+  const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const busy = useRef(false)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-    if (!token) { setError('Invalid or missing reset token.'); return }
-    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return }
-    if (form.password !== form.confirm) { setError('Passwords do not match.'); return }
+  const form = useForm(
+    { password: '', confirm: '' },
+    {
+      password: (v) => (!v ? 'Enter a new password.' : v.length < MIN_PASSWORD ? `Use at least ${MIN_PASSWORD} characters.` : ''),
+      confirm: (v, all) => (!v ? 'Confirm your new password.' : v !== all.password ? 'Passwords do not match.' : ''),
+    },
+  )
 
+  const submit = async (e) => {
+    e?.preventDefault()
+    if (busy.current) return
+    form.touchAll()
+    if (form.hasErrors()) return
+    busy.current = true
     setLoading(true)
+    setError(null)
     try {
-      await api.post('/auth/reset-password', { token, new_password: form.password })
+      await api.post('/auth/reset-password', { token, new_password: form.values.password })
       setDone(true)
-      setTimeout(() => navigate('/login'), 3000)
     } catch (err) {
-      setError(err.message || 'Reset failed. The link may have expired.')
+      if (err?.status === 400 || err?.status === 401 || err?.status === 404) {
+        setTokenError('The link is invalid or has expired. Reset links work once and only for a short time.')
+      } else {
+        setError({ ...describeError(err, { fallback: 'Could not reset the password. Please try again.' }), retryFn: submit })
+      }
     } finally {
+      busy.current = false
       setLoading(false)
     }
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-[#060b13] px-4 transition-colors duration-300">
-      <div className="absolute top-4 right-4 z-20">
-        <ThemeToggle />
-      </div>
+  if (!token) return <ExpiredLink message="This link is missing its reset token. Request a new one to continue." />
+  if (tokenError) return <ExpiredLink message={tokenError} />
 
-      <div className="w-full max-w-[400px] space-y-6 animate-fade-in">
-        <div className="space-y-2 text-center">
-          <div className="w-12 h-12 bg-primary-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-primary-600/30 mb-4">
-            <Lock className="w-6 h-6 text-white" />
-          </div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Set new password</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-            Choose a strong password for your account.
-          </p>
+  if (done) {
+    return (
+      <AuthLayout title="Password reset">
+        <div role="status" className="flex items-start gap-3 rounded-lg border border-line bg-surface p-4 text-sm">
+          <CheckCircle2 aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-ok" />
+          <p className="text-ink">Password updated. You can now sign in with your new password.</p>
         </div>
+        <Link to="/login" className="btn-primary mt-4 w-full">
+          Sign in
+        </Link>
+      </AuthLayout>
+    )
+  }
 
-        {done ? (
-          <div className="bg-white dark:bg-[#0c1221] border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-sm text-center space-y-4">
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
-            <div>
-              <p className="font-bold text-slate-900 dark:text-white">Password updated!</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Redirecting you to sign in…
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white dark:bg-[#0c1221] border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-sm space-y-5">
-            {!token && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
-                <p className="text-xs text-rose-500 font-bold">
-                  Invalid reset link. Please request a new one.
-                </p>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 tracking-wide">
-                  New password
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="h-4 w-4 text-slate-400" />
-                  </div>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    className="w-full pl-11 pr-10 py-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
-                    placeholder="Min. 6 characters"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    autoComplete="new-password"
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 tracking-wide">
-                  Confirm password
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="h-4 w-4 text-slate-400" />
-                  </div>
-                  <input
-                    type={showConfirm ? 'text' : 'password'}
-                    required
-                    className="w-full pl-11 pr-10 py-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all text-xs font-semibold"
-                    placeholder="Repeat new password"
-                    value={form.confirm}
-                    onChange={(e) => setForm({ ...form, confirm: e.target.value })}
-                    autoComplete="new-password"
-                  />
-                  <button type="button" onClick={() => setShowConfirm(!showConfirm)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
-                    {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {error && (
-                <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
-                  <p className="text-xs text-rose-500 font-bold">{error}</p>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading || !token}
-                className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-bold transition-all text-xs shadow-lg shadow-primary-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Updating...' : 'Update password'}
-              </button>
-            </form>
-
-            <div className="text-center">
-              <Link to="/login" className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
-                Back to sign in
-              </Link>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+  return (
+    <AuthLayout title="Set a new password" description="Choose a password you have not used before.">
+      <form onSubmit={submit} noValidate className="space-y-4">
+        <FormAlert error={error} disabled={loading} />
+        <PasswordField label="New password" name="password" autoComplete="new-password" autoFocus required hint={`At least ${MIN_PASSWORD} characters.`} {...form.bind('password')} />
+        <Field label="Confirm password" type="password" name="confirm" autoComplete="new-password" required {...form.bind('confirm')} />
+        <Button type="submit" loading={loading} className="w-full">
+          {loading ? 'Resetting…' : 'Reset password'}
+        </Button>
+      </form>
+    </AuthLayout>
   )
 }
