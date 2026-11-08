@@ -8,8 +8,11 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(() => localStorage.getItem(STORAGE_KEYS.TOKEN))
   const [loading, setLoading] = useState(!!localStorage.getItem(STORAGE_KEYS.TOKEN))
+  // Set when we could not confirm the session (server or network trouble). The token is kept; the UI offers a retry.
+  const [bootError, setBootError] = useState(null)
 
   const logout = useCallback(() => {
+    setBootError(null)
     const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)
     if (refreshToken) {
 
@@ -22,15 +25,26 @@ export function AuthProvider({ children }) {
   }, [])
 
 
+  // Only a server answer of 401/403 means the session is invalid. Network or server trouble must not sign
+  // the user out: keep the token and let them retry.
+  const loadUser = useCallback(() => {
+    setLoading(true)
+    setBootError(null)
+    return api.get('/users/me')
+      .then((u) => setUser(u))
+      .catch((err) => {
+        if (err?.status === 401 || err?.status === 403) logout()
+        else setBootError(err)
+      })
+      .finally(() => setLoading(false))
+  }, [logout])
+
   useEffect(() => {
     if (!token) {
       setLoading(false)
       return
     }
-    api.get('/users/me')
-      .then((u) => setUser(u))
-      .catch(() => logout())
-      .finally(() => setLoading(false))
+    loadUser()
   }, [])
 
 
@@ -62,7 +76,7 @@ export function AuthProvider({ children }) {
   const updateUser = (updates) => setUser((prev) => ({ ...prev, ...updates }))
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateUser, applyAuth }}>
+    <AuthContext.Provider value={{ user, token, loading, bootError, retry: loadUser, login, register, logout, updateUser, applyAuth }}>
       {children}
     </AuthContext.Provider>
   )

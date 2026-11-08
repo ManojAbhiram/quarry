@@ -10,6 +10,20 @@ function getRefreshToken() {
   return localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)
 }
 
+/** An Error that carries the HTTP status, so callers can tell "the server said no" from "the server is down". */
+function httpError(message, status) {
+  return Object.assign(new Error(message), { status })
+}
+
+/** fetch() that marks a failed connection (offline, DNS, CORS, server down) with `isNetworkError`. */
+async function send(url, init) {
+  try {
+    return await fetch(url, init)
+  } catch (cause) {
+    throw Object.assign(new Error(cause?.message || 'Network error'), { isNetworkError: true })
+  }
+}
+
 let isRefreshing = false
 let refreshQueue = []
 
@@ -20,9 +34,9 @@ function drainQueue(error, token) {
 
 async function doRefresh() {
   const refreshToken = getRefreshToken()
-  if (!refreshToken) throw new Error('No refresh token')
+  if (!refreshToken) throw httpError('No refresh token', 401)
 
-  const res = await fetch(`${BASE}/auth/refresh`, {
+  const res = await send(`${BASE}/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken }),
@@ -31,7 +45,7 @@ async function doRefresh() {
   if (!res.ok) {
     localStorage.removeItem(STORAGE_KEYS.TOKEN)
     localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
-    throw new Error('Session expired')
+    throw httpError('Session expired', 401)
   }
 
   const data = await res.json()
@@ -45,7 +59,7 @@ async function request(method, path, body) {
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await send(`${BASE}${path}`, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -70,7 +84,8 @@ async function request(method, path, body) {
     } catch (err) {
       isRefreshing = false
       drainQueue(err, null)
-      window.dispatchEvent(new Event('auth:logout'))
+      // A refresh that failed only because the network is down must not sign the user out.
+      if (!err.isNetworkError) window.dispatchEvent(new Event('auth:logout'))
       throw err
     }
   }
@@ -81,15 +96,15 @@ async function request(method, path, body) {
   try {
     data = await res.json()
   } catch {
-    throw new Error(res.ok ? 'Invalid server response' : `Server error (${res.status})`)
+    throw httpError(res.ok ? 'Invalid server response' : `Server error (${res.status})`, res.status)
   }
 
   if (!res.ok) {
     const detail = data.detail
     if (Array.isArray(detail)) {
-      throw new Error(detail[0]?.msg || 'Validation error')
+      throw httpError(detail[0]?.msg || 'Validation error', res.status)
     }
-    throw new Error(detail || 'Request failed')
+    throw httpError(detail || 'Request failed', res.status)
   }
   return data
 }
@@ -99,7 +114,7 @@ async function requestFormData(method, path, formData) {
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await send(`${BASE}${path}`, {
     method,
     headers,
     body: formData,
@@ -123,7 +138,8 @@ async function requestFormData(method, path, formData) {
     } catch (err) {
       isRefreshing = false
       drainQueue(err, null)
-      window.dispatchEvent(new Event('auth:logout'))
+      // A refresh that failed only because the network is down must not sign the user out.
+      if (!err.isNetworkError) window.dispatchEvent(new Event('auth:logout'))
       throw err
     }
   }
@@ -134,15 +150,15 @@ async function requestFormData(method, path, formData) {
   try {
     data = await res.json()
   } catch {
-    throw new Error(res.ok ? 'Invalid server response' : `Server error (${res.status})`)
+    throw httpError(res.ok ? 'Invalid server response' : `Server error (${res.status})`, res.status)
   }
 
   if (!res.ok) {
     const detail = data.detail
     if (Array.isArray(detail)) {
-      throw new Error(detail[0]?.msg || 'Validation error')
+      throw httpError(detail[0]?.msg || 'Validation error', res.status)
     }
-    throw new Error(detail || 'Request failed')
+    throw httpError(detail || 'Request failed', res.status)
   }
   return data
 }
@@ -152,7 +168,7 @@ async function requestDownload(path, filename) {
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await send(`${BASE}${path}`, {
     method: 'GET',
     headers,
   })
@@ -176,7 +192,8 @@ async function requestDownload(path, filename) {
     } catch (err) {
       isRefreshing = false
       drainQueue(err, null)
-      window.dispatchEvent(new Event('auth:logout'))
+      // A refresh that failed only because the network is down must not sign the user out.
+      if (!err.isNetworkError) window.dispatchEvent(new Event('auth:logout'))
       throw err
     }
   }

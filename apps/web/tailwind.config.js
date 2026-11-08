@@ -3,6 +3,8 @@ import { STEPS, DEFAULT_PALETTE, paletteVars } from './src/config/palettes.js'
 // rgb(var(--p-600) / <alpha-value>) keeps opacity modifiers (bg-primary-600/20) working.
 const fromVar = (prefix) => Object.fromEntries(STEPS.map((s) => [s, `rgb(var(--${prefix}-${s}) / <alpha-value>)`]))
 
+const token = (name) => `rgb(var(--c-${name}) / <alpha-value>)`
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: 'class',
@@ -17,6 +19,19 @@ export default {
         accent: fromVar('a'),
         violet: fromVar('a'),
         purple: fromVar('a'),
+        // Semantic tokens (light and dark values live in src/index.css). New screens use these, not raw slate-*.
+        app: token('app'),
+        surface: token('surface'),
+        head: token('head'),
+        line: token('line'),
+        ink: token('ink'),
+        muted: token('muted'),
+        ok: token('ok'),
+        'ok-soft': token('ok-soft'),
+        warn: token('warn'),
+        'warn-soft': token('warn-soft'),
+        bad: token('bad'),
+        'bad-soft': token('bad-soft'),
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],

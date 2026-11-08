@@ -11,6 +11,12 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: { '@': path.resolve(process.cwd(), 'src') },
     },
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: './src/test/setup.js',
+      css: false,
+    },
     server: {
       port: Number(env.VITE_DEV_PORT) || 3000,
       proxy: {

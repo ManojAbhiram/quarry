@@ -2,9 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Design tokens ("The Sheet": flat, bordered, numbers first). Values are "r g b" triplets so Tailwind's
+  alpha syntax works (bg-surface/60). The accent comes from the palette variables (--p-*, see
+  src/config/palettes.js). Text and status colours are chosen to pass WCAG AA on their own surface.
+*/
+:root {
+  --c-app: 246 248 250;
+  --c-surface: 255 255 255;
+  --c-head: 241 244 247;
+  --c-line: 221 227 234;
+  --c-ink: 15 27 45;
+  --c-muted: 91 107 127;
+  --c-ok: 18 122 74;
+  --c-ok-soft: 227 245 236;
+  --c-warn: 154 98 0;
+  --c-warn-soft: 253 241 216;
+  --c-bad: 180 35 24;
+  --c-bad-soft: 253 232 230;
+}
+
+.dark {
+  --c-app: 13 22 38;
+  --c-surface: 20 32 54;
+  --c-head: 16 28 49;
+  --c-line: 36 53 83;
+  --c-ink: 230 237 246;
+  --c-muted: 141 160 184;
+  --c-ok: 74 222 155;
+  --c-ok-soft: 18 55 43;
+  --c-warn: 242 184 75;
+  --c-warn-soft: 58 46 18;
+  --c-bad: 255 138 128;
+  --c-bad-soft: 61 27 27;
+}
+
 @layer base {
   body {
-    @apply font-sans text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-[#0f172a] antialiased selection:bg-primary-200 selection:text-primary-900 transition-colors duration-300;
+    @apply font-sans text-ink bg-app antialiased selection:bg-primary-200 selection:text-primary-900 transition-colors duration-200;
   }
 
   ::-webkit-scrollbar {
@@ -13,92 +48,98 @@
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-transparent dark:bg-slate-900;
+    @apply bg-transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-slate-200 dark:bg-slate-700 rounded-full;
+    @apply bg-line rounded-full;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-primary-300 dark:bg-primary-700;
+    @apply bg-muted/50;
   }
 
   a:focus-visible,
   button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
   [role='menuitemradio']:focus-visible {
-    outline: 2px solid rgb(var(--p-500) / 0.65);
+    outline: 2px solid rgb(var(--p-500) / 0.7);
     outline-offset: 2px;
   }
 
   html {
-    @apply bg-slate-50 dark:bg-[#0f172a] transition-colors duration-300;
+    @apply bg-app transition-colors duration-200;
   }
 }
 
 @layer components {
-  /* Centres page content up to 80rem with a 2rem minimum gutter, while the element itself (the scroll
-     container) keeps spanning the full width so the scrollbar stays at the window edge. */
+  /* Centres page content up to 80rem with a 1rem minimum gutter on phones and 2rem from the sm breakpoint, while
+     the element itself (the scroll container) keeps spanning the full width so the scrollbar stays at the edge. */
   .page-container {
-    padding-inline: max(2rem, calc((100% - 80rem) / 2 + 2rem));
-    padding-top: 2rem;
+    padding-inline: max(1rem, calc((100% - 80rem) / 2 + 1rem));
+    padding-top: 1.5rem;
   }
 
+  @media (min-width: 640px) {
+    .page-container {
+      padding-inline: max(2rem, calc((100% - 80rem) / 2 + 2rem));
+      padding-top: 2rem;
+    }
+  }
+
+  /* A bordered panel. Flat: no glass, no shadow stack. */
   .card {
-    @apply bg-white/90 dark:bg-slate-900/80 backdrop-blur-2xl rounded-[2rem] border border-white/60 dark:border-slate-800/60 shadow-soft dark:shadow-2xl overflow-hidden transition-[background-color,border-color,box-shadow,transform] duration-300;
+    @apply bg-surface rounded-lg border border-line overflow-hidden;
   }
 
   .card-hover:hover {
-    @apply shadow-xl transform -translate-y-1.5 border-primary-200/50;
+    @apply border-primary-400;
   }
 
-  /* Primary button */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 bg-gradient-to-br from-primary-600 via-primary-500 to-indigo-600 hover:shadow-glow hover:brightness-110 text-white font-bold px-6 py-3 rounded-2xl transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md border border-primary-600 bg-primary-600 text-white text-sm font-semibold transition-colors hover:bg-primary-700 hover:border-primary-700 dark:bg-primary-400 dark:border-primary-400 dark:text-app dark:hover:bg-primary-300 dark:hover:border-primary-300 disabled:opacity-60 disabled:cursor-not-allowed;
   }
 
-  /* Secondary button text was invisible in light mode (slate-700 on white/80 is fine, but bg-white/80 has no dark:bg fallback on hover causing flash) */
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 bg-white dark:bg-slate-800 backdrop-blur-md hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold px-6 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 transition-[background-color,border-color,box-shadow,transform] duration-300 shadow-sm hover:shadow-md active:scale-95;
+    @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md border border-line bg-surface text-ink text-sm font-semibold transition-colors hover:bg-head disabled:opacity-60 disabled:cursor-not-allowed;
   }
 
-  /* .input — bg-white/60 in light mode renders semi-transparent, showing through to page bg.
-     Also dark:focus:bg-slate-800 is fine but focus:bg-white in dark mode caused a white flash. Fixed. */
   .input {
-    @apply w-full px-5 py-3.5 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-400 dark:focus:bg-slate-800 transition-all duration-200;
+    @apply w-full h-10 px-3 bg-surface border border-line rounded-md text-sm text-ink placeholder:text-muted/80 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-colors;
   }
 
   .label {
-    @apply block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2 tracking-tight ml-0.5;
+    @apply block text-sm font-semibold text-ink mb-1.5;
   }
 
-  /* Badges — dark bg used /30 opacity which was invisible on dark:bg-[#0f172a]. Increased to /40 */
+  /* Status badges: text plus a tint, never colour alone. */
   .badge-pending {
-    @apply inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-700/50 shadow-sm;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-warn-soft text-warn;
   }
 
   .badge-completed {
-    @apply inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-700/50 shadow-sm;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-ok-soft text-ok;
   }
 
   .badge-failed {
-    @apply inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-bold bg-rose-50 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400 border border-rose-200/50 dark:border-rose-700/50 shadow-sm;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-bad-soft text-bad;
   }
 
-  /* Sidebar nav links — nav-link-active dark gradient was near-invisible (slate-800 to slate-900 on same dark bg).
-     Added a left border accent that's visible in both modes. */
   .nav-link {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-all duration-200 cursor-pointer;
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted hover:bg-head hover:text-ink transition-colors cursor-pointer;
   }
 
   .nav-link-active {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-primary-50 dark:bg-primary-950/60 text-primary-700 dark:text-primary-400 border border-primary-100 dark:border-primary-900/60 shadow-sm transition-all duration-200;
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm font-semibold bg-primary-50 text-primary-800 dark:bg-primary-950/60 dark:text-primary-300;
   }
 
   .field-input {
-    @apply w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 transition-all;
+    @apply w-full px-3 py-2 text-sm bg-surface border border-line rounded-md text-ink placeholder:text-muted/80 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-colors;
   }
 }
+
 /* Respect the OS "reduce motion" setting: keep state changes, drop the movement. */
 @media (prefers-reduced-motion: reduce) {
   *,
