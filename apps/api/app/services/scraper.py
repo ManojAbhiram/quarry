@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 
 from app.core.config import settings
 from app.core.logger import logger
-from app.core.url_guard import UnsafeURLError, httpx_request_guard, playwright_route_guard, safe_get
+from app.core.url_guard import GuardedAsyncClient, UnsafeURLError, playwright_route_guard, safe_get
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -598,11 +598,10 @@ async def scrape_url_with_discovery(url: str) -> tuple[str, dict]:
                     logger.warning("Failed after %d retries — %s: %s", retries, fetch_url, exc)
         return ""
 
-    async with httpx.AsyncClient(
+    async with GuardedAsyncClient(
         headers=HEADERS,
         timeout=settings.SCRAPE_TIMEOUT + 10,  # extra buffer
         follow_redirects=True,
-        event_hooks={"request": [httpx_request_guard]},
     ) as client:
 
         # ── Homepage ──────────────────────────────────────────────────────────

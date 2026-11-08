@@ -26,6 +26,7 @@ from typing import Optional
 import dns.resolver  # dnspython – already in pyproject.toml
 
 from app.core.logger import logger
+from app.core.url_guard import UnsafeURLError, resolve_public
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -59,8 +60,14 @@ def _smtp_verify(mx_host: str, email: str, timeout: int = 5) -> tuple[bool, str]
     so the result is best-effort.
     """
     try:
+        # An MX record can point at loopback or a private host. Resolve and check it, then
+        # connect to the checked address so the name cannot resolve differently a second time.
+        mx_ip = resolve_public(mx_host, 25)[0]
+    except UnsafeURLError as exc:
+        return False, f"SMTP target refused: {exc}"
+    try:
         with smtplib.SMTP(timeout=timeout) as smtp:
-            smtp.connect(mx_host, 25)
+            smtp.connect(mx_ip, 25)
             smtp.ehlo("quarry.ai")
             smtp.mail(PROBE_FROM)
             code, _ = smtp.rcpt(email)

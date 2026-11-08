@@ -10,7 +10,7 @@ import asyncio
 import httpx
 from bs4 import BeautifulSoup
 
-from app.core.url_guard import httpx_request_guard
+from app.core.url_guard import GuardedAsyncClient
 
 logger = logging.getLogger(__name__)
 
@@ -860,11 +860,10 @@ class TechStackDetector:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         try:
-            async with httpx.AsyncClient(
+            async with GuardedAsyncClient(
                 headers=headers,
                 follow_redirects=True,
                 timeout=timeout,
-                event_hooks={"request": [httpx_request_guard]},
             ) as client:
                 return await self.detect_technologies_with_client(client, url, timeout)
         except Exception as e:
@@ -1213,12 +1212,11 @@ async def detect_technology_stacks_parallel(urls: List[str], timeout: int = 5) -
     }
     limits = httpx.Limits(max_keepalive_connections=25, max_connections=50)
 
-    async with httpx.AsyncClient(
+    async with GuardedAsyncClient(
         headers=headers,
         limits=limits,
         follow_redirects=True,
         timeout=timeout,
-        event_hooks={"request": [httpx_request_guard]},
     ) as client:
         async def detect_one(url: str) -> Tuple[str, List[str]]:
             try:
@@ -1610,11 +1608,10 @@ async def detect_backend_framework(
     }
 
     try:
-        async with httpx.AsyncClient(
+        async with GuardedAsyncClient(
             headers=headers,
             follow_redirects=True,
             timeout=timeout,
-            event_hooks={"request": [httpx_request_guard]},
         ) as client:
             # Parallel scanning
             api_docs, health_check = await asyncio.gather(

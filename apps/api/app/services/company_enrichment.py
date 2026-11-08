@@ -21,11 +21,10 @@ import asyncio
 import logging
 from urllib.parse import urlparse, parse_qs, unquote
 
-import httpx
 from bs4 import BeautifulSoup
 
 from app.core.config import settings
-from app.core.url_guard import httpx_request_guard
+from app.core.url_guard import GuardedAsyncClient
 from app.services.serper import fetch_leads_from_serper
 from app.services.llm import _llm_json_completion
 
@@ -112,11 +111,10 @@ async def _scrape_linkedin_company_page(company_name: str, linkedin_url: str = "
 
     # Step 2: Scrape the LinkedIn page directly
     try:
-        async with httpx.AsyncClient(
+        async with GuardedAsyncClient(
             headers=_SCRAPER_HEADERS,
             follow_redirects=True,
             timeout=15,
-            event_hooks={"request": [httpx_request_guard]},
         ) as client:
             resp = await client.get(linkedin_url)
             resp.raise_for_status()

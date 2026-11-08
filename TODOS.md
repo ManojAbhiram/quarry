@@ -1,17 +1,22 @@
 # TODOS
 
 ## Infrastructure
+_None open._
+
+## Completed
 ### Close the DNS-rebinding gap in the private-address guard (pre-hosting blocker)
 
 **What:** Make the guard connect to the IP address it checked, so a DNS server that answers differently on the second lookup cannot redirect a request to an internal address.
 
-**Why:** `app/core/url_guard.py` resolves a name to check it, then the HTTP client resolves the same name again before connecting. A hostile DNS server can answer with a public address the first time and `127.0.0.1` the second.
+**Why:** `app/core/url_guard.py` resolved a name to check it, then the HTTP client resolved the same name again before connecting. A hostile DNS server could answer with a public address the first time and `127.0.0.1` the second.
 
-**Context:** Documented as a known limit in the `url_guard.py` module docstring. Closing it means pinning the resolved IP into the connection (a custom httpx transport and a `requests` adapter, keeping the Host header and TLS server name). It affects every guarded fetcher: `scraper.py`, `tech_stack.py`, `careers_tech_stack.py`, `company_enrichment.py` and `product_similarity.py`. Not needed for the local concierge pilot.
+**Context:** Documented as a known limit in the `url_guard.py` module docstring. Closing it means pinning the resolved IP into the connection. It affects every guarded fetcher. Not needed for the local concierge pilot.
 
 **Effort:** M
 **Priority:** P2
 **Depends on:** None. Must land before Quarry runs on any server.
+
+**Completed:** 2026-11-08 on branch `fix/mx-and-dns-guard`. `GuardedAsyncClient` (httpx) wraps the connection pool's network backend so every connection is resolved, checked and made to the checked IP, with fallback to the next address; TLS still verifies against the real hostname. `safe_get` (requests) resolves each hop once and connects to the checked IP with the original Host header and TLS server name. All five modules now build `GuardedAsyncClient`. Confirmed with a live request to example.com on both paths. Remaining limits, documented in the module: Playwright's browser does its own DNS (checked, not pinned; Playwright is off by default), and a `GuardedAsyncClient` ignores environment proxy settings. The pinning reaches one private httpcore attribute (`_pool._network_backend`); `tests/test_url_guard_pinning.py` fails loudly if an httpx or httpcore upgrade removes it.
 
 ### Check MX addresses before the SMTP email probe
 
@@ -25,7 +30,8 @@
 **Priority:** P3
 **Depends on:** None.
 
-## Completed
+**Completed:** 2026-11-08 on branch `fix/mx-and-dns-guard`. New `resolve_public()` in `url_guard.py`; `_smtp_verify` refuses a non-public MX and connects to the checked IP, not the hostname. 4 tests in `tests/test_url_guard_mx.py`.
+
 ### Extend the private-address guard to the other outbound fetchers (pre-hosting blocker)
 
 **What:** Add `event_hooks={"request": [httpx_request_guard]}` to every `httpx.AsyncClient` that fetches company or scraped URLs outside `scraper.py`, and close the DNS-rebinding gap in `app/core/url_guard.py`.

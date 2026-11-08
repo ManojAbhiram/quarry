@@ -17,11 +17,10 @@ import re
 from datetime import datetime
 from urllib.parse import urljoin, urlparse, parse_qs, unquote
 
-import httpx
 from bs4 import BeautifulSoup
 
 from app.core.config import settings
-from app.core.url_guard import httpx_request_guard
+from app.core.url_guard import GuardedAsyncClient
 from app.core.utils import normalize_url
 from app.db.competitors import create_competitor_run, update_competitor_run_status
 from app.services.llm import _llm_json_completion
@@ -891,11 +890,10 @@ async def fetch_linkedin_company_info(company_name: str) -> dict:
 
     # Step 2 — scrape the LinkedIn page
     try:
-        async with httpx.AsyncClient(
+        async with GuardedAsyncClient(
             headers=_SCRAPER_HEADERS,
             follow_redirects=True,
             timeout=15,
-            event_hooks={"request": [httpx_request_guard]},
         ) as client:
             resp = await client.get(linkedin_url)
             resp.raise_for_status()
