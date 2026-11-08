@@ -18,6 +18,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.core.config import settings
+from app.core.url_guard import httpx_request_guard
 from app.core.utils import normalize_url
 from app.services.llm import pick_official_careers_url, resolve_company_from_job_board_page
 from app.services.serper import fetch_leads_from_serper
@@ -368,7 +369,12 @@ async def discover_careers_hub(
 
     owns_client = client is None
     if owns_client:
-        client = httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=settings.CAREERS_ENRICH_TIMEOUT)
+        client = httpx.AsyncClient(
+        headers=HEADERS,
+        follow_redirects=True,
+        timeout=settings.CAREERS_ENRICH_TIMEOUT,
+        event_hooks={"request": [httpx_request_guard]},
+    )
 
     try:
         candidates: List[Dict[str, str]] = []
@@ -482,7 +488,12 @@ async def collect_job_listings(
     """Parse official careers index and return validated job URLs only."""
     owns_client = client is None
     if owns_client:
-        client = httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=settings.CAREERS_ENRICH_TIMEOUT)
+        client = httpx.AsyncClient(
+        headers=HEADERS,
+        follow_redirects=True,
+        timeout=settings.CAREERS_ENRICH_TIMEOUT,
+        event_hooks={"request": [httpx_request_guard]},
+    )
 
     jobs: List[Dict[str, Any]] = []
     try:
@@ -528,7 +539,12 @@ async def fetch_job_descriptions(
     """Fetch JD text for validated official job URLs."""
     owns_client = client is None
     if owns_client:
-        client = httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=settings.CAREERS_ENRICH_TIMEOUT)
+        client = httpx.AsyncClient(
+        headers=HEADERS,
+        follow_redirects=True,
+        timeout=settings.CAREERS_ENRICH_TIMEOUT,
+        event_hooks={"request": [httpx_request_guard]},
+    )
 
     semaphore = asyncio.Semaphore(10)
     results: List[Dict[str, Any]] = []
@@ -574,7 +590,12 @@ async def fetch_job_descriptions(
 
 async def detect_careers_tech_stack(url: str) -> Dict[str, Any]:
     """End-to-end careers tech detection for one company URL."""
-    async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=settings.CAREERS_ENRICH_TIMEOUT) as client:
+    async with httpx.AsyncClient(
+        headers=HEADERS,
+        follow_redirects=True,
+        timeout=settings.CAREERS_ENRICH_TIMEOUT,
+        event_hooks={"request": [httpx_request_guard]},
+    ) as client:
         discovery = await discover_careers_hub(url, client=client)
         company_domain = discovery.get("company_domain") or _domain_from_url(url)
         careers_url = discovery.get("careers_url")
