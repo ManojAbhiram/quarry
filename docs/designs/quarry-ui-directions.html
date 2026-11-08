@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quarry UI directions</title>
+<style>
+/* Three directions share one structure; each theme is a set of tokens plus a few layout switches. */
+:root{--font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,"SF Mono",Consolas,monospace}
+*{box-sizing:border-box;margin:0}
+body{font-family:var(--font);background:#e9edf1;color:#0f1b2d;min-height:100vh}
+.chrome{position:sticky;top:0;z-index:5;background:#0f1b2d;color:#dfe8f1;display:flex;gap:24px;align-items:center;padding:10px 20px;flex-wrap:wrap;font-size:13px}
+.chrome b{font-weight:600;margin-right:4px}
+.seg{display:flex;background:#1b2b44;border-radius:8px;padding:3px}
+.seg button{all:unset;cursor:pointer;padding:6px 12px;border-radius:6px;font-size:13px;color:#a9bbd0}
+.seg button[aria-pressed=true]{background:#2dd4e8;color:#06222a;font-weight:600}
+.note{margin-left:auto;color:#8fa4bd;max-width:520px;font-size:12px;line-height:1.4}
+.stage{padding:20px;display:flex;justify-content:center}
+.app{width:1440px;max-width:100%;min-height:860px;background:var(--bg);color:var(--ink);border-radius:var(--r-lg);border:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column;font-family:var(--font)}
+/* ---- themes ---- */
+[data-t=a]{--bg:#f6f8fa;--surface:#fff;--ink:#0f1b2d;--muted:#5b6b7f;--line:#dde3ea;--accent:#0891b2;--accent-ink:#fff;--accent-soft:#e0f4f8;--ok:#127a4a;--ok-bg:#e3f5ec;--warn:#9a6200;--warn-bg:#fdf1d8;--bad:#b42318;--bad-bg:#fde8e6;--r:8px;--r-lg:12px;--head:#fff}
+[data-t=b]{--bg:#0d1626;--surface:#142036;--ink:#e6edf6;--muted:#8da0b8;--line:#243553;--accent:#38c7d8;--accent-ink:#04262c;--accent-soft:#17344a;--ok:#4ade9b;--ok-bg:#12372b;--warn:#f2b84b;--warn-bg:#3a2e12;--bad:#ff8a80;--bad-bg:#3d1b1b;--r:6px;--r-lg:12px;--head:#101c31}
+[data-t=c]{--bg:#fff;--surface:#fff;--ink:#14231a;--muted:#5f7066;--line:#cfd9d2;--accent:#1a7f4b;--accent-ink:#fff;--accent-soft:#e6f3ec;--ok:#1a7f4b;--ok-bg:#dff1e6;--warn:#8a5a00;--warn-bg:#fbefd2;--bad:#b3261e;--bad-bg:#fbe3e0;--r:2px;--r-lg:6px;--head:#f4f7f5}
+/* ---- shared parts ---- */
+.top{display:flex;align-items:center;gap:20px;padding:14px 24px;background:var(--head);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.2px}
+.logo i{width:22px;height:22px;border-radius:5px;background:var(--accent);display:inline-block;clip-path:polygon(50% 0,100% 30%,100% 80%,50% 100%,0 80%,0 30%)}
+.nav{display:flex;gap:4px;margin-left:12px}
+.nav span{padding:6px 12px;border-radius:var(--r);font-size:14px;color:var(--muted)}
+.nav span.on{background:var(--accent-soft);color:var(--ink);font-weight:600}
+.who{margin-left:auto;font-size:13px;color:var(--muted)}
+.body{padding:28px 32px;flex:1}
+h1{font-size:24px;letter-spacing:-.2px}
+.sub{color:var(--muted);font-size:14px;margin-top:4px}
+.btn{all:unset;cursor:pointer;padding:9px 16px;border-radius:var(--r);font-size:14px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.btn.p{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.off{opacity:.5;cursor:not-allowed}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+.in{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink);font:inherit;font-size:14px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.field{margin-bottom:18px}
+.hint{font-size:12px;color:var(--muted);margin-top:5px}
+/* wizard layouts */
+.wiz{display:grid;gap:24px;margin-top:22px}
+.wiz[data-l=rail]{grid-template-columns:200px 1fr 320px}
+.wiz[data-l=top]{grid-template-columns:1fr 340px}
+.wiz[data-l=crumb]{grid-template-columns:minmax(0,760px);justify-content:center}
+.steps{list-style:none;padding:0;display:flex;flex-direction:column;gap:6px}
+.steps li{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:var(--r);font-size:14px;color:var(--muted)}
+.steps li b{width:24px;height:24px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-size:12px}
+.steps li.done b{background:var(--ok);border-color:var(--ok);color:var(--accent-ink)}
+.steps li.on{background:var(--accent-soft);color:var(--ink);font-weight:600}
+.steps li.on b{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.hstep{display:flex;gap:8px;margin-top:20px}
+.hstep div{flex:1;padding:10px 12px;border-radius:var(--r);border:1px solid var(--line);font-size:13px;color:var(--muted);background:var(--surface)}
+.hstep div.on{border-color:var(--accent);color:var(--ink);font-weight:600}
+.hstep div.done{color:var(--ok)}
+.crumb{font-size:13px;color:var(--muted);margin-top:14px;display:flex;gap:8px}
+.crumb b{color:var(--ink)}
+.sum h3{font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:12px}
+.sum dl{display:grid;grid-template-columns:90px 1fr;gap:8px 12px;font-size:14px}
+.sum dt{color:var(--muted)}
+.est{margin-top:16px;padding:12px;border-radius:var(--r);background:var(--accent-soft);font-size:14px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:5px 10px;border-radius:99px;border:1px solid var(--line);font-size:13px;background:var(--surface)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);font-weight:600}
+[data-t=c] .chip{border-radius:2px}
+.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+/* results */
+.rh{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.rh .r{margin-left:auto;display:flex;gap:10px}
+.stats{display:flex;gap:28px;margin:16px 0 18px;font-size:13px;color:var(--muted)}
+.stats b{display:block;color:var(--ink);font-size:20px}
+.filters{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.tbl{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;font-size:14px}
+.tbl th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:10px 12px;background:var(--head);border-bottom:1px solid var(--line);font-weight:600}
+.tbl td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl tr.x td{background:var(--accent-soft)}
+.co{font-weight:600}.co small,.dm small{display:block;color:var(--muted);font-weight:400;font-size:12px}
+.mono{font-family:var(--mono);font-size:13px}
+[data-t=b] .tbl td.n,[data-t=c] .tbl td.n{font-family:var(--mono)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:99px;font-size:12px;font-weight:600}
+[data-t=c] .badge{border-radius:2px}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}.badge.lk{background:var(--warn-bg);color:var(--warn)}.badge.rk{background:var(--bad-bg);color:var(--bad)}
+.bar{display:flex;align-items:center;gap:8px;min-width:110px}
+.bar i{flex:1;height:6px;border-radius:99px;background:var(--line);position:relative;overflow:hidden}
+.bar i u{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:99px}
+[data-t=c] .bar i{display:none}
+[data-t=c] .score{padding:3px 8px;font-weight:700;border-radius:2px}
+.why{color:var(--muted);font-size:13px;max-width:280px}
+.detail{background:var(--accent-soft);padding:12px 16px;font-size:13px;color:var(--muted);display:flex;gap:28px}
+.detail b{color:var(--ink)}
+.state{margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.state .card{font-size:13px;color:var(--muted);padding:14px}
+.state .card strong{display:block;color:var(--ink);margin-bottom:4px;font-size:14px}
+.tag{margin-top:22px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="chrome">
+  <b>Quarry UI directions</b>
+  <div class="seg" id="dir"></div>
+  <div class="seg" id="scr"></div>
+  <span class="note" id="note"></span>
+</div>
+<div class="stage"><div class="app" id="app"></div></div>
+
+<script>
+const DIRS={
+  a:{name:"A · Clean Ledger",note:"Light, calm, brand cyan on cool white. Left step rail. Built for trust: plain labels, generous space, the table is the hero."},
+  b:{name:"B · Control Room",note:"Dark navy, flat (no glow). Mono data, compact rows. Built for people who live in tools all day and want density and speed."},
+  c:{name:"C · The Sheet",note:"Looks like the spreadsheet they already use. Green, bordered grid, numbers first. Lowest learning cost, easiest to trust on first sight."}
+};
+const ROWS=[
+ ["Brandwerk Studio","Berlin · 24 staff","Lena Hartmann","Founder & MD","lena@brandwerk.example","ok",92,"Boutique agency, B2B clients, hiring a SDR"],
+ ["Nordlicht Marketing","Hamburg · 18 staff","Jonas Brandt","Head of Growth","jonas.brandt@nordlicht.example","ok",88,"Launched outbound service page this quarter"],
+ ["Klartext Digital","Vienna · 31 staff","Eva Moser","Managing Partner","e.moser@klartext.example","lk",81,"Case studies target SaaS, 11-50 staff fit"],
+ ["Alpenfunk Media","Zurich · 14 staff","Marc Keller","Co-founder","marc@alpenfunk.example","ok",77,"Agency, recent funding round mentioned"],
+ ["Stadtwerk Kreativ","Munich · 42 staff","Sophie Wirth","Business Development","s.wirth@stadtwerk.example","rk",64,"Broader than ICP, mixed B2C work"],
+ ["Pixelmanufaktur","Cologne · 12 staff","Tim Lorenz","Founder","tim@pixelmanufaktur.example","lk",59,"Small team, no outbound signals found"]
+];
+const BL={ok:["Verified","✓"],lk:["Likely","~"],rk:["Risky","!"]};
+let dir="a",scr="wizard";
+function seg(el,items,cur,fn){el.innerHTML=items.map(([k,l])=>`<button aria-pressed="${k===cur}" data-k="${k}">${l}</button>`).join("");el.querySelectorAll("button").forEach(b=>b.onclick=()=>fn(b.dataset.k))}
+function topbar(on){return `<div class="top"><div class="logo"><i></i>Quarry</div><div class="nav"><span>Dashboard</span><span class="${on==='n'?'on':''}">New request</span><span class="${on==='r'?'on':''}">Requests</span><span>Lists</span></div><div class="who">pilot@example.com</div></div>`}
+function form(){return `<div class="card"><div class="field"><label>Who is your ideal customer?</label><textarea class="in" rows="4">Small B2B marketing agencies in the DACH region that sell to SaaS companies and are growing their sales team.</textarea><div class="hint">Plain language is fine. Quarry turns this into search queries.</div></div>
+<div class="row2"><div class="field"><label>Industry</label><div class="in">Marketing &amp; advertising agencies</div></div><div class="field"><label>Company size</label><div class="chips"><span class="chip">1-10</span><span class="chip on">11-50</span><span class="chip">51-200</span></div></div></div>
+<div class="row2"><div class="field"><label>Geography</label><div class="in">Germany, Austria, Switzerland</div></div><div class="field"><label>Number of leads</label><div class="in">40</div><div class="hint">Between 1 and 200.</div></div></div>
+<div class="actions"><button class="btn">Save draft</button><button class="btn">Back</button><button class="btn p">Find leads</button></div></div>`}
+function summary(){return `<div class="card sum"><h3>What Quarry will search</h3><dl><dt>Looking for</dt><dd>B2B marketing agencies</dd><dt>Size</dt><dd>11-50 staff</dd><dt>Where</dt><dd>DE · AT · CH</dd><dt>Contacts</dt><dd>Founders, heads of growth</dd></dl><div class="est"><b>About 40 companies, around 6 minutes.</b><br>Uses your Serper key. Est. 25 searches.</div><p class="hint" style="margin-top:12px">Email status is labelled Verified, Likely or Risky, with the date it was checked.</p></div>`}
+function wizard(){
+ const L={a:"rail",b:"top",c:"crumb"}[dir];
+ const head=`<h1>New request</h1><div class="sub">Step 2 of 4 · Describe your ideal customer</div>`;
+ const steps=["Name your run","Describe your customer","Add your Serper key","Review and launch"];
+ let nav="";
+ if(L==="rail")nav=`<ul class="steps">${steps.map((s,i)=>`<li class="${i<1?'done':i===1?'on':''}"><b>${i<1?'✓':i+1}</b>${s}</li>`).join("")}</ul>`;
+ if(L==="top")nav=`<div class="hstep">${steps.map((s,i)=>`<div class="${i<1?'done':i===1?'on':''}">${i+1}. ${s}</div>`).join("")}</div>`;
+ if(L==="crumb")nav=`<div class="crumb"><span>Name your run</span>›<b>Describe your customer</b>›<span>Serper key</span>›<span>Launch</span></div>`;
+ const grid=L==="rail"?`<div class="wiz" data-l="rail">${nav}${form()}${summary()}</div>`
+  :L==="top"?`${nav}<div class="wiz" data-l="top">${form()}${summary()}</div>`
+  :`${nav}<div class="wiz" data-l="crumb">${form()}<div class="card sum"><h3>Estimate</h3><div class="est" style="margin:0"><b>About 40 companies, around 6 minutes.</b> Uses your Serper key, est. 25 searches.</div></div></div>`;
+ return topbar('n')+`<div class="body">${head}${grid}</div>`}
+function results(){
+ const rows=ROWS.map((r,i)=>{const b=BL[r[5]];const sc=r[6];
+  const sc2=dir==="c"?`<span class="score" style="background:${sc>=85?'var(--ok-bg)':sc>=70?'var(--warn-bg)':'var(--bad-bg)'}">${sc}</span>`:`<div class="bar"><i><u style="width:${sc}%"></u></i><span class="mono">${sc}</span></div>`;
+  return `<tr class="${i===2?'x':''}"><td class="co">${r[0]}<small>${r[1]}</small></td><td class="dm">${r[2]}<small>${r[3]}</small></td><td class="n">${r[4]}</td><td><span class="badge ${r[5]}">${b[1]} ${b[0]}</span></td><td>${sc2}</td><td class="why">${r[7]}</td></tr>`+(i===2?`<tr class="x"><td colspan="6" style="padding:0"><div class="detail"><span><b>Source</b> klartext.example/team</span><span><b>Email checked</b> 8 Nov 2026 · mailbox not confirmed (catch-all domain)</span><span><b>LinkedIn</b> linkedin.com/in/e-moser</span></div></td></tr>`:"")}).join("");
+ return topbar('r')+`<div class="body"><div class="rh"><div><h1>Boutique marketing agencies, DACH</h1><div class="sub">Completed 8 Nov 2026, 6 min · 11-50 staff · DE, AT, CH</div></div><div class="r"><button class="btn off">Add to sequence · coming soon</button><button class="btn p">Export CSV</button></div></div>
+ <div class="stats"><span><b>38</b>leads found</span><span><b>21</b>verified emails</span><span><b>11</b>likely</span><span><b>6</b>risky</span><span><b>74</b>avg fit score</span></div>
+ <div class="filters"><span class="chip on">All</span><span class="chip">Verified only</span><span class="chip">Fit 70+</span><span class="chip">Germany</span><span class="chip">Austria</span><span class="chip">Switzerland</span></div>
+ <table class="tbl"><thead><tr><th>Company</th><th>Decision maker</th><th>Email</th><th>Status</th><th>Fit</th><th>Why it matched</th></tr></thead><tbody>${rows}</tbody></table>
+ <div class="state"><div class="card"><strong>Running</strong>Searching Google, 14 of 40 companies. Estimated 3 minutes left. Cancel any time.</div><div class="card"><strong>No results</strong>Nothing matched. Try a wider size range or another country. No charge for empty runs.</div><div class="card"><strong>Failed</strong>Your Serper key was rejected (401). Update it in Profile and retry. Nothing was lost.</div></div>
+ <p class="tag">Mock data. Email labels show how sure Quarry is, never a guarantee.</p></div>`}
+function paint(){
+ seg(document.getElementById("dir"),Object.entries(DIRS).map(([k,v])=>[k,v.name]),dir,k=>{dir=k;paint()});
+ seg(document.getElementById("scr"),[["wizard","Wizard"],["results","Results"]],scr,k=>{scr=k;paint()});
+ document.getElementById("note").textContent=DIRS[dir].note;
+ const app=document.getElementById("app");app.dataset.t=dir;app.innerHTML=scr==="wizard"?wizard():results();
+}
+paint();
+</script>
+</body>
+</html>
