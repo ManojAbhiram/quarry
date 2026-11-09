@@ -14,8 +14,7 @@ from reportlab.lib import colors
 
 def generate_csv(headers, rows) -> bytes:
     output = io.StringIO()
-    # Write BOM for Excel UTF-8 compatibility
-    output.write('\ufeff')
+    # The BOM (for Excel UTF-8 compatibility) comes from the utf-8-sig encode below; writing it here too doubled it.
     writer = csv.writer(output)
     writer.writerow(headers)
     for row in rows:
