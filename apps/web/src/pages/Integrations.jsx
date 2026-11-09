@@ -126,7 +126,7 @@ function Enrichment() {
 export default function Integrations() {
   return (
     <div className="h-full overflow-y-auto pb-12 page-container">
-      <PageHeader title="Integrations" description="API keys, webhooks and enrichment providers." />
+      <PageHeader title="Integrations" description="API keys, webhooks and enrichment providers. Looking for HubSpot or Zapier? See CRM integrations in the account menu." />
       <div className="space-y-6"><ApiKeys /><Webhooks /><Enrichment /></div>
     </div>
   )

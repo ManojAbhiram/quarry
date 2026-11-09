@@ -291,7 +291,7 @@ export default function Integrations() {
     <div id="integrations-page" ref={pageRef} className="h-full overflow-y-auto pb-12 page-container">
       <div className="mx-auto max-w-4xl">
         <div data-reveal>
-          <PageHeader title="Integrations" description="Send leads to your CRM and trigger automations." />
+          <PageHeader title="CRM integrations" description="Send leads to your CRM and trigger automations. API keys and webhooks are under Integrations." />
         </div>
         {state.status === 'loading' && <div role="status" aria-label="Loading integrations" className="space-y-4"><Skeleton className="h-40 w-full" /><Skeleton className="h-40 w-full" /></div>}
         {state.status === 'error' && <ErrorState title="Could not load integrations" message={state.error} onRetry={load} />}
