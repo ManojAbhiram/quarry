@@ -149,3 +149,6 @@ TABLES: dict[str, DocTable] = {
     "lead_lists": DocTable(LeadList),
     "serper_cache": DocTable(SerperCache),
 }
+
+
+from app.p3 import models as _p3_models  # noqa: E402,F401  (registers Phase 3 tables into Base/TABLES)
