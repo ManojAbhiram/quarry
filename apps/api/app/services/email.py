@@ -7,12 +7,38 @@ from app.core.config import settings
 from app.core.logger import logger
 
 
+class SmtpNotConfigured(RuntimeError):
+    pass
+
+
+async def _deliver(msg: MIMEMultipart) -> None:
+    """Send via SMTP. Port 465 uses implicit TLS; anything else uses STARTTLS."""
+    username = settings.SMTP_USERNAME.strip()
+    # Google shows app passwords as "abcd efgh ijkl mnop"; the spaces are not part of it.
+    password = settings.SMTP_PASSWORD.replace(" ", "")
+    if not (username and password):
+        raise SmtpNotConfigured("SMTP_USERNAME and SMTP_PASSWORD must be set in .env")
+    if "From" not in msg:
+        msg["From"] = settings.SMTP_FROM or username
+    use_ssl = settings.SMTP_PORT == 465
+    await aiosmtplib.send(
+        msg,
+        hostname=settings.SMTP_HOST,
+        port=settings.SMTP_PORT,
+        username=username,
+        password=password,
+        use_tls=use_ssl,
+        start_tls=not use_ssl,
+        timeout=20,
+    )
+
+
 async def send_password_reset_email(to_email: str, reset_token: str) -> None:
     reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = "Reset Your Password — Quarry"
-    msg["From"] = settings.SMTP_FROM
+    msg["From"] = settings.SMTP_FROM or settings.SMTP_USERNAME
     msg["To"] = to_email
 
     plain = (
@@ -47,12 +73,20 @@ async def send_password_reset_email(to_email: str, reset_token: str) -> None:
     msg.attach(MIMEText(plain, "plain"))
     msg.attach(MIMEText(html, "html"))
 
-    await aiosmtplib.send(
-        msg,
-        hostname=settings.SMTP_HOST,
-        port=settings.SMTP_PORT,
-        username=settings.SMTP_USERNAME,
-        password=settings.SMTP_PASSWORD,
-        start_tls=True,
-    )
+    await _deliver(msg)
     logger.info(f"Password reset email sent to {to_email}")
+
+
+if __name__ == "__main__":
+    # Smoke test:  python -m app.services.email you@example.com
+    import asyncio
+    import sys
+
+    async def _main(to: str) -> None:
+        m = MIMEText("SMTP is configured correctly.", "plain")
+        m["Subject"] = "Quarry SMTP test"
+        m["To"] = to
+        await _deliver(m)
+        print(f"Sent test email to {to}")
+
+    asyncio.run(_main(sys.argv[1]))

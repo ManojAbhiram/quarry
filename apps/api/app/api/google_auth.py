@@ -1,7 +1,7 @@
 """Google OAuth2 SSO flow.
 
-Routes are mounted at /auth/google (no /api prefix) because Google's registered
-redirect URI is http://localhost:9000/auth/google/callback.
+Mounted under the API prefix, so the registered redirect URI must match
+GOOGLE_REDIRECT_URI (default http://localhost:8000/api/auth/google/callback).
 """
 import urllib.parse
 
