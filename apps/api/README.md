@@ -1,149 +1,130 @@
-# Quarry Backend — AI-Powered B2B Lead Generation Engine
+# Quarry API
 
-Quarry is an advanced, autonomous lead generation engine designed to discover, extract, and qualify B2B prospects at scale. By orchestrating a multi-stage AI pipeline, Quarry transforms high-level Ideal Customer Profiles (ICPs) into actionable business intelligence.
+FastAPI backend for Quarry, an AI-assisted B2B lead generation tool. A user describes an ideal customer; the API
+generates search queries, discovers and scrapes candidate companies, enriches them with an LLM, scores them, finds
+decision makers and competitors, and exposes everything over REST (plus a server-sent-events status stream).
 
----
+Design docs: [`HLD.md`](HLD.md) (architecture) and [`LLD.md`](LLD.md) (modules, data model, flows).
 
-## 🏗️ Technical Architecture & Workflow
+## Quick start
 
-The engine operates through a high-performance asynchronous pipeline that ensures maximum coverage with minimal resource overhead.
+Requirements: Python 3.12+ (3.13 is what CI uses). The database is a local SQLite file created on first start; no
+server is needed.
 
-### 1. Intelligent Discovery
-- **Contextual Query Generation**: Utilizing LiteLLM (Groq/OpenRouter), the engine parses the user's ICP to generate 5-10 distinct, optimized search queries targeting specific domains, industries, and geographies.
-- **Concurrent Search Execution**: Queries are processed in parallel via the Serper (Google) API to build a comprehensive candidate pool of company URLs.
-- **URL Triage & Classification**: Each discovered URL is classified as either a "Standalone Company" or a "Directory/Aggregator."
+```bash
+cd apps/api
+cp .env.example .env            # set SECRET_KEY, SERPER_API_KEY and at least one LLM provider key
+uv sync                         # or: pip install -r requirements.txt -r requirements-dev.txt
+uv run uvicorn app.main:app --reload     # http://localhost:8000  (Swagger UI at /docs)
+```
 
-### 2. Autonomous Scraping & Expansion
-- **Directory Deep-Crawling**: For aggregator sites, the engine automatically extracts nested company links, expanding the reach of a single search result.
-- **Hybrid Scraping Engine**: 
-  - **Standard Mode**: High-speed fetching using HTTPX and BeautifulSoup4 for traditional websites.
-  - **Playwright Fallback**: If a site is detected as a JavaScript-heavy Single Page Application (SPA), the engine spins up a headless Chromium instance via Playwright to ensure full content visibility.
-- **Sub-page Discovery**: The scraper intelligently identifies and crawls `/contact`, `/about`, and `/team` pages to capture deep contact data and company metadata.
+The server refuses to start without `SECRET_KEY` and `SERPER_API_KEY`.
 
-### 3. Data Mining & Enrichment
-- **Structured Data Prioritization**: The parser prioritizes Schema.org (JSON-LD) blocks to extract deterministic fields like addresses, emails, and phone numbers before calling any AI models.
-- **Universal Social Extraction**: Directly mines LinkedIn, X (Twitter), Facebook, and Crunchbase profiles from anchor tags, with smart filtering to ignore sharing intents.
-- **AI Qualification**: Enriched data is processed by the LLM to calculate a **Match Score** and identify **Growth Signals** (e.g., funding rounds, leadership changes).
+## Checks
 
----
+```bash
+uv run ruff check .             # lint (must be clean)
+uv run pytest                   # backend tests; every external call (LLM, Serper, scraping) is mocked
+```
 
-## ✨ Key Features
+CI (`.github/workflows/ci.yml`) runs the same two commands plus the web lint, vitest and build.
 
-- **LiteLLM Orchestration**: Supports Groq, OpenAI, Gemini, and Anthropic with automatic model fallback and resilience.
-- **High-Precision Filtering**: Integrated Regex validation for emails and phone numbers to ensure zero "placeholder" data enters the system.
-- **Async Concurrency**: Leverages Python's `asyncio` with semaphore-controlled workers (up to 25 parallel scrapes) for massive throughput.
-- **UV Powered**: Built using the modern Python toolchain for lightning-fast dependency management and isolated environments.
+## Authentication
 
----
+* Login, register, refresh and the Google callback set three cookies: `quarry_access` (HttpOnly, JWT),
+  `quarry_refresh` (HttpOnly, JWT, path `/api/auth`) and `quarry_csrf` (readable, random).
+* Browsers authenticate with the cookies. Unsafe requests (anything but GET/HEAD/OPTIONS) must echo the
+  `quarry_csrf` value in an `X-CSRF-Token` header (double-submit). `GET /api/auth/csrf` returns it for
+  cross-site deployments where the cookie is not readable.
+* API clients and tests can use `Authorization: Bearer <access_token>` instead; that path needs no CSRF header.
+  The token endpoints still return the tokens in the JSON body for such clients.
+* Cookie flags: `COOKIE_SECURE` (default on when `FRONTEND_URL` is https), `COOKIE_SAMESITE` (default `lax`; `none`
+  forces Secure) and `COOKIE_DOMAIN`.
+* Google sign-in is a server-side redirect flow: `GET /api/auth/google` -> Google -> `GET /api/auth/google/callback`,
+  which sets the cookies and redirects to `${FRONTEND_URL}/auth/google/callback?login=success`. No tokens appear in
+  URLs. Register `GOOGLE_REDIRECT_URI` (default `http://localhost:8000/api/auth/google/callback`) with Google.
 
-## 🛠️ API Reference
+## Background jobs
 
-### Core Endpoints
+Pipeline runs and enrichment retries execute on a durable queue (`app/jobs.py`, table `jobs`), not on in-process
+`BackgroundTasks`. Jobs survive restarts: on startup, jobs left `running` are re-queued (or failed once their attempts
+are used up) and requests belonging to queued pipeline jobs are not marked Failed.
 
 | Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/api/leads` | **Trigger Pipeline**: Submits ICP and launches background generation. |
-| `GET` | `/api/leads/status/{id}` | **Poll Status**: Returns current progress (Pending/Completed/Failed). |
-| `GET` | `/api/leads?request_id={id}` | **Fetch Results**: Returns all enriched leads for a specific run. |
-| `GET` | `/api/requests/stats` | **Global Stats**: Real-time counts of successful vs pending leads. |
+| --- | --- | --- |
+| `GET` | `/api/jobs?status=&kind=&limit=` | The caller's jobs, newest first (payloads are never returned). |
+| `GET` | `/api/jobs/{id}` | One job: `status` is queued, running, succeeded, failed or cancelled. |
+| `POST` | `/api/jobs/{id}/cancel` | Cancel a queued or running job. |
 
----
+Retries use exponential backoff (`JOB_BACKOFF_BASE_SECONDS`, capped by `JOB_BACKOFF_MAX_SECONDS`) up to
+`max_attempts`. Pipeline jobs get two attempts (one automatic resume). If the queue cannot be written to, launching a
+run falls back to in-process `BackgroundTasks` (the run then does not survive a restart).
 
-## 📦 Quick Start
+## Main endpoints
 
-### 1. Requirements
-- Python 3.12+ & [uv](https://docs.astral.sh/uv/)
-- Nothing else for the database: Quarry uses a local SQLite file (`quarry.db`), created on first start
-- Serper API Key (Google Search)
-- Groq or OpenRouter API Key (AI Inference)
+| Area | Endpoints |
+| --- | --- |
+| Auth | `POST /api/auth/register`, `/login`, `/refresh`, `/logout`, `/forgot-password`, `/reset-password`; `GET /api/auth/csrf`, `/google`, `/google/url`, `/google/callback` |
+| Users and orgs | `GET/PUT/DELETE /api/users/me`, `GET/PUT/DELETE /api/users/me/serper-key`, `POST /api/organizations`, `GET/PUT /api/organizations/me` |
+| Requests | `GET/POST /api/requests`, `PUT/DELETE /api/requests/{id}`, `PUT /api/requests/{id}/lists`, `GET /api/requests/stats` |
+| Launch flow | `POST /api/requests/analyze-source`, `/generate-icp`, `/check-consistency`, `/suggest-chip`, `/launch`, `/launch-direct`, `/parse-companies-csv`; `GET /api/requests/find-competitors` |
+| Leads | `GET /api/leads`, `GET /api/leads/status/{request_id}` (+ `/stream` SSE), `GET /api/leads/decision-makers`, `POST /api/leads/{id}/retry-enrichment`, intent analysis, email verification |
+| Exports | `GET /api/leads/{request_id}/export/{companies,competitors,decision-makers}?format=csv\|xlsx\|pdf` |
+| Lists | `GET/POST /api/lists`, `GET/PUT/DELETE /api/lists/{id}`, `POST/DELETE /api/lists/{id}/leads`, `GET /api/lists/{id}/export` |
+| Misc | `POST /api/tech-stack/detect`, `GET /api/health` |
 
-### 2. Setup
-```bash
-# Install dependencies
-cd backend
-uv sync
+## LLM failures
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your SECRET_KEY and API keys
-```
+`_llm_json_completion` in `app/services/llm.py` logs every failure with its model, purpose and reason. By default it
+still returns `{}` so best-effort callers keep working; callers that must explain a blank pass `raise_on_error=True`
+and get an `LLMCompletionError` (`reason` is `provider_error`, `empty_response`, `parse_error` or `not_an_object`).
+Lead extraction does this: a lead whose AI step failed is kept and stored with `enrichment_failed=true` and an
+`enrichment_failure_reason`, the UI shows an "Enrichment failed" state, and `POST /api/leads/{id}/retry-enrichment`
+queues a retry job.
 
-### 3. Run
-```bash
-uv run uvicorn app.main:app --reload
-```
-Interactive Swagger Docs: `http://localhost:8000/docs`
+## ICP filter
 
----
+The pipeline can drop leads scoring below `ICP_SCORE_THRESHOLD` (or outside the ICP employee range) before saving.
+It is off by default (`ICP_FILTER_ENABLED=false`) so nothing is silently discarded; leads whose enrichment failed are
+never filtered out.
 
-## 📁 Repository Structure
+## Environment variables
 
-```text
-apps/api/
-├── app/
-│   ├── api/            # REST API controllers & Auth logic
-│   ├── core/           # Security, Logger, and Pydantic Config
-│   ├── db/             # SQLite (SQLAlchemy async) engine, models and repositories
-│   ├── schemas/        # Type-safe Pydantic models
-│   └── services/       # Core Business Logic
-│       ├── leads.py    # Master Pipeline Orchestrator
-│       ├── llm.py      # LiteLLM Integration & Prompt Engineering
-│       ├── scraper.py  # Hybrid Scraper (Playwright Fallback)
-│       └── serper.py   # Search Discovery Client
-└── pyproject.toml      # Modern UV dependency configuration
-```
-
----
-
-## 📁 Project Structure
-
-```text
-apps/api/
-├── app/
-
----
-
-## Environment Variables
+See `.env.example` for the full annotated list. The ones that matter most:
 
 | Variable | Required | Default | Description |
-| -------- | -------- | ------- | ----------- |
-| `SECRET_KEY` | **Yes** | — | JWT signing secret — use a 32-byte random hex string |
-| `GROQ_API_KEY` | **Yes** | — | Groq API key — [console.groq.com](https://console.groq.com) |
-| `SERPER_API_KEY` | **Yes** | — | Serper key — [serper.dev](https://serper.dev) |
-| `DATABASE_URL` | No | `sqlite+aiosqlite:///./quarry.db` | SQLAlchemy async database URL (SQLite file by default; e.g. `postgresql+asyncpg://...` also works) |
-| `GROQ_MODEL` | No | `llama-3.3-70b-versatile` | Model for query generation |
-| `GROQ_MODEL_MINI` | No | `llama-3.1-8b-instant` | Model for classification + extraction |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `60` | JWT lifetime |
-| `SCRAPE_TIMEOUT` | No | `15` | HTTP request timeout in seconds |
-| `OPENROUTER_API_KEY` | No | — | For `/api/scrape` direct-URL endpoint |
+| --- | --- | --- | --- |
+| `SECRET_KEY` | yes | none | JWT signing secret (`openssl rand -hex 32`) |
+| `SERPER_API_KEY` | yes | none | Default Serper key; users can store their own in Profile |
+| `DATABASE_URL` | no | `sqlite+aiosqlite:///./quarry.db` | SQLAlchemy async URL |
+| `LITELLM_MODEL`, `LITELLM_MODEL_MINI`, `LITELLM_FALLBACK_MODELS` | no | OpenRouter / Groq Llama models | LiteLLM model names |
+| `GROQ_API_KEY`, `OPENROUTER_API_KEY`, ... | per provider | none | Provider keys read by LiteLLM |
+| `ALLOWED_ORIGINS` | no | `http://localhost:3000,http://localhost:5173` | CORS origins (credentials allowed) |
+| `FRONTEND_URL` | no | `http://localhost:3000` | Post-login and password-reset redirects |
+| `COOKIE_SECURE`, `COOKIE_SAMESITE`, `COOKIE_DOMAIN` | no | see above | Session cookie attributes |
+| `JOB_WORKER_CONCURRENCY`, `JOB_POLL_INTERVAL_SECONDS`, `JOB_MAX_ATTEMPTS` | no | 4, 1.0, 3 | Job worker tuning |
+| `ICP_FILTER_ENABLED`, `ICP_SCORE_THRESHOLD` | no | false, 60 | Optional score filter |
 
-The server **will not start** without the three required variables — this prevents running with insecure defaults.
+## Layout
 
----
-
-## Development
-
-### Add a dependency
-
-```bash
-uv add <package-name>
+```text
+apps/api/
+  app/
+    main.py            app + lifespan (DB, job worker, startup recovery), routers, CORS
+    jobs.py            durable job queue + worker (enqueue, register_handler, ...)
+    api/               routers: auth, google_auth, users, organizations, requests, request_intake, leads, lists,
+                       competitors, tech_stack, jobs
+    core/              config, cookies (sessions + CSRF), logger, rate_limit, url_guard (SSRF), security_crypto, utils
+    db/                engine + docstore (JSON-document tables on SQLite) and one repository module per table
+    schemas/           Pydantic models
+    services/          leads.py (pipeline), llm.py, scraper.py, serper.py, scoring.py, tech_stack*.py,
+                       company_enrichment.py, product_similarity.py, signals/, export_service.py, pipeline_jobs.py ...
+  tests/               pytest suite (pipeline, jobs, scoring, exports, LLM failures, auth cookies, DB, SSRF guard)
 ```
 
-### Database
+## Database
 
-Tables are created automatically on startup, and expired login sessions are purged then. The data lives in the file named by `DATABASE_URL` (`apps/api/quarry.db` by default, git-ignored). Delete the file to reset all data.
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-| ----- | ---------- |
-| API framework | FastAPI + uvicorn |
-| Database | SQLite via SQLAlchemy 2.0 async (`aiosqlite`) |
-| LLM inference | Groq (llama-3.3-70b, llama-3.1-8b) |
-| Web search | Serper API (Google) |
-| Web scraping | httpx (async) + BeautifulSoup4 |
-| Auth | JWT (python-jose) + bcrypt |
-| Schema validation | Pydantic v2 |
-| Package manager | uv |
+Tables are created on startup (`Base.metadata.create_all`); there are no migrations. Each table has a few real key
+columns plus a JSON `data` column (see `app/db/docstore.py`). Adding a table is safe; changing a key column of an
+existing table needs a manual migration or deleting the dev database file. Writes go through a process-wide lock
+(SQLite allows one writer); reads use WAL snapshots.

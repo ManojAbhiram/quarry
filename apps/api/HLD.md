@@ -1,287 +1,81 @@
-# High-Level Design — Quarry AI Lead Generation Agent
+# High-Level Design: Quarry
 
-## 1. System Overview
+## 1. What it does
 
-Quarry is an AI-powered B2B lead generation backend. Given an **Ideal Customer Profile (ICP)** — business type, target location, and lead description — the system automatically:
+Given an Ideal Customer Profile (ICP), or a list of companies the user already knows, Quarry finds matching
+companies, enriches and scores them, finds decision makers and competitors, and lets the user curate and export the
+results. All runs are asynchronous: launching returns a `request_id` immediately and the client follows progress by
+polling or by server-sent events.
 
-1. Generates targeted Google search queries using an LLM
-2. Searches the web via Serper API and collects company URLs
-3. Classifies each URL (company site vs aggregator/directory)
-4. Scrapes each company website, navigating to contact/about/team sub-pages
-5. Extracts structured lead data (email, phone, company name, contact person) using an LLM
-6. Persists all results in a SQLite database
-
-Clients interact through a REST API. The pipeline runs asynchronously in the background so the HTTP response returns immediately with a `request_id` the client polls.
-
----
-
-## 2. Architecture Diagram
+## 2. Components
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT  (Frontend / API consumer)              │
-└────────────────────┬────────────────────────────────────────────────────────┘
-                     │ HTTPS REST
-                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        FastAPI Application  (uvicorn)                       │
-│                                                                             │
-│  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │  /api/auth  │  │ /api/users  │  │ /api/requests│  │   /api/leads     │  │
-│  │  register   │  │  profile    │  │  CRUD + stats│  │  trigger pipeline│  │
-│  │  login      │  │  password   │  │              │  │  poll status     │  │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘  └────────┬─────────┘  │
-│         │                │                │                    │            │
-│         └────────────────┴────────────────┴────────────────────┘            │
-│                                      │                                      │
-│                          ┌───────────▼────────────┐                        │
-│                          │   Services Layer        │                        │
-│                          │                         │                        │
-│                          │  ┌──────────────────┐  │                        │
-│                          │  │  leads.py        │  │   Core pipeline        │
-│                          │  │  (orchestrator)  │  │   (background task)    │
-│                          │  └────────┬─────────┘  │                        │
-│                          │           │             │                        │
-│                          │  ┌────────┼──────────┐  │                        │
-│                          │  │        │          │  │                        │
-│                          │  ▼        ▼          ▼  │                        │
-│                          │ groq   serper    scraper │                        │
-│                          │  .py    .py        .py  │                        │
-│                          └───┬──────┬──────────┬───┘                        │
-│                              │      │          │                            │
-└──────────────────────────────┼──────┼──────────┼────────────────────────────┘
-                               │      │          │
-             ┌─────────────────┘      │          └──────────────────────┐
-             ▼                        ▼                                  ▼
-   ┌──────────────────┐   ┌───────────────────────┐        ┌────────────────────┐
-   │   Groq API       │   │   Serper API           │        │  Target Websites   │
-   │                  │   │   (Google Search)      │        │                    │
-   │  llama-3.3-70b   │   │   /search endpoint     │        │  homepage          │
-   │  llama-3.1-8b    │   │   returns organic URLs │        │  /contact          │
-   │                  │   │                        │        │  /about            │
-   │  • query gen     │   │                        │        │  /team             │
-   │  • URL classify  │   │                        │        │  /leadership       │
-   │  • lead extract  │   │                        │        │                    │
-   └──────────────────┘   └───────────────────────┘        └────────────────────┘
-                                                                        │
-             ┌──────────────────────────────────────────────────────────┘
-             ▼
-   ┌─────────────────────────────────────────────┐
-   │       SQLite (SQLAlchemy async)             │
-   │                                             │
-   │  Tables:                                    │
-   │    users      — registered accounts         │
-   │    requests   — lead requests + results     │
-   └─────────────────────────────────────────────┘
+Browser (React SPA, apps/web)
+   |  HTTPS, HttpOnly cookie session + X-CSRF-Token on writes (Bearer header also accepted for API clients)
+   v
+FastAPI app (apps/api, uvicorn)
+   |-- routers (app/api): auth, google_auth, users, organizations, requests, request_intake, leads, lists,
+   |                      competitors, tech_stack, jobs
+   |-- services (app/services): pipeline orchestration, LLM, scraping, scoring, enrichment, exports
+   |-- job worker (app/jobs.py): polls the jobs table, runs handlers, retries, resumes after restart
+   |-- repositories (app/db): SQLAlchemy async over SQLite, JSON-document tables
+   v
+External: LiteLLM providers (OpenRouter, Groq, ...), Serper (Google search), target websites (httpx / optional
+Playwright), SMTP (password reset), Google OAuth
 ```
 
----
+Everything runs in one process. SQLite is the only datastore; the job queue is a table in it, so there is no broker.
 
-## 3. Component Breakdown
+## 3. Request lifecycle
 
-### 3.1 API Layer  (`app/api/`)
+1. The user builds an ICP in the wizard (optionally seeding it from pasted text, URLs or files) or supplies a company
+   list. `POST /api/requests/launch` (or `/launch-direct`) validates, persists the request as `Pending`, enqueues a
+   `pipeline.run` / `pipeline.direct` job and returns 202.
+2. The worker claims the job and runs the pipeline (section 4) while the lead and competitor pipelines run in
+   parallel. Progress is observable through request status (`Pending`, `Completed`, `Failed`, with a
+   `failure_reason`).
+3. Results are read with `GET /api/leads?request_id=`; exports stream CSV, XLSX or PDF.
+4. Users can star/exclude/validate companies, add them to lists, verify emails, run intent analysis on a lead, and
+   retry a lead whose AI enrichment failed (a `lead.retry_enrichment` job).
 
-| Module | Prefix | Responsibility |
-|--------|--------|----------------|
-| `auth.py` | `/api/auth` | Register, login — returns JWT |
-| `users.py` | `/api/users` | Profile read/update, password change, account delete |
-| `requests.py` | `/api/requests` | CRUD for lead requests, aggregate stats |
-| `leads.py` | `/api/leads` | Trigger pipeline, poll status, fetch results |
-| `scrape_leads.py` | `/api/scrape` | Optional endpoint — scrape explicit URLs directly (bypass search) |
+## 4. Discovery pipeline
 
-### 3.2 Service Layer  (`app/services/`)
+1. Generate search queries from the ICP (LLM) and store them on the request.
+2. Search Google through Serper (the user's own key from Profile, else the server key).
+3. De-duplicate URLs and classify each as a company site or a directory (LLM). Expand directories into nested
+   company URLs.
+4. In batches: research each company (Serper snippets), extract structured lead data and a match score (LLM),
+   drop the seller itself and junk pages, find decision makers, until the requested number of leads is reached or the
+   candidate pool is exhausted (one extra query round is allowed).
+5. Enrich: tech stack and infrastructure detection, LinkedIn firmographics, funding/news/job/social signals.
+6. Optionally filter by ICP score (off by default), save leads, companies, enrichments and decision makers, and mark
+   the request `Completed` (or `Failed` with a reason).
 
-| Module | Responsibility |
-|--------|----------------|
-| `leads.py` | **Pipeline orchestrator** — runs all 10 steps end-to-end |
-| `groq.py` | All Groq LLM calls: query generation, URL classification, lead extraction |
-| `serper.py` | Serper API wrapper — fires a single search query, returns JSON |
-| `scraper.py` | Async web scraper — fetches homepage + discovers & fetches sub-pages |
-| `auth.py` | JWT creation/verification, bcrypt password hashing, `get_current_user` dep |
+## 5. Reliability
 
-### 3.3 Database Layer  (`app/db/`)
+* **Durable jobs**: launches and retries are rows in `jobs` with status, attempts, backoff and result. A restart
+  re-queues jobs that were `running`; a request whose job is queued is not failed by the startup orphan sweep.
+* **Observable LLM failures**: provider errors, empty replies and unparsable replies are logged with model and
+  purpose. Lead extraction keeps the lead and records `enrichment_failed` with a reason, which the UI shows with a
+  retry action, instead of leaving unexplained blanks.
+* **Deletion**: deleting a request or account also deletes the leads, decision makers and enrichments collected for
+  it (third-party personal data); shared company facts are kept.
 
-| Module | Responsibility |
-|--------|----------------|
-| `engine.py` | Async SQLAlchemy engine/session — `connect_db`, `close_db`, `session` |
-| `models.py` | One table per document collection (key columns + JSON `data`) and the `TABLES` registry |
-| `docstore.py` | `DocTable` — generic document↔row mapping used by every repository |
-| `leads.py`, `requests.py`, `users.py`, … | Repository functions per table |
+## 6. Security
 
-### 3.4 Scraper Package  (`scraper/`)
+* **Sessions**: short-lived JWT access token and rotating refresh token in HttpOnly cookies; refresh tokens are
+  stored hashed server-side and can be revoked (logout). Cookie-authenticated writes require a CSRF header.
+  There is no header-based identity shortcut.
+* **SSRF**: every outbound fetch of a user-influenced URL goes through `core/url_guard.py` (public addresses only,
+  DNS pinning, redirect re-checks, Playwright route guard).
+* **Secrets**: users' Serper keys are encrypted at rest (`core/security_crypto.py`); secrets are never put in job
+  payloads. Auth endpoints are rate limited.
+* **CORS** is an explicit origin list with credentials enabled.
 
-A standalone multi-provider AI scraper used by the `/api/scrape` direct-URL endpoint.
+## 7. Known limits
 
-| Module | Responsibility |
-|--------|----------------|
-| `engine.py` | Orchestrates async site scraping + deduplication |
-| `fetcher.py` | `httpx` async page fetcher + HTML text extractor |
-| `discovery.py` | Finds internal sub-pages (team/contact/about) from homepage HTML |
-| `parser.py` | Parses AI JSON response, regex fallback when no AI is available |
-| `prompt.py` | Shared system prompt + user message template for all providers |
-| `providers/` | OpenRouter (13 free models) → OpenAI → Claude → Gemini → Grok → Perplexity |
-| `config.py` | API keys, free-model list, constants — initialises all provider clients |
-
-### 3.5 Configuration  (`app/core/`)
-
-| Module | Responsibility |
-|--------|----------------|
-| `config.py` | `Settings` class — loads `.env`, validates required keys at startup |
-| `logger.py` | Structured `logging` setup — stdout handler, timestamp + level prefix |
-
----
-
-## 4. End-to-End Data Flow
-
-```
-Client sends:
-  POST /api/leads
-  {
-    "title": "Find EdTech leads in South India",
-    "business_type": "SaaS CRM for colleges",
-    "target_location": "Tamil Nadu, India",
-    "ideal_lead_profile": "Private engineering colleges with 1000+ students",
-    "budget_target_size": "50-500 students"
-  }
-
-──────────────────────────────────────────────────────────────────────
-STEP 1  API layer (leads.py)
-  • Validates body against CompleteLeadRequest schema
-  • Calls insert_complete_lead_request() → creates the request row
-    {_id, title, business_type, target_location, ideal_lead_profile,
-     user_id, status:"Pending", created_at}
-  • Registers _run_pipeline_background() as a BackgroundTask
-  • Returns HTTP 202:  { request_id, status:"Pending" }
-
-──────────────────────────────────────────────────────────────────────
-STEP 2  Pipeline: Query Generation  (services/leads.py + services/groq.py)
-  • Sends ICP context to Groq (llama-3.3-70b-versatile)
-  • Groq returns 5 targeted queries:
-    ["list of private engineering colleges Tamil Nadu",
-     "top engineering colleges in Chennai",  ...]
-  • Queries appended to the request's `queries` list
-
-──────────────────────────────────────────────────────────────────────
-STEP 3  Pipeline: Web Search  (services/serper.py)
-  • Fires each query at Serper API
-  • Collects all organic results: [{title, url, snippet}, ...]
-  • Deduplicates by URL
-
-──────────────────────────────────────────────────────────────────────
-STEP 4  Pipeline: URL Classification  (services/groq.py)
-  • Sends all URLs + titles + snippets to Groq (llama-3.1-8b-instant)
-  • Groq classifies each as "standalone" or "directory"
-  • Standalone example: srmist.edu.in
-  • Directory example:  ranking-sites.com/top-colleges
-
-──────────────────────────────────────────────────────────────────────
-STEP 5  Pipeline: Directory Expansion  (services/scraper.py)
-  • For directory URLs: sync scrape in thread executor
-  • Extracts all href links from the directory page
-  • Newly found URLs re-classified by Groq
-  • Merged into standalone list
-
-──────────────────────────────────────────────────────────────────────
-STEP 6  Pipeline: Basic Lead Save  (db/leads.py)
-  • Saves pre-enrichment standalone items to the leads table
-    (title, url, snippet — no contact data yet)
-
-──────────────────────────────────────────────────────────────────────
-STEP 7  Pipeline: Scrape + Sub-page Discovery  (services/scraper.py)
-  For each standalone URL (e.g. srmist.edu.in):
-  a. Fetch homepage HTML  (async httpx)
-  b. Parse HTML → find internal links matching:
-     /contact, /about, /team, /people, /leadership, /management, …
-  c. Fetch up to 5 sub-pages concurrently
-  d. Strip scripts/nav/footer, extract visible text
-  e. Combine all page text (capped at 12,000 chars)
-
-──────────────────────────────────────────────────────────────────────
-STEP 8  Pipeline: Lead Extraction  (services/groq.py)
-  • Combined page text sent to Groq (llama-3.1-8b-instant)
-  • Groq returns structured lead:
-    {
-      company_name, website, industry, location,
-      contact_name, contact_title, contact_email, contact_phone,
-      description, buying_signals, match_score (0–100)
-    }
-
-──────────────────────────────────────────────────────────────────────
-STEP 9  Pipeline: Save Enriched Leads  (db/leads.py)
-  • Enriched leads upserted into the leads table (with company, enrichment and decision-maker rows)
-
-──────────────────────────────────────────────────────────────────────
-STEP 10  Pipeline: Complete  (db/leads.py)
-  • status updated to "Completed" (or "Failed" on unrecoverable error)
-
-──────────────────────────────────────────────────────────────────────
-Client polls:
-  GET /api/leads/status/{request_id}
-  → { status:"Completed", leads_count:14, queries_count:5 }
-
-Client fetches results:
-  GET /api/leads?request_id={id}
-  → { leads: [...], total_found: 14 }
-```
-
----
-
-## 5. External Integrations
-
-| Service | Purpose | Auth |
-|---------|---------|------|
-| **Groq API** | LLM inference (query gen, URL classification, lead extraction) | `GROQ_API_KEY` header |
-| **Serper API** | Google search — returns organic results JSON | `X-API-KEY` header |
-| **SQLite** | Persistent storage for users, requests, leads | `DATABASE_URL` (file path by default) |
-| **OpenRouter** *(optional)* | Free LLM models for direct-URL scrape endpoint | `OPENROUTER_API_KEY` |
-| **OpenAI / Claude / Gemini / Grok / Perplexity** *(optional)* | Paid fallback providers for direct-URL scrape endpoint | Individual API keys |
-
----
-
-## 6. Authentication & Security
-
-- **JWT Bearer tokens** — created on login/register, verified via `get_current_user` dependency injected into every protected route
-- **bcrypt** password hashing — stored as `password_hash`, never plaintext
-- **Token expiry** — configurable via `ACCESS_TOKEN_EXPIRE_MINUTES` (default: 60 min)
-- **SECRET_KEY** — required at startup; no insecure fallback; raises `EnvironmentError` if missing
-- **Error responses** — stack traces never leak to clients; logged server-side only
-- **CORS** — restricted to `localhost:3000` and `localhost:5173` by default
-
----
-
-## 7. Deployment Architecture
-
-### Development (local)
-
-```
-.env  →  uvicorn app.main:app --reload
-         │
-         └── creates ./quarry.db (SQLite) on first start; nothing to install
-```
-
-### Hosted / production
-
-No deployment setup yet — to be decided.
-
-### Production Checklist
-
-- [ ] Set `SECRET_KEY` to a cryptographically random 32-byte hex string
-- [ ] Set `ACCESS_TOKEN_EXPIRE_MINUTES` to ≤ 60
-- [ ] Set `ALLOWED_ORIGINS` to your actual frontend domain(s)
-- [ ] For multi-instance hosting, switch `DATABASE_URL` to Postgres (SQLite is a single-writer local file)
-- [ ] Put the API behind a reverse proxy with TLS
-- [ ] Set up log aggregation and alerting
-
----
-
-## 8. Non-Functional Characteristics
-
-| Concern | Design Decision |
-|---------|----------------|
-| **Latency** | Pipeline runs as background task — HTTP returns in < 200ms |
-| **Concurrency** | FastAPI + SQLAlchemy async (SQLite, WAL mode) — single process handles many concurrent requests |
-| **Scalability** | Stateless API process — can horizontally scale behind a load balancer |
-| **Reliability** | Background task catches all exceptions, sets status = "Failed" |
-| **Observability** | Structured logging with timestamps and log levels to stdout |
-| **Rate limits** | Serper search rate-limited per key; Groq has per-minute token limits |
-| **Cost** | Groq is used for all LLM calls (free tier covers moderate usage) |
+* One process, one SQLite writer: fine for a single instance, not for horizontal scaling (the job table claim is
+  only atomic within one process; move to Postgres with `SELECT ... FOR UPDATE SKIP LOCKED` to scale out).
+* No schema migrations (`create_all` only).
+* Pipeline resume after a crash re-runs the pipeline from the start (it is idempotent per lead URL but repeats
+  API spend).
