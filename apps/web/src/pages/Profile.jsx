@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { CheckCircle2, KeyRound, Lock, Mail, Save, ShieldAlert, Trash2, UserCircle2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
@@ -6,6 +7,8 @@ import { Button, Field, PageHeader, Skeleton, useToast } from '../components/kit
 import { useStaggerIn } from '../components/motion/useStaggerIn'
 import ConfirmDialog from './requests/ConfirmDialog'
 import Section from './profile/Section'
+import VerifierSettings from './profile/VerifierSettings'
+import UsageCard from '../components/UsageCard'
 
 const FIELD_MAX = 100
 const PHONE_RE = /^[+()\d][\d\s().+-]{4,29}$/
@@ -268,6 +271,17 @@ export default function Profile() {
                 )}
               </div>
             </form>
+          </Section>
+
+          <VerifierSettings />
+
+          <div data-reveal><UsageCard /></div>
+
+          <Section id="privacy-compliance" title="Privacy and compliance" description="Manage your suppression list, erase a person's data, and read how Quarry handles personal data." icon={ShieldAlert}>
+            <div className="flex flex-wrap gap-3">
+              <Link to="/compliance" className="btn-secondary">Open compliance tools</Link>
+              <Link to="/privacy" className="btn-secondary">Privacy notice</Link>
+            </div>
           </Section>
 
           <Section id="danger-zone" title="Delete account" description="Permanently delete your account and everything generated with it. This cannot be undone." icon={ShieldAlert} danger>

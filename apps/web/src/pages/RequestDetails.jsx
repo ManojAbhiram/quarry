@@ -288,6 +288,7 @@ export default function RequestDetails() {
             onToggleFlag={(name, kind) => saveLists(toggleMembership(lists, name, kind), manualAdds)}
             onClose={() => setOpenIndex(null)}
             onPatch={patchLead}
+            onRefresh={load}
             onViewDecisionMakers={() => showDecisionMakers(leadKey(openLead))}
           />
         )}

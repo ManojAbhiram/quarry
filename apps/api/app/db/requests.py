@@ -99,10 +99,12 @@ async def request_exists(request_id: str) -> bool:
     return await _reqs.get(_id=str(request_id)) is not None
 
 
-async def fail_orphaned_requests() -> int:
+async def fail_orphaned_requests(exclude_ids: set[str] | None = None) -> int:
     """Mark requests still 'Pending' as Failed. Run at startup: pipelines live in this process, so after a restart
-    nothing is running and every Pending request is an orphan. Returns how many were failed."""
-    orphans = await _reqs.find(Request.status == "Pending")
+    nothing is running and every Pending request is an orphan, except those a durable job will re-run
+    (`exclude_ids`). Returns how many were failed."""
+    skip = exclude_ids or set()
+    orphans = [d for d in await _reqs.find(Request.status == "Pending") if d["_id"] not in skip]
     for doc in orphans:
         await _reqs.update(doc["_id"], {
             "status": "Failed",

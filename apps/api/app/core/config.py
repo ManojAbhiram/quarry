@@ -34,6 +34,15 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
     REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
+    # Auth cookies. Secure defaults to on whenever the frontend is served over https. SameSite=lax is right when the
+    # SPA and API share a site (localhost ports, or sibling subdomains with COOKIE_DOMAIN set); use "none" only for a
+    # genuinely cross-site deployment (it forces Secure).
+    COOKIE_SECURE: bool = os.getenv(
+        "COOKIE_SECURE", "true" if os.getenv("FRONTEND_URL", "http://localhost:3000").startswith("https") else "false"
+    ).lower() in ("1", "true", "yes")
+    COOKIE_SAMESITE: str = os.getenv("COOKIE_SAMESITE", "lax").lower()
+    COOKIE_DOMAIN: str = os.getenv("COOKIE_DOMAIN", "")
+
     # CORS — comma-separated list of allowed frontend origins (env-overridable)
     ALLOWED_ORIGINS: list[str] = [
         o.strip()
@@ -77,6 +86,9 @@ class Settings:
 
     # Lead scoring thresholds (defaults match prior in-code literals)
     ICP_SCORE_THRESHOLD: int = int(os.getenv("ICP_SCORE_THRESHOLD", "60"))
+    # Drop discovered leads scoring below ICP_SCORE_THRESHOLD (or outside the ICP employee range) before saving.
+    # Off by default: the UI shows every lead with its fit score and the user decides.
+    ICP_FILTER_ENABLED: bool = os.getenv("ICP_FILTER_ENABLED", "false").lower() in ("1", "true", "yes")
     INTENT_SCORE_DECAY_RATE: float = float(os.getenv("INTENT_SCORE_DECAY_RATE", "0.15"))
     INTENT_SCORE_DECAY_PERIOD_DAYS: int = int(
         os.getenv("INTENT_SCORE_DECAY_PERIOD_DAYS", "30")

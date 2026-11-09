@@ -632,7 +632,6 @@ async def scrape_url_with_discovery(url: str) -> tuple[str, dict]:
             for k, v in structured.items():
                 if v and k not in all_structured:
                     all_structured[k] = v
-            label = sub_url.rstrip("/").split("/")[-1].upper() or "SUBPAGE"
             logger.debug("Sub-page %s -> %d chars, %d new fields", sub_url, len(text), len(structured))
             return sub_url, text, structured
 

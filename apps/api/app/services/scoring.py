@@ -19,7 +19,7 @@ Score decay:
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from app.core.scoring_config import (
     CONFIDENCE_MULTIPLIERS,
@@ -70,6 +70,8 @@ def apply_score_decay(
         last_signal = datetime.fromisoformat(last_signal_date.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
         return pillar_scores
+    if last_signal.tzinfo is None:  # a date-only / naive ISO string is UTC; subtracting from an aware "now" would raise
+        last_signal = last_signal.replace(tzinfo=timezone.utc)
 
     now = datetime.now(timezone.utc)
     days_since = (now - last_signal).days
@@ -159,7 +161,6 @@ def compute_intent_score(
     }
 
     for pillar in ("tech", "intent", "engagement"):
-        total = sum(s.get("weight", 0) for s in category_signals[pillar])
 
         weighted = 0.0
         for s in category_signals[pillar]:

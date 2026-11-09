@@ -17,3 +17,4 @@ dnspython
 aiosmtplib
 openpyxl
 reportlab
+tzdata

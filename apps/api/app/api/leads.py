@@ -1,6 +1,5 @@
 import asyncio
 import json
-import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, Response
@@ -10,20 +9,18 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.core.cookies import ACCESS_COOKIE
 from app.core.logger import logger
 from app.db.leads import get_lead_for_user, update_lead_fields
 from app.db.requests import get_request_by_id
 from app.db.signals import save_intent_analysis
 from app.db.users import get_user_serper_key
-from app.schemas.leads import LeadsListResponse
 from app.services.auth import bearer_scheme, get_current_user
 from app.services.serper import current_serper_key
 from app.services.leads import (
     get_decision_makers_service,
     get_leads_for_request,
     get_request_status_summary,
-    run_lead_pipeline,
-    run_pipeline_background,
 )
 from app.services.signals.orchestrator import collect_all_signals
 from app.services.export_service import (
@@ -34,6 +31,9 @@ from app.services.export_service import (
     generate_decision_makers_pdf,
 )
 from app.services.email_verification import verify_email, verify_emails_batch
+from app.verification import VerifierConfig
+from app.compliance.exports import contact_is_suppressed, lead_is_suppressed, matcher_for, source_notice
+from app.provenance import summarize
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 
@@ -51,7 +51,7 @@ async def _get_current_user_sse(
         detail="Invalid or expired token",
     )
 
-    raw_token = credentials.credentials if credentials else token
+    raw_token = credentials.credentials if credentials else (token or request.cookies.get(ACCESS_COOKIE))
     if not raw_token:
         raise credentials_exception
 
@@ -61,7 +61,7 @@ async def _get_current_user_sse(
         if user_id is None:
             raise credentials_exception
     except JWTError:
-        raise credentials_exception
+        raise credentials_exception from None
 
     user = await get_user_by_id(user_id)
     if user is None:
@@ -184,7 +184,7 @@ async def analyze_lead_intent(
         raise HTTPException(
             status_code=500,
             detail=f"Intent analysis failed: {str(exc)}",
-        )
+        ) from exc
 
 
     try:
@@ -268,7 +268,8 @@ async def export_companies(
 ):
     from app.services.leads import get_leads_for_request
     leads_data = await get_leads_for_request(request_id, str(current_user["_id"]))
-    leads = leads_data.get("leads", [])
+    matcher = await matcher_for(str(current_user["_id"]))
+    leads = [lead for lead in leads_data.get("leads", []) if not lead_is_suppressed(matcher, lead)]
 
     if format == "pdf":
         pdf_data = generate_companies_pdf(leads)
@@ -282,7 +283,7 @@ async def export_companies(
         "Company Name", "ICP Match Score", "Intent Score", "Intent Band", 
         "Industry", "Employee Size Estimate", "Growth", "Funding Stage", 
         "Tech Stack", "Signals", "Deep Intent Signals", "Location", 
-        "Website URL", "Description"
+        "Website URL", "Description", "Contact Email", "Email Status", "Email Checked At", "Region", "Field Sources",
     ]
     rows = []
     for lead in leads:
@@ -301,10 +302,14 @@ async def export_companies(
         url = lead.get("url", "")
         description = lead.get("description", "")
         
-        rows.append([name, score, intent_score, intent_band, industry, employees, growth, funding, tech, signals, intent_signals, location, url, description])
+        rows.append([
+            name, score, intent_score, intent_band, industry, employees, growth, funding, tech, signals, intent_signals,
+            location, url, description, lead.get("email") or "", lead.get("email_status") or "",
+            lead.get("email_checked_at") or "", lead.get("region") or "", summarize(lead.get("provenance")),
+        ])
 
     if format == "xlsx":
-        xlsx_data = generate_xlsx("Companies", headers, rows)
+        xlsx_data = generate_xlsx("Companies", headers, rows, notice=source_notice())
         return Response(
             content=xlsx_data,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -312,7 +317,7 @@ async def export_companies(
         )
 
 
-    csv_data = generate_csv(headers, rows)
+    csv_data = generate_csv(headers, rows, notice=source_notice())
     return Response(
         content=csv_data,
         media_type="text/csv",
@@ -430,6 +435,9 @@ async def export_decision_makers(
             flat_dm["company"] = dm.get("company_name") or ""
             flat_contacts.append(flat_dm)
 
+    matcher = await matcher_for(user_id)
+    flat_contacts = [c for c in flat_contacts if not contact_is_suppressed(matcher, c)]
+
     if format == "pdf":
         pdf_data = generate_decision_makers_pdf(flat_contacts)
         return Response(
@@ -438,7 +446,8 @@ async def export_decision_makers(
             headers={"Content-Disposition": f"attachment; filename=quarry_all_decision_makers_{request_id}.pdf"}
         )
     
-    headers = ["Company", "Name", "Title", "Seniority", "Department", "Location", "LinkedIn URL", "Email", "Snippet"]
+    headers = ["Company", "Name", "Title", "Seniority", "Department", "Location", "LinkedIn URL", "Email", "Snippet",
+               "Email Status", "Email Checked At", "Field Sources"]
     rows = []
     for dm in flat_contacts:
         rows.append([
@@ -451,10 +460,13 @@ async def export_decision_makers(
             dm.get("linkedin_url") or dm.get("url") or "",
             dm.get("email", ""),
             dm.get("snippet") or "",
+            dm.get("email_status") or "",
+            dm.get("email_checked_at") or "",
+            summarize(dm.get("provenance")),
         ])
             
     if format == "xlsx":
-        xlsx_data = generate_xlsx("Decision Makers", headers, rows)
+        xlsx_data = generate_xlsx("Decision Makers", headers, rows, notice=source_notice())
         return Response(
             content=xlsx_data,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -462,7 +474,7 @@ async def export_decision_makers(
         )
 
 
-    csv_data = generate_csv(headers, rows)
+    csv_data = generate_csv(headers, rows, notice=source_notice())
     return Response(
         content=csv_data,
         media_type="text/csv",
@@ -491,7 +503,7 @@ async def verify_single_email(
     Verify a single email address using DNS MX lookup + SMTP probe.
     Saves the result back to the lead record (if lead_id provided).
     """
-    result = await verify_email(body.email)
+    result = await verify_email(body.email, config=VerifierConfig.from_user(current_user))
     return result
 
 
@@ -502,7 +514,7 @@ async def verify_emails_in_batch(
 ):
     """Verify multiple emails concurrently (up to 50)."""
     emails = body.emails[:50]  # safety cap
-    results = await verify_emails_batch(emails)
+    results = await verify_emails_batch(emails, config=VerifierConfig.from_user(current_user))
     return {"results": results}
 
 
@@ -525,7 +537,7 @@ async def verify_and_save_email(
     if not email:
         raise HTTPException(status_code=400, detail="Lead has no email address to verify")
 
-    result = await verify_email(email)
+    result = await verify_email(email, config=VerifierConfig.from_user(current_user))
 
     # Persist verification result on the lead document
     await update_lead_fields(lead_id, {
@@ -533,9 +545,29 @@ async def verify_and_save_email(
         "email_confidence": result["confidence"],
         "email_verify_method": result["method"],
         "email_verify_reason": result["reason"],
+        "email_status": result.get("status"),
+        "email_checked_at": result.get("checked_at"),
+        "email_status_reason": result.get("reason"),
+        "email_catch_all": result.get("catch_all"),
     })
 
     return result
+
+
+@router.post("/{lead_id}/retry-enrichment", status_code=202)
+async def retry_enrichment(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Queue a re-run of the AI enrichment for a lead. Poll GET /jobs/{job_id} for the outcome."""
+    from app import jobs
+    from app.services.pipeline_jobs import LEAD_RETRY_ENRICHMENT
+
+    user_id = str(current_user["_id"])
+    lead = await get_lead_for_user(lead_id, user_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    job_id = await jobs.enqueue(
+        LEAD_RETRY_ENRICHMENT, {"lead_id": lead_id, "user_id": user_id}, owner_id=user_id, max_attempts=2
+    )
+    return {"job_id": job_id, "status": "queued"}
 
 
 # ---------------------------------------------------------------------------

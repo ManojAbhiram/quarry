@@ -14,14 +14,12 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime
-from urllib.parse import urljoin, urlparse, parse_qs, unquote
+from urllib.parse import urlparse, parse_qs, unquote
 
 from bs4 import BeautifulSoup
 
 from app.core.config import settings
 from app.core.url_guard import GuardedAsyncClient
-from app.core.utils import normalize_url
 from app.db.competitors import create_competitor_run, update_competitor_run_status
 from app.services.llm import _llm_json_completion
 from app.services.scraper import scrape_url_with_discovery
@@ -364,7 +362,7 @@ async def classify_and_filter_standalones(items: list[dict]) -> list[dict]:
 
     standalone_items: list[dict] = []
 
-    for chunk_idx, (chunk, result) in enumerate(zip(chunks, batch_results)):
+    for chunk_idx, (chunk, result) in enumerate(zip(chunks, batch_results, strict=False)):
         if isinstance(result, Exception):
             logger.warning("Classification chunk %d failed: %s", chunk_idx, result)
             # Conservative fallback: include all on failure
@@ -562,7 +560,7 @@ async def score_urls_against_product(
 
     score_map: dict[str, dict] = {}
 
-    for chunk_idx, (chunk, result) in enumerate(zip(chunks, batch_results)):
+    for chunk_idx, (chunk, result) in enumerate(zip(chunks, batch_results, strict=False)):
         if isinstance(result, Exception):
             logger.warning("Scoring chunk %d failed: %s", chunk_idx, result)
             for item in chunk:
@@ -753,8 +751,6 @@ async def fetch_review_ratings(company_name: str) -> dict:
     print("Parsing ratings from Serper results for data '%s'", data)
 
     for item in organic:
-        result_url = (item.get("link") or "").lower()
-        combined = f"{item.get('title', '')}"
 
         if ( not g2_rating and ( "g2" in item.get("title", "").lower())):
             g2_rating = item.get("rating", "")
@@ -1058,7 +1054,7 @@ async def enrich_and_store_competitors(
     )
 
     enriched: list[dict] = []
-    for item, result in zip(filtered, enrich_tasks):
+    for item, result in zip(filtered, enrich_tasks, strict=False):
         if isinstance(result, Exception):
             logger.warning("Enrichment failed for %s: %s", item.get("url"), result)
             enriched.append(_make_fallback_doc(item))

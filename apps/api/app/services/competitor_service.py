@@ -4,7 +4,6 @@ from datetime import datetime
 from fastapi import HTTPException
 
 from app.db.competitors import insert_competitors_request
-from app.db.requests import update_request_status
 from app.services.product_similarity import run_similarity_pipeline
 
 logger = logging.getLogger("app.services.competitor_service")

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import CompanyLogo from '../../components/CompanyLogo'
-import { List, MailCheck } from 'lucide-react'
+import { AlertTriangle, Globe2, List, MailCheck, RefreshCw, Trash2 } from 'lucide-react'
 import { api } from '../../api'
 import IntentPanel from '../../components/intent/IntentPanel'
 import { Button, Menu, useToast } from '../../components/kit'
@@ -9,12 +9,86 @@ import { Dash, Drawer, EmailStatusBadge, ExtLink, Tag } from './ui'
 import { actionItems } from './LeadActions'
 import ListPicker from './ListPicker'
 import { emailStatus } from './emailStatus'
+import Provenance from '../../components/Provenance'
 
 function Stat({ label, children }) {
   return (
     <div className="rounded-lg border border-line p-3">
       <dt className="text-xs text-muted">{label}</dt>
       <dd className="mt-1 break-words text-base font-semibold tabular-nums text-ink">{children || <Dash />}</dd>
+    </div>
+  )
+}
+
+const RETRY_POLL_MS = 2000
+const RETRY_MAX_POLLS = 60
+
+/**
+ * Shown when the AI step failed for this lead: says why its fields are blank and offers a retry. The retry runs as a
+ * background job; we poll it and reload the results when it finishes.
+ */
+function EnrichmentFailedNotice({ lead, leadId, onRetried }) {
+  const toast = useToast()
+  const [state, setState] = useState('idle') // idle | working
+  const [message, setMessage] = useState(null)
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => { alive.current = false }
+  }, [])
+
+  const retry = async () => {
+    setState('working')
+    setMessage(null)
+    try {
+      const { job_id: jobId } = await api.retryLeadEnrichment(String(leadId))
+      for (let i = 0; i < RETRY_MAX_POLLS && alive.current; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_POLL_MS))
+        if (!alive.current) return
+        const job = await api.getJob(jobId)
+        if (job.status === 'succeeded') {
+          if (job.result?.enrichment_failed) {
+            setMessage(job.result.reason || 'It failed again. Check your AI provider settings and try again later.')
+          } else {
+            toast.push({ type: 'success', message: 'Enrichment finished.' })
+            onRetried?.()
+          }
+          setState('idle')
+          return
+        }
+        if (job.status === 'failed' || job.status === 'cancelled') {
+          setMessage(job.error || 'The retry did not finish. Please try again.')
+          setState('idle')
+          return
+        }
+      }
+      if (alive.current) {
+        setMessage('This is taking longer than expected. It will keep running; reload in a moment.')
+        setState('idle')
+      }
+    } catch (err) {
+      if (!alive.current) return
+      setMessage(err?.isNetworkError ? "Can't reach Quarry. Check your connection and try again." : 'Could not start the retry. Please try again.')
+      setState('idle')
+    }
+  }
+
+  return (
+    <div role="alert" className="mb-5 rounded-xl border border-warn/30 bg-warn-soft p-3 text-warn">
+      <div className="flex items-start gap-2">
+        <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">Enrichment failed for this company</p>
+          <p className="mt-0.5 break-words text-sm">
+            {lead.enrichment_failure_reason || 'The AI step failed.'} Fields like industry, score and signals are blank because of this, not because nothing exists.
+          </p>
+          {message && <p className="mt-1 break-words text-sm font-medium" data-retry-message="">{message}</p>}
+          <Button variant="secondary" size="sm" className="mt-2" loading={state === 'working'} onClick={retry} disabled={!leadId}>
+            {state !== 'working' && <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />}
+            {state === 'working' ? 'Retrying' : 'Retry enrichment'}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -29,28 +103,46 @@ function Section({ title, children }) {
 }
 
 /** One lead in full. Opens as a side panel; Escape or the close button dismisses it. */
-export default function LeadDrawer({ lead, requestId, flags, onToggleFlag, onClose, onPatch, onViewDecisionMakers }) {
+export default function LeadDrawer({ lead, requestId, flags, onToggleFlag, onClose, onPatch, onViewDecisionMakers, onRefresh }) {
   const toast = useToast()
   const [verifying, setVerifying] = useState(false)
+  const [rejecting, setRejecting] = useState(false)
   if (!lead) return null
 
   const name = leadKey(lead)
   const contact = contactOf(lead)
   const email = lead.email || lead.contact_email
   const leadId = lead._id || lead.id
-  const canVerify = Boolean(email) && emailStatus(lead).key === 'unchecked' && Boolean(leadId)
+  const canVerify = Boolean(email) && Boolean(leadId)
+  const prov = lead.provenance
 
   const verify = async () => {
     if (verifying) return
     setVerifying(true)
     try {
       const res = await api.verifyAndSaveLeadEmail(String(leadId))
-      onPatch(lead._originalIndex, { email_verified: res.verified, email_confidence: res.confidence })
+      onPatch(lead._originalIndex, { email_verified: res.verified, email_confidence: res.confidence, email_status: res.status, email_checked_at: res.checked_at, email_status_reason: res.reason })
     } catch (err) {
       console.error('Email verification failed:', err)
       toast.push({ type: 'error', message: 'Could not verify this email. Please try again.' })
     } finally {
       setVerifying(false)
+    }
+  }
+
+  const rejected = Boolean(lead.rejected_at)
+  const toggleReject = async () => {
+    if (rejecting || !leadId) return
+    setRejecting(true)
+    try {
+      if (rejected) await api.restoreLead(String(leadId))
+      else await api.rejectLead(String(leadId))
+      onPatch(lead._originalIndex, { rejected_at: rejected ? null : new Date().toISOString() })
+      toast.push({ type: 'success', message: rejected ? 'Lead restored.' : 'Lead rejected. It will be deleted in 30 days unless you restore it.' })
+    } catch (err) {
+      toast.push({ type: 'error', message: err.message || 'Could not update this lead.' })
+    } finally {
+      setRejecting(false)
     }
   }
 
@@ -79,6 +171,8 @@ export default function LeadDrawer({ lead, requestId, flags, onToggleFlag, onClo
         </div>
       }
     >
+      {lead.enrichment_failed && <EnrichmentFailedNotice lead={lead} leadId={leadId} onRetried={onRefresh} />}
+
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Match score">{lead.match_score != null ? Math.round(matchScore(lead)) : null}</Stat>
         <Stat label="Employees">{lead.employee_size_estimate}</Stat>
@@ -103,7 +197,12 @@ export default function LeadDrawer({ lead, requestId, flags, onToggleFlag, onClo
               {label}
             </Button>
           ))}
+          <Button variant="ghost" size="sm" loading={rejecting} onClick={toggleReject} className={rejected ? undefined : 'text-bad hover:text-bad'}>
+            {!rejecting && <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />}
+            {rejected ? 'Restore lead' : 'Reject lead'}
+          </Button>
         </div>
+        {rejected && <p className="mt-2 text-xs text-muted">Rejected. This lead and its contacts are deleted 30 days after rejection.</p>}
       </Section>
 
       <Section title="Contact">
@@ -112,31 +211,45 @@ export default function LeadDrawer({ lead, requestId, flags, onToggleFlag, onClo
             <p className="text-sm text-ink break-words">
               <span className="font-semibold">{contact.name}</span>
               {contact.title && <span className="text-muted">, {contact.title}</span>}
+              <Provenance provenance={prov} field={['contact_name', 'contact_title']} label="the contact name" className="ml-1" />
             </p>
           )}
           {email ? (
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <a href={`mailto:${email}`} className="break-all text-sm text-primary-700 hover:underline dark:text-primary-300">{email}</a>
-              <EmailStatusBadge lead={lead} />
+              <Provenance provenance={prov} field={['contact_email', 'email']} label="the email" />
+              <EmailStatusBadge lead={lead} showDate />
               {canVerify && (
                 <Button variant="secondary" size="sm" loading={verifying} onClick={verify}>
                   {!verifying && <MailCheck aria-hidden="true" className="h-3.5 w-3.5" />}
-                  Verify email
+                  {emailStatus(lead).key === 'unchecked' ? 'Verify email' : 'Re-check'}
                 </Button>
               )}
             </div>
           ) : (
             <p className="mt-1 text-sm text-muted">No email address found. <EmailStatusBadge lead={lead} className="ml-1" /></p>
           )}
-          {email && <p className="mt-1 text-xs text-muted">{emailStatus(lead).hint}</p>}
-          {lead.phone && <p className="mt-1 text-sm text-ink">{lead.phone}</p>}
+          {email && <p className="mt-1 text-xs text-muted">{emailStatus(lead).reason || emailStatus(lead).hint}</p>}
+          {lead.phone && <p className="mt-1 text-sm text-ink">{lead.phone}<Provenance provenance={prov} field={['contact_phone', 'phone']} label="the phone number" className="ml-1" /></p>}
         </div>
       </Section>
 
       <Section title="Company">
         <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-2 text-sm">
           <dt className="text-muted">Location</dt>
-          <dd className="break-words text-ink">{lead.location || <Dash />}</dd>
+          <dd className="break-words text-ink">{lead.location || <Dash />}{lead.location && <Provenance provenance={prov} field={['location', 'headquarters']} label="the location" className="ml-1" />}</dd>
+          {lead.region && (
+            <>
+              <dt className="text-muted">Data region</dt>
+              <dd className="text-ink">
+                <span data-region={lead.region} className="inline-flex items-center gap-1 rounded-full bg-warn-soft px-2 py-0.5 text-xs font-semibold text-warn">
+                  <Globe2 aria-hidden="true" className="h-3 w-3" />
+                  {lead.region}
+                </span>
+                {lead.region_note && <p className="mt-1 text-xs text-muted">{lead.region_note}</p>}
+              </dd>
+            </>
+          )}
           <dt className="text-muted">Source</dt>
           <dd className="break-all text-ink">{lead.source_url ? <ExtLink href={lead.source_url}>{lead.source_url}</ExtLink> : <Dash />}</dd>
           <dt className="text-muted">Links</dt>
@@ -149,7 +262,19 @@ export default function LeadDrawer({ lead, requestId, flags, onToggleFlag, onClo
         </dl>
       </Section>
 
+      <Section title="Company facts">
+        <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-sm">
+          {[['Industry', lead.industry, 'industry'], ['Employees', lead.employee_size_estimate, 'employee_size_estimate'], ['Funding', lead.funding_stage, 'funding_stage'], ['Growth', lead.growth, 'growth']].map(([label, value, field]) => (
+            <div key={field} className="contents">
+              <dt className="text-muted">{label}</dt>
+              <dd className="break-words text-ink">{value || <Dash />}{value && <Provenance provenance={prov} field={field} label={`the ${label.toLowerCase()}`} className="ml-1" />}</dd>
+            </div>
+          ))}
+        </dl>
+      </Section>
+
       <Section title="Technology">
+        {tech.length > 0 && <p className="mb-1.5 text-xs text-muted">Detected from the website<Provenance provenance={prov} field="tech_stack" label="the technology list" className="ml-1" /></p>}
         {tech.length > 0 ? <div className="flex flex-wrap gap-1.5">{tech.map((t, i) => <Tag key={i}>{t}</Tag>)}</div> : <p className="text-sm text-muted">No technology detected.</p>}
       </Section>
 

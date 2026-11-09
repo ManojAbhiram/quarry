@@ -10,7 +10,6 @@ Signal weights (from PRD Phase 6):
     +8        LinkedIn thought leadership posts
 """
 
-import asyncio
 import json
 import logging
 from datetime import datetime, timezone

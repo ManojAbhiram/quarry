@@ -4,11 +4,14 @@ from typing import List, Optional
 from sqlalchemy import func, select
 
 from app.core.logger import logger
+from app.crm.hooks import schedule_event
 from app.db import engine as _engine
 from app.db.companies import get_company_by_id, upsert_company
 from app.db.decision_makers import insert_decision_maker_if_new
 from app.db.lead_enrichments import upsert_lead_enrichment
 from app.db.models import TABLES, Lead as LeadRow
+from app.compliance.region import infer_region
+from app.provenance import build_lead_provenance
 from app.schemas.leads import Lead
 
 _leads = TABLES["leads"]
@@ -81,6 +84,9 @@ async def save_enriched_leads_to_db(
     if not enriched:
         return
     now = datetime.utcnow()
+    from app.suppression import load_matcher  # local import: suppression imports the models
+
+    suppressed = await load_matcher(user_id)
 
     for item in enriched:
         lead_url = item.get("source_url") or item.get("website") or item.get("url") or ""
@@ -93,6 +99,9 @@ async def save_enriched_leads_to_db(
             except (ValueError, TypeError):
                 match_score_float = 0.0
 
+            region = infer_region(
+                lead_url, location=item.get("location") or item.get("headquarters"), email=item.get("contact_email")
+            )
             lead_doc = {
                 "request_id": request_id,
                 "user_id": user_id,
@@ -108,6 +117,16 @@ async def save_enriched_leads_to_db(
                 "email_confidence": item.get("email_confidence"),
                 "email_verify_method": item.get("email_verify_method"),
                 "email_verify_reason": item.get("email_verify_reason"),
+                "enrichment_failed": bool(item.get("enrichment_failed")),
+                "enrichment_failure_reason": (
+                    item.get("enrichment_failure_reason") if item.get("enrichment_failed") else None
+                ),
+                "email_status": item.get("email_status"),
+                "email_checked_at": item.get("email_checked_at"),
+                "email_catch_all": item.get("email_catch_all"),
+                "provenance": build_lead_provenance(item, now.isoformat() + "Z"),
+                "region": region["region"],
+                "region_note": region["note"],
                 "updated_at": now,
             }
             existing_lead = await _leads.get(request_id=request_id, url=lead_url)
@@ -116,6 +135,7 @@ async def save_enriched_leads_to_db(
                 await _leads.update(lead_id, lead_doc)
             else:
                 lead_id = await _leads.insert({**lead_doc, "created_at": now})
+                schedule_event(user_id, "lead.created", {"lead": {"id": lead_id, "title": lead_doc["title"], "url": lead_url, "email": lead_doc.get("email"), "match_score": match_score_float}})
         except Exception as exc:
             logger.warning("Failed to upsert lead (url=%s) to leads table: %s", lead_url, exc)
 
@@ -135,8 +155,10 @@ async def save_enriched_leads_to_db(
                 logger.warning("Failed to upsert lead_enrichment for lead %s: %s", lead_id, exc)
 
             for dm in item.get("decision_makers") or []:
+                if suppressed.matches(dm.get("email")):
+                    continue  # never re-collect a person who was erased or opted out
                 try:
-                    await insert_decision_maker_if_new(lead_id, dm)
+                    await insert_decision_maker_if_new(lead_id, dm, fallback_source_url=lead_url)
                 except Exception as exc:
                     logger.warning("Failed to insert decision_maker for lead %s: %s", lead_id, exc)
 
@@ -233,11 +255,21 @@ async def get_normalized_leads_for_request(request_id: str) -> list[dict]:
                 "snippet": d.get("snippet"),
                 "recent_activity_summary": d.get("recent_activity_summary"),
                 "recent_posts": d.get("recent_posts") or [],
+                "id": d.get("_id"),
+                "email_status": d.get("email_status"),
+                "email_checked_at": d.get("email_checked_at"),
+                "email_status_reason": d.get("email_status_reason"),
+                "provenance": d.get("provenance") or {},
             }
             for d in raw_dms
         ]
 
         score = nl.get("match_score")
+        region = (
+            {"region": nl.get("region"), "note": nl.get("region_note")}
+            if nl.get("region")
+            else infer_region(nl.get("url"), location=company_doc.get("headquarters"))
+        )
         combined.append({
             "id": lead_id,
             "_id": lead_id,
@@ -248,6 +280,15 @@ async def get_normalized_leads_for_request(request_id: str) -> list[dict]:
             "phone": nl.get("phone"),
             "email_verified": nl.get("email_verified"),
             "email_confidence": nl.get("email_confidence"),
+            "enrichment_failed": bool(nl.get("enrichment_failed")),
+            "enrichment_failure_reason": nl.get("enrichment_failure_reason"),
+            "email_status": nl.get("email_status"),
+            "email_checked_at": nl.get("email_checked_at"),
+            "email_status_reason": nl.get("email_status_reason") or nl.get("email_verify_reason"),
+            "provenance": nl.get("provenance") or {},
+            "region": region.get("region"),
+            "region_note": region.get("note"),
+            "rejected_at": nl.get("rejected_at"),
             "match_score": str(score if score is not None else "0"),
             "snippet": nl.get("snippet"),
             "type": nl.get("lead_type", "enriched"),

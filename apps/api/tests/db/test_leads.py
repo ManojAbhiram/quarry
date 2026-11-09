@@ -89,13 +89,15 @@ async def test_get_normalized_leads_for_request_matches_shape(db):
     assert lead["decision_makers"][0]["name"] == "Ann" and lead["decision_makers"][0]["recent_posts"] == []
     assert lead["email_verified"] is True
     expected = {
-        "id", "_id", "user_id", "title", "url", "email", "phone", "email_verified", "email_confidence",
+        "id", "_id", "user_id", "title", "url", "email", "phone", "email_verified", "email_confidence", "enrichment_failed", "enrichment_failure_reason",
         "match_score", "snippet", "type", "company_name", "industry", "location", "employee_size_estimate",
         "funding_stage", "founded_year", "linkedin_url", "x_url", "facebook_url", "growth", "tech_stack",
         "infrastructure", "contact_name", "contact_title", "buying_signals", "match_explanation", "signals",
         "decision_makers", "intent_score", "intent_band", "band_emoji", "band_action", "intent_signals",
         "intent_summary", "score_breakdown", "pillar_details", "total_signals", "intent_score_updated_at",
         "signal_timeline", "serper_queries_used",
+        # Phase 2: email status, provenance, region and rejection marker
+        "email_status", "email_checked_at", "email_status_reason", "provenance", "region", "region_note", "rejected_at",
     }
     assert set(lead) == expected
     assert await leads.get_normalized_leads_for_request("nope") == []
@@ -171,7 +173,7 @@ async def test_verify_email_persists_on_lead_via_api(db, monkeypatch):
     await _seed()
     lead_id = (await leads.get_normalized_leads_for_request("r1"))[0]["_id"]
 
-    async def fake_verify(email):
+    async def fake_verify(email, config=None):
         return {"verified": True, "confidence": 0.9, "method": "smtp", "reason": "ok"}
 
     monkeypatch.setattr(leads_api, "verify_email", fake_verify)

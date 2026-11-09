@@ -1,12 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { Download, Loader2, RefreshCw, Users } from 'lucide-react'
 import { api } from '../../api'
 import { decorateDecisionMakerContacts } from '../../utils/decisionMakers'
 import { Button, EmptyState, ErrorState } from '../../components/kit'
 import { leadKey, matchScore, PAGE_SIZE, pageSlice } from './leadHelpers'
-import { Dash, ExtLink, ScoreBar, SearchInput, SelectFilter, Tag } from './ui'
+import { Dash, EmailStatusBadge, ExtLink, ScoreBar, SearchInput, SelectFilter, Tag } from './ui'
+import Provenance from '../../components/Provenance'
 import ExportMenu from './ExportMenu'
+import { EnrollDialog } from '../Outreach'
+import { outreachApi } from '../../api.p3'
 
 const SENIORITY = {
   'C-Level': (t) => /chief|cxo|\bceo\b|\bcto\b|\bcro\b|\bcfo\b|\bcoo\b/.test(t),
@@ -26,6 +29,12 @@ export default function DecisionMakersPanel({ leads, dmDataMap, dmLoading, dmErr
   const [withEmail, setWithEmail] = useState(false)
   const [selected, setSelected] = useState([])
   const [page, setPage] = useState(1)
+  const [enrollOpen, setEnrollOpen] = useState(false)
+  const [sequences, setSequences] = useState([])
+  useEffect(() => {
+    if (!enrollOpen) return
+    outreachApi.sequences().then((r) => setSequences(r?.sequences || [])).catch(() => setSequences([]))
+  }, [enrollOpen])
 
   const hasServerData = Object.keys(dmDataMap).length > 0
   const lead = leads.find((l) => leadKey(l) === selectedCompany) || leads[0]
@@ -54,6 +63,10 @@ export default function DecisionMakersPanel({ leads, dmDataMap, dmLoading, dmErr
   const companyList = leads.filter((l) => leadKey(l).toLowerCase().includes(companySearch.toLowerCase()))
   const toggle = (name) => setSelected(selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name])
   const allSelected = visible.length > 0 && visible.every((c) => selected.includes(c.name))
+
+  const outreachContacts = contacts
+    .filter((c) => selected.includes(c.name) && c.email)
+    .map((c) => ({ email: c.email, name: c.name, title: c.title, company: lead?.title || company, lead_id: lead?.id || lead?._id }))
 
   const exportCsv = () => {
     if (contacts.length === 0) return
@@ -168,6 +181,12 @@ export default function DecisionMakersPanel({ leads, dmDataMap, dmLoading, dmErr
                             {email ? <a href={`mailto:${email}`} className="break-all text-primary-700 hover:underline dark:text-primary-300">{email}</a> : <span className="text-muted">No email</span>}
                             <ExtLink href={c.linkedin_url}>LinkedIn</ExtLink>
                           </p>
+                          {email && (
+                            <p className="mt-1 flex flex-wrap items-center gap-1">
+                              <EmailStatusBadge lead={{ ...c, email }} showDate />
+                              <Provenance provenance={c.provenance} field="email" label={`${c.name}'s email`} />
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2"><Tag>{c.persona_label || 'Influencer'}</Tag><span className="text-xs text-muted">{c.confidence_label} confidence</span></div>
                         <ScoreBar value={c.relevance_score ?? 0} label="Relevance" />
@@ -186,7 +205,8 @@ export default function DecisionMakersPanel({ leads, dmDataMap, dmLoading, dmErr
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
             <span className="text-sm text-muted tabular-nums">{selected.length === 0 ? 'No contacts selected' : `${selected.length} ${selected.length === 1 ? 'contact' : 'contacts'} selected`}</span>
-            <Button disabled title="Outreach sequencing is not available yet. Export your leads to use them in your outreach tool.">Outreach sequencing (coming soon)</Button>
+            <Button disabled={outreachContacts.length === 0} title={outreachContacts.length === 0 ? 'Select contacts that have an email to add them to a sequence.' : undefined} onClick={() => setEnrollOpen(true)}>Add to sequence{outreachContacts.length > 0 ? ` (${outreachContacts.length})` : ''}</Button>
+            <EnrollDialog open={enrollOpen} onClose={() => setEnrollOpen(false)} contacts={outreachContacts} sequences={sequences} onDone={() => setSelected([])} />
           </div>
         </div>
       </div>

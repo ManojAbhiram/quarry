@@ -1,86 +1,64 @@
-# Quarry Dashboard — Premium AI Lead Generation Interface
+# Quarry Web
 
-Quarry Dashboard is a high-performance, SaaS-oriented frontend designed for precision lead generation management. Built with React 18 and Tailwind CSS, it offers a data-rich, low-latency workspace for configuring, monitoring, and analyzing AI-driven outreach campaigns.
+React 18 + Vite + Tailwind single-page app for Quarry. It is a premium, motion-rich UI (glass surfaces, animated score
+bars, flip transitions, spring drawers) that keeps accessibility and loading, empty and error states on every screen.
 
----
+## Stack
 
-## 💎 User Experience & Design Philosophy
+React 18, React Router 6, Tailwind CSS, `motion` and GSAP for animation, lucide icons, Vitest + Testing Library.
 
-The dashboard is engineered for clarity and professional efficiency, featuring a high-contrast design system optimized for deep analytical work.
+## Getting started
 
-### 🌓 Synchronized Theme System
-- **Unified Transitions**: A global transition engine ensures that all UI elements—including cards, sidebars, and data tables—toggle between light and dark modes in perfect synchronization.
-- **Dark Mode Optimization**: Specifically tuned for reduced eye strain during long research sessions, utilizing a deep slate and indigo color palette.
+Requirements: Node 20+ (CI uses 22) and a running Quarry API.
 
-### 📊 Multi-Dimensional Data Visualization
-- **Lead Intelligence Views**: Users can toggle between a **High-Density Table View** for rapid scanning and a **Rich Intelligence Card View** for deep-diving into individual prospect firmographics.
-- **Growth Signals & Match Scoring**: Visual indicators highlight the most promising leads based on AI-calculated relevance and real-time business signals (funding, leadership shifts).
-
-### ⚡ Real-Time Pipeline Monitoring
-- **Live Generation Feedback**: Integrated progress tracking provides instant visibility into the AI's search discovery, site classification, and extraction stages.
-- **Dynamic Status Polling**: Automatic UI updates reflect pipeline completions and data enrichment without requiring manual page refreshes.
-
----
-
-## ✨ Features & Capabilities
-
-- **Universal Social Discovery**: One-click access to verified LinkedIn, X (Twitter), and Crunchbase profiles embedded directly into lead records.
-- **Contextual Transparency**: View the exact AI-generated search prompts and the original Search Parameters used for every campaign.
-- **High-Performance Grid**: Responsive 12-column workspace that adapts perfectly from ultra-wide monitors to standard laptops.
-- **Glassmorphic Aesthetics**: Modern UI components utilizing backdrop-blurs, subtle gradients, and premium shadow systems.
-
----
-
-## 🛠️ Tech Stack
-
-- **Framework**: React 18 (Vite-powered for instant HMR)
-- **Styling**: Tailwind CSS (JIT Engine)
-- **Iconography**: Lucide React
-- **Navigation**: React Router Dom v6
-- **State Engine**: React Context API with custom hooks for Auth and Lead Management
-- **Performance**: Optimized bundle sizes and lazy-loading for heavy assets
-
----
-
-## 📦 Getting Started
-
-### 1. Requirements
-- Node.js 18+
-- Active Quarry Backend Instance
-
-### 2. Installation
 ```bash
-cd frontend
+cd apps/web
 npm install
+npm run dev          # http://localhost:3000, proxies /api to http://127.0.0.1:8000
 ```
 
-### 3. Environment Config
-Create a `.env` file in the root:
-```env
-VITE_API_URL=http://localhost:8000
-```
+Environment (all optional): `VITE_API_URL` (API base, default `/api`), `VITE_BACKEND_URL` (dev proxy target),
+`VITE_DEV_PORT` (default 3000). In development a component showcase is served at `/ui-lab`.
 
-### 4. Development Run
-```bash
-npm run dev
-```
-Access the dashboard at `http://localhost:5173`
+## Scripts
 
----
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Dev server with HMR |
+| `npm run lint` | ESLint (must have no errors) |
+| `npx vitest run` | Unit and component tests |
+| `npm run build` | Production build to `dist/` |
 
-## 📁 Workspace Architecture
+## Authentication
+
+The API sets HttpOnly cookies on login, so the app never sees or stores a token. `src/api.js` sends every request with
+`credentials: 'include'`, adds `X-CSRF-Token` (read from the `quarry_csrf` cookie, or fetched from `/auth/csrf` when it
+is not readable) to writes, and on a 401 refreshes the session once (shared by concurrent requests) and retries.
+`src/session.js` keeps a non-secret `session` hint in localStorage so the app knows whether to call `/users/me` on
+load; old `token` / `refresh_token` entries are deleted. Google sign-in returns to `/auth/google/callback?login=success`
+and the page then loads the user via the cookie.
+
+## Layout
 
 ```text
-apps/web/
-├── src/
-│   ├── components/     # High-level layout and global UI primitives
-│   ├── context/        # Business logic providers (Auth, Leads, Theme)
-│   ├── pages/          # Full-screen application views
-│   │   ├── Dashboard.jsx        # Pipeline hub & stats
-│   │   ├── CampaignDetails.jsx  # Intelligence analytical view
-│   │   ├── History.jsx          # Generated Leads management
-│   │   └── NewRequest.jsx       # AI parameter configuration
-│   ├── index.css       # Core design system and Tailwind layers
-│   └── App.jsx         # Component orchestration and routing
-└── tailwind.config.js  # Brand identity and theme configuration
+src/
+  api.js, session.js     fetch layer (cookies, CSRF, refresh) and the session hint
+  App.jsx                routes and boot states
+  context/               AuthContext, LeadContext (requests and results), ThemeContext
+  config/                constants, palettes
+  components/
+    kit/                 Button, Field, Menu, Toast, states (Empty/Error/Skeleton), screens
+    motion/              Reveal, SplitHeading, Backdrop, flip and stagger hooks
+    ui/                  decorative effect components (used by the UI lab)
+    intent/, request/    intent score panel, request wizard parts
+  pages/
+    Dashboard, LeadRequests, NewRequest / CreateLeadRequest (wizard), DirectCompanies,
+    RequestDetails (+ request-details/: table, lead drawer, competitors, decision makers, exports),
+    LeadLists, Profile, auth pages (Login, Signup, ForgotPassword, ResetPassword, GoogleCallback)
 ```
+
+## Enrichment failures
+
+If the AI step failed for a company, the results table shows an "Enrichment failed" badge and the lead drawer explains
+why its fields are blank and offers "Retry enrichment". The retry queues a background job (`POST
+/leads/{id}/retry-enrichment`), polls `GET /jobs/{id}`, and reloads the results when it finishes.

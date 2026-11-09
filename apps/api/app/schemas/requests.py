@@ -80,7 +80,7 @@ def request_to_out(doc: dict, enrich_data: dict | None = None) -> LeadRequestOut
         enrich_data = {}
 
     leads_agg = enrich_data.get("leads_agg") or {}
-    companies_list = leads_agg.get("companies") or []
+    leads_agg.get("companies") or []
     companies_count = leads_agg.get("count") or 0
     contacts_count = leads_agg.get("decision_makers_count") or 0
     avg_score = leads_agg.get("avg_score")

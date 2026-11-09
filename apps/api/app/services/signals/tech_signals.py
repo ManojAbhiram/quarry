@@ -83,7 +83,7 @@ def detect_tech_signals(
 
     # Also flatten infrastructure dict into the stack set
     if isinstance(lead_infrastructure, dict):
-        for category, items in lead_infrastructure.items():
+        for _category, items in lead_infrastructure.items():
             if isinstance(items, list):
                 for item in items:
                     stack_set.add(_normalize_tech(item))

@@ -35,39 +35,39 @@ describe('AuthProvider bootstrap', () => {
     vi.clearAllMocks()
   })
 
-  it('is anonymous and not loading when there is no token', async () => {
+  it('is anonymous and not loading when there is no session hint', async () => {
     renderAuth()
     expect(screen.getByTestId('state')).toHaveTextContent('anonymous')
     expect(api.get).not.toHaveBeenCalled()
   })
 
-  it('loads the user when the token is valid', async () => {
-    localStorage.setItem('token', 'tok')
+  it('loads the user when the session is valid', async () => {
+    localStorage.setItem('session', '1')
     api.get.mockResolvedValueOnce({ name: 'Asha' })
     renderAuth()
     expect(screen.getByTestId('state')).toHaveTextContent('loading')
     await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('user:Asha'))
   })
 
-  it('signs out when the server rejects the token (401)', async () => {
-    localStorage.setItem('token', 'tok')
-    localStorage.setItem('refresh_token', 'ref')
+  it('signs out when the server rejects the session (401)', async () => {
+    localStorage.setItem('session', '1')
+    localStorage.setItem('token', 'legacy')
+    localStorage.setItem('refresh_token', 'legacy')
     api.get.mockRejectedValueOnce(serverError(401, 'Invalid token'))
     renderAuth()
     await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('anonymous'))
-    expect(localStorage.getItem('token')).toBeNull()
+    expect(localStorage.getItem('session')).toBeNull()
+    expect(localStorage.getItem('token')).toBeNull() // legacy tokens are wiped too
     expect(localStorage.getItem('refresh_token')).toBeNull()
   })
 
   it('keeps the session when the network is down, and lets the user retry', async () => {
-    localStorage.setItem('token', 'tok')
-    localStorage.setItem('refresh_token', 'ref')
+    localStorage.setItem('session', '1')
     api.get.mockRejectedValueOnce(networkError())
     renderAuth()
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Failed to fetch')
-    expect(localStorage.getItem('token')).toBe('tok')
-    expect(localStorage.getItem('refresh_token')).toBe('ref')
+    expect(localStorage.getItem('session')).toBe('1')
     expect(screen.getByTestId('state')).not.toHaveTextContent('loading')
 
     api.get.mockResolvedValueOnce({ name: 'Asha' })
@@ -79,10 +79,10 @@ describe('AuthProvider bootstrap', () => {
   })
 
   it('keeps the session on a server error (503) instead of signing the user out', async () => {
-    localStorage.setItem('token', 'tok')
+    localStorage.setItem('session', '1')
     api.get.mockRejectedValueOnce(serverError(503, 'Service unavailable'))
     renderAuth()
     expect(await screen.findByRole('alert')).toHaveTextContent('Service unavailable')
-    expect(localStorage.getItem('token')).toBe('tok')
+    expect(localStorage.getItem('session')).toBe('1')
   })
 })

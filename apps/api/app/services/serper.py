@@ -5,6 +5,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logger import logger
+from app import usage
 
 # Per-request/per-pipeline Serper key. Entry points (lead pipeline, competitor
 # pipeline, intent analysis) set this from the requesting user's stored key so
@@ -23,6 +24,7 @@ def get_serper_key() -> str:
 
 
 async def fetch_leads_from_serper(query: str) -> dict:
+    usage.count("serper")
     payload = json.dumps({"q": query})
     headers = {
         'X-API-KEY': get_serper_key(),

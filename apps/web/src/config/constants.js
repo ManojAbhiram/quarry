@@ -9,12 +9,16 @@
 // API base URL — overridable per environment via VITE_API_URL.
 export const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
-// localStorage keys (kept identical to previous string literals).
+// localStorage keys. Auth tokens live in HttpOnly cookies, never here: SESSION is only a "probably signed in" hint
+// (no secret) and the LEGACY_* keys are removed on load because older versions stored tokens in them.
 export const STORAGE_KEYS = {
-  TOKEN: 'token',
-  REFRESH_TOKEN: 'refresh_token',
+  SESSION: 'session',
+  LEGACY_TOKEN: 'token',
+  LEGACY_REFRESH_TOKEN: 'refresh_token',
   THEME: 'theme',
   PALETTE: 'palette',
+  ACTIVE_ORG: 'active_org',
+  PENDING_INVITE: 'pending_invite',
 }
 
 // UI timing in milliseconds (values match previous in-component literals).

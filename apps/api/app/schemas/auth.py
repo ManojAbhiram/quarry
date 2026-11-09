@@ -22,7 +22,8 @@ class LoginRequest(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    # Optional: browsers send the refresh token in the HttpOnly cookie instead.
+    refresh_token: str | None = None
 
 
 class RefreshResponse(BaseModel):

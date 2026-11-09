@@ -60,6 +60,11 @@ ignore = [
     "B008",  # function call in default arg — required by FastAPI's Depends()
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Fingerprint tables contain historical duplicate keys (the later entry wins at runtime); merging them is a data
+# change, not a lint fix, so it is tracked separately.
+"app/services/tech_stack.py" = ["F601"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

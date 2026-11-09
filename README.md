@@ -33,9 +33,11 @@ In development the web app also serves a component showcase at `http://localhost
 
 ```bash
 cd apps/api && uv run pytest          # backend tests (pytest is a dev dependency, so plain `uv sync` keeps it)
-cd apps/api && uv run ruff check app  # lint
-cd apps/web && npm run build          # web build
+cd apps/api && uv run ruff check .    # lint
+cd apps/web && npm run lint && npx vitest run && npm run build
 ```
+
+CI (`.github/workflows/ci.yml`) runs all of the above on pushes and pull requests.
 
 ## Colour palettes
 

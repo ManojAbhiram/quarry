@@ -22,9 +22,12 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
+from app.crm.hooks import schedule_event
 from app.db import lead_lists as db_lists
 from app.db.leads import get_leads_by_ids
 from app.services.auth import get_current_user
+from app.compliance.exports import lead_is_suppressed, matcher_for, source_notice
+from app.provenance import summarize
 from app.services.export_service import generate_csv, generate_xlsx
 
 router = APIRouter(prefix="/lists", tags=["lead-lists"])
@@ -118,7 +121,7 @@ async def get_list(
     if lead_ids:
         raw_leads = await get_leads_by_ids(lead_ids, user_id)
         # Build a quick lookup by _id
-        by_id = {str(l["_id"]): l for l in raw_leads}
+        by_id = {str(lead["_id"]): lead for lead in raw_leads}
         for lid in lead_ids:
             lead_doc = by_id.get(lid)
             if lead_doc:
@@ -130,6 +133,8 @@ async def get_list(
                     "match_score": lead_doc.get("match_score"),
                     "email_verified": lead_doc.get("email_verified"),
                     "email_confidence": lead_doc.get("email_confidence"),
+                    "email_status": lead_doc.get("email_status"),
+                    "email_checked_at": lead_doc.get("email_checked_at"),
                 })
 
     result = _serialize(doc)
@@ -174,6 +179,7 @@ async def add_leads(
     doc = await db_lists.add_leads_to_list(list_id, user_id, body.lead_ids)
     if not doc:
         raise HTTPException(status_code=404, detail="List not found")
+    schedule_event(user_id, "list.updated", {"list": {"id": list_id, "name": doc.get("name"), "lead_count": len(doc.get("lead_ids") or [])}, "change": "leads_added"})
     return {"message": f"Added {len(body.lead_ids)} lead(s) to list", "list": _serialize(doc)}
 
 
@@ -187,6 +193,7 @@ async def remove_leads(
     doc = await db_lists.remove_leads_from_list(list_id, user_id, body.lead_ids)
     if not doc:
         raise HTTPException(status_code=404, detail="List not found")
+    schedule_event(user_id, "list.updated", {"list": {"id": list_id, "name": doc.get("name"), "lead_count": len(doc.get("lead_ids") or [])}, "change": "leads_removed"})
     return {"message": f"Removed {len(body.lead_ids)} lead(s) from list", "list": _serialize(doc)}
 
 
@@ -212,16 +219,17 @@ async def export_list(
     by_id: dict = {}
     if lead_ids:
         raw_leads = await get_leads_by_ids(lead_ids, user_id)
-        by_id = {str(l["_id"]): l for l in raw_leads}
+        by_id = {str(lead["_id"]): lead for lead in raw_leads}
 
     headers = [
         "Company / Title", "Email", "Email Verified", "Email Confidence",
-        "Phone", "ICP Match Score", "Website URL",
+        "Phone", "ICP Match Score", "Website URL", "Email Status", "Email Checked At", "Region", "Field Sources",
     ]
+    matcher = await matcher_for(user_id)
     rows = []
     for lid in lead_ids:  # preserve the list's ordering
         lead = by_id.get(lid)
-        if not lead:
+        if not lead or lead_is_suppressed(matcher, lead):
             continue
         verified = lead.get("email_verified")
         verified_str = "" if verified is None else ("Yes" if verified else "No")
@@ -233,18 +241,22 @@ async def export_list(
             lead.get("phone") or "",
             lead.get("match_score", ""),
             lead.get("url", ""),
+            lead.get("email_status") or "",
+            lead.get("email_checked_at") or "",
+            lead.get("region") or "",
+            summarize(lead.get("provenance")),
         ])
 
     fname = _safe_filename(doc.get("name"))
     if format == "xlsx":
-        data = generate_xlsx("Leads", headers, rows)
+        data = generate_xlsx("Leads", headers, rows, notice=source_notice())
         return Response(
             content=data,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": f"attachment; filename=quarry_{fname}.xlsx"},
         )
 
-    data = generate_csv(headers, rows)
+    data = generate_csv(headers, rows, notice=source_notice())
     return Response(
         content=data,
         media_type="text/csv",
