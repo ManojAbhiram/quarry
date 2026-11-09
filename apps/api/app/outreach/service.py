@@ -235,6 +235,19 @@ def unsubscribe_url(owner_id: str, enrollment_id: str, email: str) -> str:
     return f"{p3_settings.public_api_url}/api/public/unsubscribe/{token}"
 
 
+def compliance_footer(unsub: str) -> tuple[str, str]:
+    """(plain text, html) footer on every outreach email: the signed unsubscribe link and the sender's postal address.
+
+    One mechanism only: the Phase 3 signed one-click link (stops the sequence and adds a suppression). The Phase 2
+    `compliance.optout.optout_url` points at the web opt-out page used by the compliance tools, not by sequences.
+    """
+    address = p3_settings.postal_address
+    text = f"\n\n--\nDon't want these emails? Unsubscribe: {unsub}\n{address}"
+    markup = (f"<p style='color:#6b7280;font-size:12px'><a href='{html.escape(unsub)}'>Unsubscribe</a><br>"
+              f"{html.escape(address)}</p>")
+    return text, markup
+
+
 def build_message(box: dict, seq: dict, enr: dict, step_index: int, prev_message_id: str | None, base_subject: str) -> EmailMessage:
     values = logic.build_vars({**(enr.get("contact") or {}), "email": enr["email"]}, box.get("from_name") or "")
     step = seq["steps"][step_index]
@@ -252,14 +265,14 @@ def build_message(box: dict, seq: dict, enr: dict, step_index: int, prev_message
         msg["References"] = prev_message_id
     msg["List-Unsubscribe"] = f"<{unsub}>, <mailto:{box['email']}?subject=unsubscribe>"
     msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
-    msg.set_content(f"{body}\n\n--\nDon't want these emails? Unsubscribe: {unsub}")
+    footer_text, footer_html = compliance_footer(unsub)
+    msg.set_content(f"{body}{footer_text}")
     pixel = ""
     if seq.get("track_opens"):
         tok = logic.sign_token("open", {"e": enr["_id"], "s": step_index})
         pixel = f'<img src="{p3_settings.public_api_url}/api/public/o/{tok}.gif" width="1" height="1" alt="">'
     msg.add_alternative(
-        f"<div style='white-space:pre-wrap'>{html.escape(body)}</div><p style='color:#6b7280;font-size:12px'>"
-        f"<a href='{html.escape(unsub)}'>Unsubscribe</a></p>{pixel}",
+        f"<div style='white-space:pre-wrap'>{html.escape(body)}</div>{footer_html}{pixel}",
         subtype="html",
     )
     return msg
