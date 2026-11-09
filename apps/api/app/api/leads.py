@@ -9,6 +9,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.core.cookies import ACCESS_COOKIE
 from app.core.logger import logger
 from app.db.leads import get_lead_for_user, update_lead_fields
 from app.db.requests import get_request_by_id
@@ -47,7 +48,7 @@ async def _get_current_user_sse(
         detail="Invalid or expired token",
     )
 
-    raw_token = credentials.credentials if credentials else token
+    raw_token = credentials.credentials if credentials else (token or request.cookies.get(ACCESS_COOKIE))
     if not raw_token:
         raise credentials_exception
 

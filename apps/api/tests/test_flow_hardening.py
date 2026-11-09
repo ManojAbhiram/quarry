@@ -41,6 +41,7 @@ async def test_sse_stream_rejects_x_user_id_header_without_a_token(api):
     from app.main import app
 
     _, uid = await _signup(api, "sse@t.com")
+    api.cookies.clear()  # signup also set the session cookie; the header alone must not authenticate
     path = next(p for p in app.openapi()["paths"] if p.endswith("/status/{request_id}/stream"))
     resp = await asyncio.wait_for(api.get(path.replace("{request_id}", "r1"), headers={"X-User-Id": uid}), 5)
     assert resp.status_code == 401

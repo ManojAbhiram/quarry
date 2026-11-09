@@ -8,6 +8,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.core.config import settings
+from app.core.cookies import ACCESS_COOKIE, check_csrf
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -87,14 +88,26 @@ async def verify_refresh_token(token: str) -> str:
     return user_id
 
 
+def token_from_request(request: Request, credentials: Optional[HTTPAuthorizationCredentials]) -> Optional[str]:
+    """The access token for this request: the Authorization header wins, else the HttpOnly cookie (with CSRF check)."""
+    if credentials is not None and credentials.credentials:
+        return credentials.credentials
+    cookie = request.cookies.get(ACCESS_COOKIE)
+    if cookie:
+        check_csrf(request)  # cookies are sent by the browser on its own, so unsafe methods need the CSRF token
+        return cookie
+    return None
+
+
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ):
     """
-    Resolve the current user from either:
-      1. X-User-Id header set by the api-gateway after JWT validation (trusted internal path).
-      2. Bearer JWT token (direct access without the gateway, e.g. local dev / testing).
+    Resolve the current user from a JWT access token, taken from the Authorization: Bearer header (API clients,
+    tests) or the HttpOnly `quarry_access` cookie (the web app; unsafe methods also need the X-CSRF-Token header).
+
+    There is deliberately no trusted "X-User-Id" header path: any client can set that header.
     """
     from app.db.users import get_user_by_id
 
@@ -103,21 +116,13 @@ async def get_current_user(
         detail="Invalid or expired token",
     )
 
-    # ── Path 1: trusted gateway header ───────────────────────────────────────
-    x_user_id = request.headers.get("X-User-Id")
-    if x_user_id:
-        user = await get_user_by_id(x_user_id)
-        if user:
-            return user
+    token = token_from_request(request, credentials)
+    if not token:
         raise credentials_exception
-
-    # ── Path 2: direct Bearer token ───────────────────────────────────────────
-    if credentials is None:
-        raise credentials_exception
-
-    token = credentials.credentials
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") not in (None, "access"):
+            raise credentials_exception
         user_id: Optional[str] = payload.get("sub")
         if user_id is None:
             raise credentials_exception

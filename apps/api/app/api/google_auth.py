@@ -10,6 +10,7 @@ from fastapi import APIRouter, status
 from fastapi.responses import RedirectResponse
 
 from app.core.config import settings
+from app.core.cookies import set_auth_cookies
 from app.core.logger import logger
 from app.db.user_sessions import create_session
 from app.services.auth import create_access_token, create_refresh_token, hash_token, refresh_token_expiry
@@ -105,9 +106,7 @@ async def google_callback(code: str | None = None, error: str | None = None):
         expires_at=refresh_token_expiry(),
     )
 
-    redirect_url = (
-        f"{frontend_callback}"
-        f"?access_token={urllib.parse.quote(our_access_token)}"
-        f"&refresh_token={urllib.parse.quote(our_refresh_token)}"
-    )
-    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+    # Tokens travel in HttpOnly cookies, never in the URL (URLs end up in history, logs and Referer headers).
+    redirect = RedirectResponse(url=f"{frontend_callback}?login=success", status_code=status.HTTP_302_FOUND)
+    set_auth_cookies(redirect, our_access_token, our_refresh_token)
+    return redirect
