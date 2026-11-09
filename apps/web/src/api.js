@@ -217,6 +217,7 @@ export const api = {
   get: (path) => request('GET', path),
   post: (path, body) => request('POST', path, body),
   put: (path, body) => request('PUT', path, body),
+  patch: (path, body) => request('PATCH', path, body),
   delete: (path) => request('DELETE', path),
 
 
@@ -283,4 +284,5 @@ export const api = {
   removeLeadsFromList: (listId, leadIds) => request('DELETE', `/lists/${encodeURIComponent(listId)}/leads`, { lead_ids: leadIds }),
   getListsForLead: (leadId) => request('GET', `/lists/lead/${encodeURIComponent(leadId)}`),
   exportList: (listId, name = 'list', format = 'csv') => requestDownload(`/lists/${encodeURIComponent(listId)}/export?format=${format}`, `quarry_${name}.${format}`),
+  exportLeadsCsv: (source, id) => requestDownload(`/integrations/export/${source}/${encodeURIComponent(id)}.csv`, `quarry_${source}_${id}.csv`),
 }

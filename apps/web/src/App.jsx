@@ -17,6 +17,9 @@ import Profile from './pages/Profile'
 import Layout from './components/Layout'
 import LeadLists from './pages/LeadLists'
 import UiLab from './pages/UiLab'
+import Outreach from './pages/Outreach'
+import Integrations from './pages/Integrations'
+import Watch from './pages/Watch'
 import { BootScreen, ErrorBoundary, NotFound, ToastProvider } from './components/kit'
 
 function ProtectedRoute({ children }) {
@@ -59,6 +62,9 @@ function AppRoutes() {
           <Route path="request/:id" element={<RequestDetails />} />
           <Route path="profile" element={<Profile />} />
           <Route path="lead-lists" element={<LeadLists />} />
+          <Route path="outreach" element={<Outreach />} />
+          <Route path="watch" element={<Watch />} />
+          <Route path="integrations" element={<Integrations />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />

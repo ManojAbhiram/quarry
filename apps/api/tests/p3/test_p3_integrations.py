@@ -191,6 +191,9 @@ async def test_csv_export_for_request_and_list_with_ownership(api, signup):
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
     lines = r.text.lstrip("﻿").strip().splitlines()
     assert lines[0] == "title,url,email,phone,match_score,snippet" and len(lines) == 4
+    g = await api.get(f"/api/integrations/export/request/{req}.csv", headers=ha)
+    assert g.status_code == 200 and g.text == r.text
+    assert (await api.get(f"/api/integrations/export/request/{req}.csv", headers=hb)).status_code == 404
     assert (await api.post("/api/integrations/export", headers=hb, json={"source": "request", "id": req})).status_code == 404
     assert (await api.post("/api/integrations/export", headers=ha, json={"source": "list", "id": "nope"})).status_code == 404
 

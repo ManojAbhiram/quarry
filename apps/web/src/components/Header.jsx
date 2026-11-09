@@ -17,6 +17,9 @@ const NAV = [
   { to: '/lead-requests', label: 'Requests', also: '/request/' },
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/lead-lists', label: 'Lead lists' },
+  { to: '/outreach', label: 'Outreach' },
+  { to: '/watch', label: 'Watch' },
+  { to: '/integrations', label: 'Integrations' },
 ]
 
 function initialsOf(name) {

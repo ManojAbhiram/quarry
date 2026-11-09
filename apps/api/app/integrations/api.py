@@ -149,14 +149,23 @@ async def leads_for_source(user_id: str, source: str, source_id: str) -> list[di
     return await get_leads_by_ids(lst.get("lead_ids", []), user_id)
 
 
+def _csv_response(source: str, source_id: str, leads: list[dict]) -> Response:
+    data = generate_csv(LEAD_COLUMNS, [[lead.get(c) for c in LEAD_COLUMNS] for lead in leads])
+    return Response(data, media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="quarry_{source}_{source_id}.csv"'})
+
+
+@router.get("/export/{source}/{source_id}.csv")
+async def export_csv(source: Literal["request", "list"], source_id: str, user: dict = Depends(get_current_user)):
+    return _csv_response(source, source_id, await leads_for_source(_uid(user), source, source_id))
+
+
 @router.post("/export")
 async def export(body: ExportIn, user: dict = Depends(get_current_user)):
     uid = _uid(user)
     leads = await leads_for_source(uid, body.source, body.id)
     if body.destination == "csv":
-        data = generate_csv(LEAD_COLUMNS, [[lead.get(c) for c in LEAD_COLUMNS] for lead in leads])
-        return Response(data, media_type="text/csv",
-                        headers={"Content-Disposition": f'attachment; filename="quarry_{body.source}_{body.id}.csv"'})
+        return _csv_response(body.source, body.id, leads)
     if not body.webhook_id or not await _hooks.get(_id=body.webhook_id, user_id=uid):
         raise HTTPException(422, "Choose one of your webhooks")
     payload = {"source": body.source, "source_id": body.id,
@@ -166,10 +175,6 @@ async def export(body: ExportIn, user: dict = Depends(get_current_user)):
 
 
 # ------------------------------------------------------------------ public read API
-def _page(limit: int, offset: int):
-    return limit, offset
-
-
 @public_v1.get("/requests")
 async def pub_requests(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
                        key: dict = require_scope("read:requests")):
