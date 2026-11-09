@@ -1,6 +1,5 @@
 import asyncio
 import json
-import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, Response
@@ -15,15 +14,12 @@ from app.db.leads import get_lead_for_user, update_lead_fields
 from app.db.requests import get_request_by_id
 from app.db.signals import save_intent_analysis
 from app.db.users import get_user_serper_key
-from app.schemas.leads import LeadsListResponse
 from app.services.auth import bearer_scheme, get_current_user
 from app.services.serper import current_serper_key
 from app.services.leads import (
     get_decision_makers_service,
     get_leads_for_request,
     get_request_status_summary,
-    run_lead_pipeline,
-    run_pipeline_background,
 )
 from app.services.signals.orchestrator import collect_all_signals
 from app.services.export_service import (
@@ -61,7 +57,7 @@ async def _get_current_user_sse(
         if user_id is None:
             raise credentials_exception
     except JWTError:
-        raise credentials_exception
+        raise credentials_exception from None
 
     user = await get_user_by_id(user_id)
     if user is None:
@@ -184,7 +180,7 @@ async def analyze_lead_intent(
         raise HTTPException(
             status_code=500,
             detail=f"Intent analysis failed: {str(exc)}",
-        )
+        ) from exc
 
 
     try:

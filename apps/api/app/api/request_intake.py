@@ -193,7 +193,7 @@ async def parse_companies_csv_endpoint(
     try:
         text = raw.decode("utf-8-sig", errors="replace")
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not read CSV file: {exc}")
+        raise HTTPException(status_code=400, detail=f"Could not read CSV file: {exc}") from exc
 
     reader = csv.reader(io.StringIO(text))
     rows = [row for row in reader if any((cell or "").strip() for cell in row)]

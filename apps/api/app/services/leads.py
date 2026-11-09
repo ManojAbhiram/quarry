@@ -17,7 +17,6 @@ Lead generation pipeline — end-to-end flow:
 import asyncio
 import time
 import re
-from urllib.parse import urlparse
 
 import httpx
 
@@ -53,9 +52,9 @@ from app.services.llm import (
     summarize_linkedin_posts_from_serper,
 )
 from app.services.email_verification import verify_emails_batch
-from app.services.scraper import scrape_directory_links, scrape_url_with_discovery
+from app.services.scraper import scrape_directory_links
 from app.services.serper import fetch_leads_from_serper, current_serper_key
-from app.services.tech_stack import detect_technology_stacks_parallel, detect_infrastructure_profile_parallel
+from app.services.tech_stack import detect_infrastructure_profile_parallel
 
 # Limit how many _resolve_company() calls run concurrently so that a large
 # batch of companies does not fire hundreds of Serper requests simultaneously
@@ -374,7 +373,7 @@ async def _dedup_against_companies(items: list[dict]) -> list[dict]:
         seen_domains.add(domain)
         existing = await get_company_by_domain(domain)
         if existing:
-            from datetime import datetime, timezone
+            from datetime import datetime
             enriched_at = existing.get("enriched_at")
             if enriched_at:
                 age_hours = (datetime.utcnow() - enriched_at).total_seconds() / 3600
@@ -418,7 +417,7 @@ async def _scrape_and_extract(
             try:
                 from urllib.parse import urlparse as _urlparse
                 _parsed = _urlparse(url if url.startswith("http") else f"https://{url}")
-                _netloc = (_parsed.netloc or "").lstrip("www.")
+                _netloc = (_parsed.netloc or "").removeprefix("www.")
                 company_name = _netloc.split(".")[0].replace("-", " ").replace("_", " ").title()
             except Exception:
                 pass
@@ -572,7 +571,7 @@ async def _verify_lead_emails(enriched: list[dict]) -> None:
         logger.warning("Email verification batch failed: %s", exc)
         return
 
-    for lead, res in zip(to_verify, results):
+    for lead, res in zip(to_verify, results, strict=False):
         lead["email_verified"] = res.get("verified")
         lead["email_confidence"] = res.get("confidence")
         lead["email_verify_method"] = res.get("method")
@@ -1139,7 +1138,7 @@ def filter_leads_by_icp(leads: list[dict], icp_dimensions: dict | None) -> list[
         except (ValueError, TypeError):
             return 0
 
-    leads = [l for l in leads if _score(l) >= ICP_SCORE_THRESHOLD]
+    leads = [ld for ld in leads if _score(ld) >= ICP_SCORE_THRESHOLD]
 
     icp_employee_range: tuple[int, int] | None = None
     if isinstance(icp_dimensions, dict):
@@ -1194,7 +1193,6 @@ async def run_pipeline_background(
 
 async def get_leads_for_request(request_id: str, user_id) -> dict:
     from fastapi import HTTPException
-    from app.db.icp_profiles import get_icp_profile
     from app.services.competitor_service import get_competitors
     doc = await get_request_by_id(request_id, user_id)
     if not doc:

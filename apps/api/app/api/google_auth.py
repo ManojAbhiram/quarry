@@ -6,7 +6,7 @@ GOOGLE_REDIRECT_URI (default http://localhost:8000/api/auth/google/callback).
 import urllib.parse
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 from fastapi.responses import RedirectResponse
 
 from app.core.config import settings

@@ -21,7 +21,6 @@ import asyncio
 import re
 import smtplib
 import socket
-from typing import Optional
 
 import dns.resolver  # dnspython – already in pyproject.toml
 

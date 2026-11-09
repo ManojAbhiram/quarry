@@ -4,8 +4,7 @@ Detects cloud providers, email services, and infrastructure patterns via DNS and
 """
 
 import logging
-import asyncio
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 # from wapalyzer import Wappalyzer, WebPage
 
@@ -28,7 +27,6 @@ except ImportError:
 try:
     import ssl
     import socket
-    from datetime import datetime
     SSL_AVAILABLE = True
 except ImportError:
     SSL_AVAILABLE = False

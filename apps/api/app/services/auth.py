@@ -8,7 +8,6 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.core.config import settings
-from app.core.logger import logger
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -66,7 +65,7 @@ async def verify_password_reset_token(token: str) -> str:
         if user_id is None:
             raise exc
     except JWTError:
-        raise exc
+        raise exc from None
     return user_id
 
 
@@ -84,7 +83,7 @@ async def verify_refresh_token(token: str) -> str:
         if user_id is None:
             raise credentials_exception
     except JWTError:
-        raise credentials_exception
+        raise credentials_exception from None
     return user_id
 
 
@@ -123,7 +122,7 @@ async def get_current_user(
         if user_id is None:
             raise credentials_exception
     except JWTError:
-        raise credentials_exception
+        raise credentials_exception from None
 
     user = await get_user_by_id(user_id)
     if user is None:

@@ -19,7 +19,7 @@ Score decay:
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from app.core.scoring_config import (
     CONFIDENCE_MULTIPLIERS,
@@ -159,7 +159,6 @@ def compute_intent_score(
     }
 
     for pillar in ("tech", "intent", "engagement"):
-        total = sum(s.get("weight", 0) for s in category_signals[pillar])
 
         weighted = 0.0
         for s in category_signals[pillar]:

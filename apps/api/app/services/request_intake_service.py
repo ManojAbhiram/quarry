@@ -23,7 +23,6 @@ from app.db.product_intake import upsert_product_intake
 from app.schemas.request_intake import (
     RequestIntakeCreate,
     ConsistencyCheckResponse,
-    StructuredICP,
 )
 from app.services.llm import (
     check_icp_consistency,
@@ -118,7 +117,7 @@ async def analyze_sources(
 
     if files:
         file_texts = await asyncio.gather(*[_text_from_file(f) for f in files])
-        for file, text in zip(files, file_texts):
+        for file, text in zip(files, file_texts, strict=False):
             if text:
                 chunks.append(f"\n\n--- Content from {file.filename} ---\n{text}")
 
@@ -129,7 +128,7 @@ async def analyze_sources(
                 *[scrape_url_with_discovery(u) for u in url_list],
                 return_exceptions=True,
             )
-            for url, result in zip(url_list, results):
+            for url, result in zip(url_list, results, strict=False):
                 if isinstance(result, Exception):
                     logger.error("Scrape failed for %s: %s", url, result)
                     continue

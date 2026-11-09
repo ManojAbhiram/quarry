@@ -58,7 +58,7 @@ def _unwrap_json(text: str) -> str:
                 continue
     
     # Fallback: return as-is and let the caller handle invalid JSON
-    logger.warning(f"[_unwrap_json] Could not extract JSON from text. Returning original.")
+    logger.warning("[_unwrap_json] Could not extract JSON from text. Returning original.")
     return text
 
 
