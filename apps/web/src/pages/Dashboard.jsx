@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import UsageCard from '../components/UsageCard'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, CheckCircle2, Clock, FileText, FileSearch, Sparkles, Target, TrendingUp, Users, XCircle, Zap } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -225,6 +226,7 @@ export default function Dashboard() {
                 )}
               </div>
             </section>
+            <div data-reveal className="lg:col-span-2"><UsageCard /></div>
           </div>
         </>
       )}

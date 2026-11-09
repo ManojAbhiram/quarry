@@ -17,6 +17,9 @@ import Profile from './pages/Profile'
 import Layout from './components/Layout'
 import LeadLists from './pages/LeadLists'
 import UiLab from './pages/UiLab'
+import Compliance from './pages/Compliance'
+import Privacy from './pages/Privacy'
+import OptOut from './pages/OptOut'
 import { BootScreen, ErrorBoundary, NotFound, ToastProvider } from './components/kit'
 
 function ProtectedRoute({ children }) {
@@ -40,6 +43,8 @@ function AppRoutes() {
         <Route path="/forgot-password" element={user ? <Navigate to="/lead-requests" replace /> : <ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         {import.meta.env.DEV && <Route path="/ui-lab" element={<UiLab />} />}
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/opt-out" element={<OptOut />} />
         <Route path="/auth/google/callback" element={<GoogleCallback />} />
 
         <Route
@@ -59,6 +64,7 @@ function AppRoutes() {
           <Route path="request/:id" element={<RequestDetails />} />
           <Route path="profile" element={<Profile />} />
           <Route path="lead-lists" element={<LeadLists />} />
+          <Route path="compliance" element={<Compliance />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />

@@ -5,7 +5,8 @@ import { api } from '../../api'
 import { decorateDecisionMakerContacts } from '../../utils/decisionMakers'
 import { Button, EmptyState, ErrorState } from '../../components/kit'
 import { leadKey, matchScore, PAGE_SIZE, pageSlice } from './leadHelpers'
-import { Dash, ExtLink, ScoreBar, SearchInput, SelectFilter, Tag } from './ui'
+import { Dash, EmailStatusBadge, ExtLink, ScoreBar, SearchInput, SelectFilter, Tag } from './ui'
+import Provenance from '../../components/Provenance'
 import ExportMenu from './ExportMenu'
 
 const SENIORITY = {
@@ -168,6 +169,12 @@ export default function DecisionMakersPanel({ leads, dmDataMap, dmLoading, dmErr
                             {email ? <a href={`mailto:${email}`} className="break-all text-primary-700 hover:underline dark:text-primary-300">{email}</a> : <span className="text-muted">No email</span>}
                             <ExtLink href={c.linkedin_url}>LinkedIn</ExtLink>
                           </p>
+                          {email && (
+                            <p className="mt-1 flex flex-wrap items-center gap-1">
+                              <EmailStatusBadge lead={{ ...c, email }} showDate />
+                              <Provenance provenance={c.provenance} field="email" label={`${c.name}'s email`} />
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2"><Tag>{c.persona_label || 'Influencer'}</Tag><span className="text-xs text-muted">{c.confidence_label} confidence</span></div>
                         <ScoreBar value={c.relevance_score ?? 0} label="Relevance" />

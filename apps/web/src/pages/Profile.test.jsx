@@ -1,18 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { ToastProvider } from '../components/kit'
 
 const auth = {}
 vi.mock('../context/AuthContext', () => ({ useAuth: () => auth }))
 vi.mock('../api', () => ({
-  api: { getSerperKey: vi.fn(), setSerperKey: vi.fn(), deleteSerperKey: vi.fn(), put: vi.fn(), post: vi.fn(), delete: vi.fn() },
+  api: { getSerperKey: vi.fn(), getUsageSummary: vi.fn(() => new Promise(() => {})), getVerifierSettings: vi.fn(() => new Promise(() => {})), setSerperKey: vi.fn(), deleteSerperKey: vi.fn(), put: vi.fn(), post: vi.fn(), delete: vi.fn() },
 }))
 
 import { api } from '../api'
 import Profile from './Profile'
 
-const setup = () => render(<ToastProvider><Profile /></ToastProvider>)
+const setup = () => render(<MemoryRouter><ToastProvider><Profile /></ToastProvider></MemoryRouter>)
 
 describe('Profile', () => {
   beforeEach(() => {
