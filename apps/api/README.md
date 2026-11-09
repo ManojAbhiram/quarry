@@ -60,6 +60,32 @@ Retries use exponential backoff (`JOB_BACKOFF_BASE_SECONDS`, capped by `JOB_BACK
 `max_attempts`. Pipeline jobs get two attempts (one automatic resume). If the queue cannot be written to, launching a
 run falls back to in-process `BackgroundTasks` (the run then does not survive a restart).
 
+## Schema migrations
+
+`create_all` never alters an existing table, so schema changes go through a small versioned runner
+(`app/db/migrations.py`). It runs at startup inside `connect_db()`, before the app serves requests, applies pending
+migrations in one transaction (a failure rolls back) and records them in the `schema_migrations` table. It is
+idempotent. Version 1 is the baseline (`create_all`), so databases created by older code are adopted without data loss.
+
+To change the schema:
+
+1. Edit the model (add the column, or the new table class) as usual.
+2. Append a migration with the next consecutive version to `MIGRATIONS` in `app/db/migrations.py`:
+
+   ```python
+   def _add_lead_note(conn):
+       add_column(conn, "leads", "note", "VARCHAR")          # idempotent ALTER TABLE ADD COLUMN
+       # create_tables(conn, "my_new_table")                  # for a brand new table
+
+   MIGRATIONS.append(Migration(2, "add leads.note", _add_lead_note))
+   ```
+3. Add a test next to `tests/db/test_migrations.py`. `test_table_names_unique_across_modules` asserts every
+   `__tablename__` is unique across feature modules; startup logs a `Schema drift` warning when a model column is
+   missing in the database, which means step 2 was forgotten.
+
+Never edit or reorder a released migration; add a new one. Keep documents in the JSON `data` column when possible:
+only fields used for filtering, sorting or uniqueness need real columns (and therefore migrations).
+
 ## Main endpoints
 
 | Area | Endpoints |
