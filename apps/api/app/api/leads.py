@@ -272,7 +272,7 @@ async def export_companies(
     from app.services.leads import get_leads_for_request
     leads_data = await get_leads_for_request(request_id, str(current_user["_id"]))
     matcher = await matcher_for(str(current_user["_id"]))
-    leads = [l for l in leads_data.get("leads", []) if not lead_is_suppressed(matcher, l)]
+    leads = [lead for lead in leads_data.get("leads", []) if not lead_is_suppressed(matcher, lead)]
 
     if format == "pdf":
         pdf_data = generate_companies_pdf(leads)

@@ -24,6 +24,7 @@ class UsageEvent(_Doc, Base):
     __tablename__ = "usage_events"
     user_id: Mapped[str | None] = _s()
     kind: Mapped[str | None] = _s()
+    request_id: Mapped[str | None] = _s()
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     __table_args__ = (Index("ix_usage_user_created", "user_id", "created_at"),)

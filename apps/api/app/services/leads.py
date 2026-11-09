@@ -54,6 +54,7 @@ from app.services.llm import (
 )
 from app.services.email_verification import verify_emails_batch
 from app.verification import VerifierConfig
+from app import usage
 from app.verification.service import current_verifier
 from app.services.scraper import scrape_directory_links, scrape_url_with_discovery
 from app.services.serper import fetch_leads_from_serper, current_serper_key
@@ -1115,7 +1116,8 @@ async def run_direct_companies_background(
     try:
         if serper_api_key:
             current_serper_key.set(serper_api_key)
-        await run_direct_companies_pipeline(request_id, companies, target_roles, user_id)
+        async with usage.tracked(user_id, request_id):
+            await run_direct_companies_pipeline(request_id, companies, target_roles, user_id)
     except BaseException as exc:  # catches asyncio.CancelledError too
         logger.error("Direct-companies pipeline failed for request %s: %s", request_id, exc, exc_info=True)
         try:
@@ -1195,7 +1197,8 @@ async def run_pipeline_background(
             current_serper_key.set(serper_api_key)
         data_dict["user_id"] = user_id
         await _load_verifier(user_id)
-        await run_lead_pipeline(request_id, data_dict)
+        async with usage.tracked(user_id, request_id):
+            await run_lead_pipeline(request_id, data_dict)
     except BaseException as exc:  # catches asyncio.CancelledError too
         logger.error("Pipeline failed for request %s: %s", request_id, exc, exc_info=True)
         try:

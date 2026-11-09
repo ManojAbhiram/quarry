@@ -9,6 +9,7 @@ from litellm import acompletion
 from app.schemas.leads import SearchQueryList
 from app.schemas.request_intake import ConsistencyCheckResponse, StructuredICP
 from app.core.config import settings
+from app import usage
 
 logger = logging.getLogger("app.services.llm")
 
@@ -163,6 +164,7 @@ async def _llm_json_completion(
         response = None
         content = ""
 
+        usage.count("llm")
         async with _LLM_SEM:
             try:
                 response = await acompletion(
@@ -251,6 +253,7 @@ async def _llm_text_completion(
             if m != model
         ]
 
+        usage.count("llm")
         async with _LLM_SEM:
             response = await acompletion(
                 model=model,
