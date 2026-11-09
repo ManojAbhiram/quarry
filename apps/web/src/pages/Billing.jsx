@@ -136,7 +136,7 @@ export default function Billing() {
                   <div className="rounded-xl border border-line p-4">
                     <dt className="flex items-center gap-2 text-sm font-semibold text-ink"><Mail aria-hidden="true" className="h-4 w-4 text-primary-600" />{summary.enrichment_credits.label || 'Email lookup credits'}</dt>
                     <dd aria-label="Email lookup credit balance" className="mt-1 text-3xl font-black tabular-nums text-ink">{summary.enrichment_credits.balance}</dd>
-                    <dd className="mt-1 text-xs text-muted">Yours alone, not shared with the organization. Spent only on hits that use the platform's provider keys.</dd>
+                    <dd className="mt-1 text-xs text-muted">Yours alone, not shared with the organization. Spent only on hits that use the platform&apos;s provider keys.</dd>
                   </div>
                 )}
               </dl>

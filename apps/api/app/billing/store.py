@@ -2,12 +2,15 @@
 
 A billing "scope" is the id that owns a plan: an organization id, or `user:<id>` for a personal workspace.
 """
+import uuid
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.billing.plans import REQUEST_CREDIT_COST, Plan, get_plan
+from app.db import engine as _engine
 from app.db.growth_models import CreditEntry, Invoice
 from app.db.models import TABLES
 
@@ -101,19 +104,31 @@ class QuotaExceeded(Exception):
 
 
 async def consume_request_quota(scope_id: str) -> dict:
-    """Check plan limits and debit the ledger for one new lead request. Raises QuotaExceeded when over a limit."""
+    """Check plan limits and debit the ledger for one new lead request. Raises QuotaExceeded when over a limit.
+
+    The usage check, the balance check and the debit happen inside ONE write transaction. A write session holds the
+    process-wide write lock for the whole block (and SQLite takes BEGIN IMMEDIATE), so two concurrent requests are
+    serialised: the second sees the first one's debit and cannot overshoot the monthly limit or the balance.
+    """
     plan = await get_plan_for_scope(scope_id)
-    await ensure_period_grant(scope_id, plan)
-    usage = await usage_this_period(scope_id)
-    if usage["requests_created"] >= plan.requests_per_month:
-        raise QuotaExceeded(
-            "request_limit",
-            f"The {plan.name} plan allows {plan.requests_per_month} lead requests per month. Upgrade to create more.",
-        )
-    if await credit_balance(scope_id) < REQUEST_CREDIT_COST:
-        raise QuotaExceeded("insufficient_credits", "Not enough credits left this month. Upgrade your plan for more.")
-    await debit_credits(scope_id, REQUEST_CREDIT_COST, "request_created", note="Lead request created")
-    return {"plan": plan.id, "requests_created": usage["requests_created"] + 1}
+    await ensure_period_grant(scope_id, plan)  # idempotent; kept outside so a refusal below never rolls it back
+    start = period_start()
+    async with _engine.session() as s, s.begin():
+        rows = (await s.execute(select(CreditEntry).where(CreditEntry.scope_id == scope_id))).scalars().all()
+        balance = sum(int((r.data or {}).get("amount", 0)) for r in rows)
+        created = sum(1 for r in rows if r.kind == "request_created" and r.created_at and r.created_at >= start)
+        if created >= plan.requests_per_month:
+            raise QuotaExceeded(
+                "request_limit",
+                f"The {plan.name} plan allows {plan.requests_per_month} lead requests per month. Upgrade to create more.",
+            )
+        if balance < REQUEST_CREDIT_COST:
+            raise QuotaExceeded("insufficient_credits", "Not enough credits left this month. Upgrade your plan for more.")
+        s.add(CreditEntry(
+            id=str(uuid.uuid4()), scope_id=scope_id, kind="request_created", created_at=datetime.utcnow(),
+            data={"amount": -REQUEST_CREDIT_COST, "note": "Lead request created"},
+        ))
+    return {"plan": plan.id, "requests_created": created + 1}
 
 
 # -- invoices ---------------------------------------------------------------------------------------------------

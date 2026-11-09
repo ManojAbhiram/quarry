@@ -244,12 +244,13 @@ describe('Integrations', () => {
             : { counts: { synced: 0, failed: 0, not_synced: 2 }, leads: [{ lead_id: 'a', status: 'not_synced' }, { lead_id: 'b', status: 'not_synced' }] },
         )
       }
+      if (p === '/jobs/j1') return Promise.resolve({ status: 'succeeded', result: { summary: { synced: 1, failed: 1, skipped: 0 } } })
       if (p === '/hooks') return Promise.resolve({ hooks: [] })
       return Promise.reject(new Error('unexpected ' + p))
     })
     api.post.mockImplementation(() => {
       synced = true
-      return Promise.resolve({ summary: { synced: 1, failed: 1, skipped: 0 }, results: [] })
+      return Promise.resolve({ job_id: 'j1', status: 'queued', total: 2 })
     })
     const user = userEvent.setup()
     wrap(<Integrations />)
@@ -260,8 +261,35 @@ describe('Integrations', () => {
     expect(await screen.findByText('Acme')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Push to HubSpot' }))
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/integrations/hubspot/push', { list_id: 'l1', only_failed: false }))
-    expect(await screen.findByText('HubSpot is unavailable (will work on retry)')).toBeInTheDocument()
+    expect(await screen.findByText('Push started. Leads update below as they sync.')).toBeInTheDocument()
+    expect(await screen.findByText('HubSpot is unavailable (will work on retry)', {}, { timeout: 5000 })).toBeInTheDocument()
+    expect(await screen.findByText('1 synced, 1 failed. See details below.', {}, { timeout: 5000 })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Retry failed/ })).toBeInTheDocument()
+  })
+
+  it('shows leads as in progress while a push runs and resumes polling on reload', async () => {
+    const connected = { ...base, integrations: [{ provider: 'hubspot', connected: true, auth_type: 'private_app', info: { portal_id: 7 } }] }
+    let polls = 0
+    api.get.mockImplementation((p) => {
+      if (p === '/integrations') return Promise.resolve(connected)
+      if (p === '/integrations/hubspot/mapping') return Promise.resolve({ mapping: { company: { name: 'name' }, contact: { email: 'email' } } })
+      if (p === '/lists') return Promise.resolve({ lists: [{ _id: 'l1', name: 'Hot', lead_ids: ['a'] }] })
+      if (p === '/lists/l1') return Promise.resolve({ leads: [{ id: 'a', title: 'Acme' }] })
+      if (p.startsWith('/integrations/hubspot/sync')) {
+        polls += 1
+        return Promise.resolve(polls < 2
+          ? { counts: { synced: 0, failed: 0, not_synced: 0, in_progress: 1 }, leads: [{ lead_id: 'a', status: 'syncing' }] }
+          : { counts: { synced: 1, failed: 0, not_synced: 0, in_progress: 0 }, leads: [{ lead_id: 'a', status: 'synced' }] })
+      }
+      if (p === '/hooks') return Promise.resolve({ hooks: [] })
+      return Promise.reject(new Error('unexpected ' + p))
+    })
+    const user = userEvent.setup()
+    wrap(<Integrations />)
+    await user.selectOptions(await screen.findByLabelText('Lead list'), 'l1')
+    expect(await screen.findByText('Syncing')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Push to HubSpot' })).toBeDisabled()
+    expect(await screen.findByText('Synced', {}, { timeout: 5000 })).toBeInTheDocument()
   })
 
   it('shows an error with retry', async () => {

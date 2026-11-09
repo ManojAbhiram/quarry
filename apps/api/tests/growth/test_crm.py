@@ -217,25 +217,39 @@ async def test_connect_requires_plan_and_valid_token(api, signup, monkeypatch):
     assert (await api.put("/api/integrations/hubspot/token", json={"access_token": "abcdefghij"}, headers=h)).status_code == 400
 
 
+async def _push(api, headers, body):
+    """Enqueue a push (HTTP returns at once), run the queued job, and return its summary."""
+    from app import jobs
+    from app.crm import jobs as crm_jobs
+
+    crm_jobs.register_handlers()
+    r = await api.post("/api/integrations/hubspot/push", json=body, headers=headers)
+    assert r.status_code == 202, r.text
+    assert r.json()["status"] == "queued" and r.json()["job_id"]
+    await jobs.run_pending_once()
+    job = (await api.get(f"/api/jobs/{r.json()['job_id']}", headers=headers)).json()
+    assert job["status"] == "succeeded", job
+    return job["result"]
+
+
 async def test_push_list_syncs_dedupes_by_domain_and_reports_status(api, signup, monkeypatch):
     h, uid, lst, lead_ids = await _setup(api, signup, "crm3@x.com")
     await service.save_connection(f"user:{uid}", "hubspot", access_token="t", refresh_token=None, auth_type="private_app", info={})
     fake = FakeCrm()
     monkeypatch.setitem(service.CONNECTOR_FACTORIES, "hubspot", lambda conn: fake)
 
-    r = await api.post("/api/integrations/hubspot/push", json={"list_id": lst}, headers=h)
-    assert r.status_code == 200, r.text
-    assert r.json()["summary"] == {"synced": 3, "failed": 1, "skipped": 0}
+    r = await _push(api, h, {"list_id": lst})
+    assert r["summary"] == {"synced": 3, "failed": 1, "skipped": 0}
     assert sorted(fake.companies) == ["a.com", "b.com"]  # a.com and www.a.com collapsed into one company
     assert set(fake.contacts) == {"x@a.com", "y@a.com"}
 
     st = (await api.get(f"/api/integrations/hubspot/sync?list_id={lst}", headers=h)).json()
-    assert st["counts"] == {"synced": 3, "failed": 1, "not_synced": 0}
+    assert st["counts"] == {"synced": 3, "failed": 1, "not_synced": 0, "in_progress": 0}
     failed = [x for x in st["leads"] if x["status"] == "failed"][0]
     assert "no website domain" in failed["error"]
 
-    again = await api.post("/api/integrations/hubspot/push", json={"list_id": lst, "only_failed": True}, headers=h)
-    assert again.json()["summary"] == {"synced": 0, "failed": 1, "skipped": 3}
+    again = await _push(api, h, {"list_id": lst, "only_failed": True})
+    assert again["summary"] == {"synced": 0, "failed": 1, "skipped": 3}
 
 
 async def test_failed_lead_is_recorded_and_retried_later(api, signup, monkeypatch):
@@ -243,12 +257,12 @@ async def test_failed_lead_is_recorded_and_retried_later(api, signup, monkeypatc
     await service.save_connection(f"user:{uid}", "hubspot", access_token="t", refresh_token=None, auth_type="private_app", info={})
     fake = FakeCrm(fail_domains={"b.com"})
     monkeypatch.setitem(service.CONNECTOR_FACTORIES, "hubspot", lambda conn: fake)
-    first = (await api.post("/api/integrations/hubspot/push", json={"list_id": lst}, headers=h)).json()
+    first = await _push(api, h, {"list_id": lst})
     assert first["summary"]["synced"] == 2 and first["summary"]["failed"] == 2  # b.com + the site-less lead
     st = (await api.get(f"/api/integrations/hubspot/sync?list_id={lst}", headers=h)).json()
     assert any(x["error"] == "boom" and x["retryable"] for x in st["leads"])
     fake.fail_domains.clear()
-    second = (await api.post("/api/integrations/hubspot/push", json={"list_id": lst, "only_failed": True}, headers=h)).json()
+    second = await _push(api, h, {"list_id": lst, "only_failed": True})
     assert second["summary"]["synced"] == 1
     rows = await service.sync_rows((await service.get_connection(f"user:{uid}", "hubspot"))["_id"])
     assert max(r["attempts"] for r in rows.values()) == 2
@@ -288,7 +302,7 @@ async def test_org_viewer_cannot_push_and_org_data_is_isolated(api, signup, monk
     monkeypatch.setitem(service.CONNECTOR_FACTORIES, "hubspot", lambda conn: FakeCrm())
     ws = {"X-Org-Id": org}
     assert (await api.post("/api/integrations/hubspot/push", json={"list_id": lst}, headers={**vh, **ws})).status_code == 403
-    assert (await api.post("/api/integrations/hubspot/push", json={"list_id": lst}, headers={**oh, **ws})).status_code == 200
+    assert (await api.post("/api/integrations/hubspot/push", json={"list_id": lst}, headers={**oh, **ws})).status_code == 202
     assert (await api.get("/api/integrations/hubspot/mapping", headers={**vh, **ws})).status_code == 200  # viewers may look
     assert (await api.put("/api/integrations/hubspot/mapping", json={}, headers={**vh, **ws})).status_code == 403
     # a stranger cannot reach the org's integrations at all
@@ -397,7 +411,7 @@ async def test_oauth_callback_checks_state_and_exchanges_code(api, signup, monke
     real_client = httpx.AsyncClient
 
     def handler(req: httpx.Request):
-        return httpx.Response(200, json={"access_token": "at", "refresh_token": "rt"})
+        return httpx.Response(200, json={"access_token": "access-secret-AT1", "refresh_token": "refresh-secret-RT1"})
 
     monkeypatch.setattr("app.api.integrations.httpx.AsyncClient", lambda **kw: real_client(transport=httpx.MockTransport(handler)))
 
@@ -408,4 +422,4 @@ async def test_oauth_callback_checks_state_and_exchanges_code(api, signup, monke
     r = await api.post("/api/integrations/hubspot/oauth/callback", json={"code": "abc", "state": url["state"]}, headers=h)
     assert r.status_code == 200 and r.json()["auth_type"] == "oauth"
     conn = await service.get_connection(f"user:{uid}", "hubspot")
-    assert conn["refresh_enc"] and "rt" not in conn["refresh_enc"]
+    assert conn["refresh_enc"] and "refresh-secret-RT1" not in conn["refresh_enc"]

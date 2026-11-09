@@ -60,6 +60,19 @@ Retries use exponential backoff (`JOB_BACKOFF_BASE_SECONDS`, capped by `JOB_BACK
 `max_attempts`. Pipeline jobs get two attempts (one automatic resume). If the queue cannot be written to, launching a
 run falls back to in-process `BackgroundTasks` (the run then does not survive a restart).
 
+## Billing, credits and CRM pushes
+
+* Two separate credit balances, labelled as such in the API and UI: **request credits** (billing ledger, per
+  workspace; granted monthly by the plan and by top-ups; one is spent per lead request) and **email lookup credits**
+  (per user; spent on Hunter/Snov/PDL hits). `GET /api/billing/summary` returns both.
+* `GET/POST /api/billing/topup` sells credit packs through the `PaymentProvider` interface (owners and admins). The
+  `mock` provider (`PAYMENT_PROVIDER=mock`, local demos only) credits instantly; Stripe creates a hosted checkout and
+  credits when the paid `checkout.session.completed` webhook arrives (idempotent per event).
+* The request quota check and credit debit run in one write transaction, so concurrent requests cannot overshoot.
+* `POST /api/integrations/hubspot/push` returns `202` with a `job_id` and runs on the job queue (`kind=crm.push`).
+  Poll `GET /api/jobs/{id}` and `GET /api/integrations/hubspot/sync?list_id=` (per-lead `queued`/`syncing`/`synced`/`failed`,
+  plus `counts.in_progress`).
+
 ## Schema migrations
 
 `create_all` never alters an existing table, so schema changes go through a small versioned runner

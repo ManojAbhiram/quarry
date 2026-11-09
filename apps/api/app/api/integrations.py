@@ -14,12 +14,11 @@ from app.billing.store import get_plan_for_scope
 from app.core.config import settings
 from app.core.url_guard import UnsafeURLError, check_url
 from app.crm import hooks, service
+from app.crm import jobs as crm_jobs
 from app.crm.base import CrmError
 from app.crm.hubspot import AUTHORIZE_URL, OAUTH_SCOPES, TOKEN_URL, HubSpotConnector
 from app.crm.mapping import COMPANY_FIELDS, CONTACT_FIELDS, DEFAULT_MAPPING, MappingError
-from app.db.decision_makers import get_decision_makers_for_lead
 from app.db.lead_lists import _attach_lead_ids
-from app.db.leads import get_leads_by_ids
 from app.db.models import TABLES
 from app.teams import store as teams
 from app.teams.deps import Workspace, get_workspace, workspace_role
@@ -173,22 +172,22 @@ async def _readable_list(ws: Workspace, list_id: str) -> dict:
     return (await _attach_lead_ids([doc]))[0]
 
 
-@router.post("/hubspot/push")
+@router.post("/hubspot/push", status_code=202)
 async def push(body: PushBody, ws: Workspace = Depends(workspace_role("member"))):
+    """Queue a background push of the list and return at once. Poll GET /jobs/{job_id} and /hubspot/sync for progress.
+
+    A push already queued or running for the same list is joined rather than started twice.
+    """
     conn = await _connection(ws)
     lst = await _readable_list(ws, body.list_id)
     lead_ids = lst["lead_ids"]
     if not lead_ids:
-        return {"summary": {"synced": 0, "failed": 0, "skipped": 0}, "results": []}
-    leads = await get_leads_by_ids(lead_ids, None)
-    dms = {x["_id"]: await get_decision_makers_for_lead(x["_id"]) for x in leads}
-    connector = service.make_connector(conn)
-    try:
-        return await service.push_leads(conn, connector, leads, dms, only_failed=body.only_failed)
-    finally:
-        close = getattr(connector, "aclose", None)
-        if close:
-            await close()
+        return {"job_id": None, "status": "succeeded", "total": 0, "summary": {"synced": 0, "failed": 0, "skipped": 0}}
+    queued = await crm_jobs.enqueue_push(
+        conn=conn, scope_id=ws.scope_id, list_id=body.list_id, lead_ids=lead_ids, only_failed=body.only_failed,
+        user_id=str(ws.user["_id"]),
+    )
+    return {"job_id": queued["job_id"], "status": "queued", "total": len(lead_ids), "joined": queued["joined"]}
 
 
 @router.get("/hubspot/sync")
@@ -205,6 +204,7 @@ async def sync_status(list_id: str = Query(...), ws: Workspace = Depends(get_wor
             "last_attempt_at": r["last_attempt_at"].isoformat() if r and r.get("last_attempt_at") else None,
         })
     counts = {s: sum(1 for x in out if x["status"] == s) for s in ("synced", "failed", "not_synced")}
+    counts["in_progress"] = sum(1 for x in out if x["status"] in service.IN_PROGRESS)
     return {"list_id": list_id, "counts": counts, "leads": out}
 
 
