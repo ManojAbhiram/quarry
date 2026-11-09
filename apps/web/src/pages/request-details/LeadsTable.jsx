@@ -4,7 +4,7 @@ import { ChevronRight } from 'lucide-react'
 import { IntentScoreBadge } from '../../components/intent/IntentPanel'
 import { contactOf, leadKey, matchScore } from './leadHelpers'
 import CompanyLogo from '../../components/CompanyLogo'
-import { Dash, EmailStatusBadge, ExtLink, ScoreBar } from './ui'
+import { Dash, EmailStatusBadge, EnrichmentFailedBadge, ExtLink, ScoreBar } from './ui'
 import LeadActionsMenu, { FlagTags } from './LeadActions'
 
 const LONG_EXPLANATION = 70
@@ -90,6 +90,7 @@ export default function LeadsTable({ leads, selected, onToggleSelect, onToggleAl
                     {name}
                   </button>
                   <p className="text-xs text-muted break-words">{[lead.industry, lead.location].filter(Boolean).join(' · ') || 'No industry or location'}</p>
+                  <EnrichmentFailedBadge lead={lead} className="mt-1" />
                 </div>
                 <LeadActionsMenu name={name} flags={flags} onToggle={(kind) => onToggleFlag(name, kind)} leadIds={[lead._id || lead.id]} />
               </div>
@@ -149,6 +150,7 @@ export default function LeadsTable({ leads, selected, onToggleSelect, onToggleAl
                           {name}
                         </button>
                         <p className="text-xs text-muted break-words">{[lead.industry, lead.location].filter(Boolean).join(' · ')}</p>
+                        <EnrichmentFailedBadge lead={lead} className="mt-1" />
                         <Explanation text={lead.match_explanation} />
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                           <ExtLink href={lead.url}>Website</ExtLink>

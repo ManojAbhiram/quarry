@@ -106,6 +106,21 @@ export function EmailStatusBadge({ lead, className }) {
   )
 }
 
+/** Marks a lead whose AI enrichment failed, so its blank fields are explained rather than looking like missing data. */
+export function EnrichmentFailedBadge({ lead, className }) {
+  if (!lead?.enrichment_failed) return null
+  return (
+    <span
+      title={lead.enrichment_failure_reason || 'The AI step failed for this company.'}
+      data-enrichment-failed=""
+      className={clsx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ring-current/15', TONES.warn, className)}
+    >
+      <AlertTriangle aria-hidden="true" className="h-3 w-3" />
+      Enrichment failed
+    </span>
+  )
+}
+
 /** A number with a gradient bar that grows in once when it appears. `value` is 0 to 100. */
 export const ScoreBar = memo(function ScoreBar({ value, label = 'Match score', className }) {
   const reduce = useReducedMotion()

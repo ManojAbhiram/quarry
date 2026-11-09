@@ -1,13 +1,53 @@
 import { API_BASE, STORAGE_KEYS } from './config/constants'
+import { hasSession, markSession, clearSession } from './session'
 
 const BASE = API_BASE
 
-function getToken() {
-  return localStorage.getItem(STORAGE_KEYS.TOKEN)
+function clearLegacyTokens() {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.LEGACY_TOKEN)
+    localStorage.removeItem(STORAGE_KEYS.LEGACY_REFRESH_TOKEN)
+  } catch {
+    /* ignore */
+  }
 }
 
-function getRefreshToken() {
-  return localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)
+/**
+ * Auth model: the API sets HttpOnly cookies (access + refresh) on login, so no token is ever readable by, or stored
+ * in, page JavaScript. The only thing kept in localStorage is a non-secret "a session probably exists" hint, used to
+ * decide whether to ask the server who we are. Unsafe requests echo the readable CSRF cookie in `X-CSRF-Token`
+ * (double-submit); the server rejects cookie-authenticated writes without it.
+ */
+const CSRF_COOKIE = 'quarry_csrf'
+const CSRF_HEADER = 'X-CSRF-Token'
+const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS']
+const AUTH_PATHS = ['/auth/refresh', '/auth/login', '/auth/register', '/auth/logout', '/auth/csrf']
+// These do not act on an existing cookie session, so the server does not ask for a CSRF token.
+const NO_CSRF_PATHS = ['/auth/login', '/auth/register', '/auth/logout']
+
+// One-time cleanup of tokens stored by older versions.
+clearLegacyTokens()
+
+function readCookie(name) {
+  if (typeof document === 'undefined') return null
+  const hit = document.cookie.split('; ').find((c) => c.startsWith(`${name}=`))
+  return hit ? decodeURIComponent(hit.slice(name.length + 1)) : null
+}
+
+let csrfFallback = null
+
+/** The CSRF token: from the readable cookie, else (cross-site deployments) from the API once and cached. */
+async function getCsrfToken() {
+  const fromCookie = readCookie(CSRF_COOKIE)
+  if (fromCookie) return fromCookie
+  if (csrfFallback) return csrfFallback
+  try {
+    const res = await fetch(`${BASE}/auth/csrf`, { credentials: 'include' })
+    if (res.ok) csrfFallback = (await res.json()).csrf_token || null
+  } catch {
+    /* the write will fail with a clear 403 if the token was really needed */
+  }
+  return csrfFallback
 }
 
 /** An Error that carries the HTTP status, so callers can tell "the server said no" from "the server is down". */
@@ -24,179 +64,98 @@ async function send(url, init) {
   }
 }
 
-let isRefreshing = false
-let refreshQueue = []
-
-function drainQueue(error, token) {
-  refreshQueue.forEach((cb) => cb(error, token))
-  refreshQueue = []
-}
+let refreshPromise = null
 
 async function doRefresh() {
-  const refreshToken = getRefreshToken()
-  if (!refreshToken) throw httpError('No refresh token', 401)
+  if (!hasSession()) throw httpError('Not signed in', 401)
 
-  const res = await send(`${BASE}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  })
+  const headers = {}
+  const csrf = await getCsrfToken()
+  if (csrf) headers[CSRF_HEADER] = csrf
+  const res = await send(`${BASE}/auth/refresh`, { method: 'POST', headers, credentials: 'include' })
 
   if (!res.ok) {
-    localStorage.removeItem(STORAGE_KEYS.TOKEN)
-    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
+    csrfFallback = null
+    clearSession()
     throw httpError('Session expired', 401)
   }
+  csrfFallback = null // the server issued a fresh CSRF token with the new session
+  markSession()
+}
 
-  const data = await res.json()
-  localStorage.setItem(STORAGE_KEYS.TOKEN, data.access_token)
-  localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token)
-  return data.access_token
+/** Refresh the session once, however many requests hit a 401 at the same time. */
+function refreshSession() {
+  if (!refreshPromise) {
+    refreshPromise = doRefresh()
+      .catch((err) => {
+        // A refresh that failed only because the network is down must not sign the user out.
+        if (!err.isNetworkError) window.dispatchEvent(new Event('auth:logout'))
+        throw err
+      })
+      .finally(() => {
+        refreshPromise = null
+      })
+  }
+  return refreshPromise
+}
+
+/** Send an authenticated request (cookies + CSRF); on a 401 refresh the session once and retry. */
+async function authedFetch(path, { method = 'GET', headers = {}, body } = {}) {
+  const attempt = async () => {
+    const h = { ...headers }
+    if (!SAFE_METHODS.includes(method) && !NO_CSRF_PATHS.includes(path)) {
+      const csrf = await getCsrfToken()
+      if (csrf) h[CSRF_HEADER] = csrf
+    }
+    return send(`${BASE}${path}`, { method, headers: h, body, credentials: 'include' })
+  }
+
+  const res = await attempt()
+  if (res.status === 401 && !AUTH_PATHS.includes(path)) {
+    await refreshSession()
+    return attempt()
+  }
+  return res
+}
+
+async function parseResponse(res) {
+  if (res.status === 204) return null
+
+  let data
+  try {
+    data = await res.json()
+  } catch {
+    throw httpError(res.ok ? 'Invalid server response' : `Server error (${res.status})`, res.status)
+  }
+
+  if (!res.ok) {
+    const detail = data.detail
+    if (Array.isArray(detail)) {
+      throw httpError(detail[0]?.msg || 'Validation error', res.status)
+    }
+    throw httpError(detail || 'Request failed', res.status)
+  }
+  return data
 }
 
 async function request(method, path, body) {
-  const headers = { 'Content-Type': 'application/json' }
-  const token = getToken()
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
-  const res = await send(`${BASE}${path}`, {
+  const res = await authedFetch(path, {
     method,
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
-
-  if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login' && path !== '/auth/register' && path !== '/auth/logout') {
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        refreshQueue.push((err, newToken) => {
-          if (err) return reject(err)
-          resolve(request(method, path, body))
-        })
-      })
-    }
-
-    isRefreshing = true
-    try {
-      const newToken = await doRefresh()
-      isRefreshing = false
-      drainQueue(null, newToken)
-      return request(method, path, body)
-    } catch (err) {
-      isRefreshing = false
-      drainQueue(err, null)
-      // A refresh that failed only because the network is down must not sign the user out.
-      if (!err.isNetworkError) window.dispatchEvent(new Event('auth:logout'))
-      throw err
-    }
-  }
-
-  if (res.status === 204) return null
-
-  let data
-  try {
-    data = await res.json()
-  } catch {
-    throw httpError(res.ok ? 'Invalid server response' : `Server error (${res.status})`, res.status)
-  }
-
-  if (!res.ok) {
-    const detail = data.detail
-    if (Array.isArray(detail)) {
-      throw httpError(detail[0]?.msg || 'Validation error', res.status)
-    }
-    throw httpError(detail || 'Request failed', res.status)
-  }
-  return data
+  // Login/register/logout/refresh rotate the CSRF cookie: forget any cached fallback token.
+  if (AUTH_PATHS.includes(path)) csrfFallback = null
+  return parseResponse(res)
 }
 
 async function requestFormData(method, path, formData) {
-  const headers = {}
-  const token = getToken()
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
-  const res = await send(`${BASE}${path}`, {
-    method,
-    headers,
-    body: formData,
-  })
-
-  if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login' && path !== '/auth/register' && path !== '/auth/logout') {
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        refreshQueue.push((err) => {
-          if (err) return reject(err)
-          resolve(requestFormData(method, path, formData))
-        })
-      })
-    }
-    isRefreshing = true
-    try {
-      const newToken = await doRefresh()
-      isRefreshing = false
-      drainQueue(null, newToken)
-      return requestFormData(method, path, formData)
-    } catch (err) {
-      isRefreshing = false
-      drainQueue(err, null)
-      // A refresh that failed only because the network is down must not sign the user out.
-      if (!err.isNetworkError) window.dispatchEvent(new Event('auth:logout'))
-      throw err
-    }
-  }
-
-  if (res.status === 204) return null
-
-  let data
-  try {
-    data = await res.json()
-  } catch {
-    throw httpError(res.ok ? 'Invalid server response' : `Server error (${res.status})`, res.status)
-  }
-
-  if (!res.ok) {
-    const detail = data.detail
-    if (Array.isArray(detail)) {
-      throw httpError(detail[0]?.msg || 'Validation error', res.status)
-    }
-    throw httpError(detail || 'Request failed', res.status)
-  }
-  return data
+  const res = await authedFetch(path, { method, body: formData })
+  return parseResponse(res)
 }
 
 async function requestDownload(path, filename) {
-  const headers = {}
-  const token = getToken()
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
-  const res = await send(`${BASE}${path}`, {
-    method: 'GET',
-    headers,
-  })
-
-  if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login' && path !== '/auth/register' && path !== '/auth/logout') {
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        refreshQueue.push((err, newToken) => {
-          if (err) return reject(err)
-          resolve(requestDownload(path, filename))
-        })
-      })
-    }
-
-    isRefreshing = true
-    try {
-      const newToken = await doRefresh()
-      isRefreshing = false
-      drainQueue(null, newToken)
-      return requestDownload(path, filename)
-    } catch (err) {
-      isRefreshing = false
-      drainQueue(err, null)
-      // A refresh that failed only because the network is down must not sign the user out.
-      if (!err.isNetworkError) window.dispatchEvent(new Event('auth:logout'))
-      throw err
-    }
-  }
+  const res = await authedFetch(path, { method: 'GET' })
 
   if (!res.ok) {
     throw new Error(`Download failed (${res.status})`)
@@ -220,7 +179,8 @@ export const api = {
   delete: (path) => request('DELETE', path),
 
 
-  logout: (refreshToken) => request('POST', '/auth/logout', { refresh_token: refreshToken }),
+  // The refresh token travels in the HttpOnly cookie; the server clears the cookies.
+  logout: () => request('POST', '/auth/logout'),
 
 
   createLeadRequest: (data) => request('POST', '/requests', data),
@@ -239,11 +199,9 @@ export const api = {
   updateRequestLists: (requestId, data) => request('PUT', `/requests/${encodeURIComponent(requestId)}/lists`, data),
 
 
-  createStatusStream: (requestId) => {
-    const token = getToken()
-    const params = token ? `?token=${encodeURIComponent(token)}` : ''
-    return new EventSource(`${BASE}/leads/status/${encodeURIComponent(requestId)}/stream${params}`)
-  },
+  // EventSource sends the HttpOnly session cookie itself (withCredentials); no token in the URL.
+  createStatusStream: (requestId) =>
+    new EventSource(`${BASE}/leads/status/${encodeURIComponent(requestId)}/stream`, { withCredentials: true }),
 
 
   getDecisionMakers: (requestId) => request('GET', `/leads/decision-makers?request_id=${encodeURIComponent(requestId)}`),
@@ -272,6 +230,11 @@ export const api = {
   verifyEmailsInBatch: (emails) => request('POST', '/leads/verify-emails-batch', { emails }),
   verifyAndSaveLeadEmail: (leadId) => request('POST', `/leads/${encodeURIComponent(leadId)}/verify-email`),
   getLeadListMemberships: (leadId) => request('GET', `/leads/${encodeURIComponent(leadId)}/lists`),
+
+  // Enrichment retry + background jobs
+  retryLeadEnrichment: (leadId) => request('POST', `/leads/${encodeURIComponent(leadId)}/retry-enrichment`),
+  getJob: (jobId) => request('GET', `/jobs/${encodeURIComponent(jobId)}`),
+  cancelJob: (jobId) => request('POST', `/jobs/${encodeURIComponent(jobId)}/cancel`),
 
   // Lead Lists
   getLists: () => request('GET', '/lists'),

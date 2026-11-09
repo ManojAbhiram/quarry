@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import CompanyLogo from '../../components/CompanyLogo'
-import { List, MailCheck } from 'lucide-react'
+import { AlertTriangle, List, MailCheck, RefreshCw } from 'lucide-react'
 import { api } from '../../api'
 import IntentPanel from '../../components/intent/IntentPanel'
 import { Button, Menu, useToast } from '../../components/kit'
@@ -19,6 +19,79 @@ function Stat({ label, children }) {
   )
 }
 
+const RETRY_POLL_MS = 2000
+const RETRY_MAX_POLLS = 60
+
+/**
+ * Shown when the AI step failed for this lead: says why its fields are blank and offers a retry. The retry runs as a
+ * background job; we poll it and reload the results when it finishes.
+ */
+function EnrichmentFailedNotice({ lead, leadId, onRetried }) {
+  const toast = useToast()
+  const [state, setState] = useState('idle') // idle | working
+  const [message, setMessage] = useState(null)
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => { alive.current = false }
+  }, [])
+
+  const retry = async () => {
+    setState('working')
+    setMessage(null)
+    try {
+      const { job_id: jobId } = await api.retryLeadEnrichment(String(leadId))
+      for (let i = 0; i < RETRY_MAX_POLLS && alive.current; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_POLL_MS))
+        if (!alive.current) return
+        const job = await api.getJob(jobId)
+        if (job.status === 'succeeded') {
+          if (job.result?.enrichment_failed) {
+            setMessage(job.result.reason || 'It failed again. Check your AI provider settings and try again later.')
+          } else {
+            toast.push({ type: 'success', message: 'Enrichment finished.' })
+            onRetried?.()
+          }
+          setState('idle')
+          return
+        }
+        if (job.status === 'failed' || job.status === 'cancelled') {
+          setMessage(job.error || 'The retry did not finish. Please try again.')
+          setState('idle')
+          return
+        }
+      }
+      if (alive.current) {
+        setMessage('This is taking longer than expected. It will keep running; reload in a moment.')
+        setState('idle')
+      }
+    } catch (err) {
+      if (!alive.current) return
+      setMessage(err?.isNetworkError ? "Can't reach Quarry. Check your connection and try again." : 'Could not start the retry. Please try again.')
+      setState('idle')
+    }
+  }
+
+  return (
+    <div role="alert" className="mb-5 rounded-xl border border-warn/30 bg-warn-soft p-3 text-warn">
+      <div className="flex items-start gap-2">
+        <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">Enrichment failed for this company</p>
+          <p className="mt-0.5 break-words text-sm">
+            {lead.enrichment_failure_reason || 'The AI step failed.'} Fields like industry, score and signals are blank because of this, not because nothing exists.
+          </p>
+          {message && <p className="mt-1 break-words text-sm font-medium" data-retry-message="">{message}</p>}
+          <Button variant="secondary" size="sm" className="mt-2" loading={state === 'working'} onClick={retry} disabled={!leadId}>
+            {state !== 'working' && <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />}
+            {state === 'working' ? 'Retrying' : 'Retry enrichment'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Section({ title, children }) {
   return (
     <section className="mt-6">
@@ -29,7 +102,7 @@ function Section({ title, children }) {
 }
 
 /** One lead in full. Opens as a side panel; Escape or the close button dismisses it. */
-export default function LeadDrawer({ lead, requestId, flags, onToggleFlag, onClose, onPatch, onViewDecisionMakers }) {
+export default function LeadDrawer({ lead, requestId, flags, onToggleFlag, onClose, onPatch, onViewDecisionMakers, onRefresh }) {
   const toast = useToast()
   const [verifying, setVerifying] = useState(false)
   if (!lead) return null
@@ -79,6 +152,8 @@ export default function LeadDrawer({ lead, requestId, flags, onToggleFlag, onClo
         </div>
       }
     >
+      {lead.enrichment_failed && <EnrichmentFailedNotice lead={lead} leadId={leadId} onRetried={onRefresh} />}
+
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Match score">{lead.match_score != null ? Math.round(matchScore(lead)) : null}</Stat>
         <Stat label="Employees">{lead.employee_size_estimate}</Stat>

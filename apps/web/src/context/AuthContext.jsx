@@ -1,32 +1,27 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { api } from '../api'
-import { STORAGE_KEYS } from '../config/constants'
+import { hasSession, markSession, clearSession } from '../session'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [token, setToken] = useState(() => localStorage.getItem(STORAGE_KEYS.TOKEN))
-  const [loading, setLoading] = useState(!!localStorage.getItem(STORAGE_KEYS.TOKEN))
-  // Set when we could not confirm the session (server or network trouble). The token is kept; the UI offers a retry.
+  // The session lives in HttpOnly cookies JavaScript cannot see; this hint only says whether to ask the server.
+  const [loading, setLoading] = useState(() => hasSession())
+  // Set when we could not confirm the session (server or network trouble). The session is kept; the UI offers a retry.
   const [bootError, setBootError] = useState(null)
 
   const logout = useCallback(() => {
     setBootError(null)
-    const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)
-    if (refreshToken) {
-
-      api.logout(refreshToken).catch(() => {})
-    }
-    localStorage.removeItem(STORAGE_KEYS.TOKEN)
-    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
-    setToken(null)
+    // Best effort: the server drops the session and clears the cookies. A failure must not block signing out here.
+    if (hasSession()) api.logout().catch(() => {})
+    clearSession()
     setUser(null)
   }, [])
 
 
   // Only a server answer of 401/403 means the session is invalid. Network or server trouble must not sign
-  // the user out: keep the token and let them retry.
+  // the user out: keep the session and let them retry.
   const loadUser = useCallback(() => {
     setLoading(true)
     setBootError(null)
@@ -40,7 +35,7 @@ export function AuthProvider({ children }) {
   }, [logout])
 
   useEffect(() => {
-    if (!token) {
+    if (!hasSession()) {
       setLoading(false)
       return
     }
@@ -53,10 +48,9 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('auth:logout', logout)
   }, [logout])
 
-  const _applyAuth = ({ access_token, refresh_token, user: u }) => {
-    localStorage.setItem(STORAGE_KEYS.TOKEN, access_token)
-    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refresh_token)
-    setToken(access_token)
+  // The server already set the session cookies; only the user (and the non-secret hint) is kept client-side.
+  const _applyAuth = ({ user: u }) => {
+    markSession()
     setUser(u)
   }
 
@@ -76,7 +70,7 @@ export function AuthProvider({ children }) {
   const updateUser = (updates) => setUser((prev) => ({ ...prev, ...updates }))
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, bootError, retry: loadUser, login, register, logout, updateUser, applyAuth }}>
+    <AuthContext.Provider value={{ user, loading, bootError, retry: loadUser, login, register, logout, updateUser, applyAuth }}>
       {children}
     </AuthContext.Provider>
   )
