@@ -68,6 +68,13 @@ async def ensure_period_grant(scope_id: str, plan: Plan) -> bool:
     return await _add_entry(scope_id, "grant", plan.credits_per_month, ref=ref, note=f"{plan.name} monthly credits")
 
 
+async def grant_credits(scope_id: str, amount: int, kind: str = "topup", ref: Optional[str] = None, note: str = "") -> bool:
+    """Add `amount` credits to the scope's ledger (top-ups and grants). Idempotent on `ref`."""
+    if amount <= 0:
+        raise ValueError("amount must be positive")
+    return await _add_entry(scope_id, kind, int(amount), ref=ref, note=note)
+
+
 async def debit_credits(scope_id: str, amount: int, kind: str, ref: Optional[str] = None, note: str = "") -> bool:
     return await _add_entry(scope_id, kind, -abs(amount), ref=ref, note=note)
 

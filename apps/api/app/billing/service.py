@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 
 from app.billing import store
-from app.billing.plans import PLANS
+from app.billing.plans import PLANS, TOPUP_TARGETS, topup_price_usd
 from app.billing.providers.base import NormalizedEvent
 from app.billing.providers.registry import get_provider
 from app.core.config import settings
@@ -19,6 +19,43 @@ async def start_checkout(*, provider_name: str, scope_id: str, plan: str, email:
         cancel_url=f"{settings.FRONTEND_URL}/billing?checkout=cancelled",
     )
     return {"id": session.id, "url": session.url, "provider": session.provider}
+
+
+class TopupError(ValueError):
+    pass
+
+
+async def apply_topup(scope_id: str, user_id: str | None, credits: int, target: str, ref: str) -> bool:
+    """Credit a paid top-up. Request credits go to the billing ledger (idempotent on `ref`); email lookup credits go
+    to the buying user's enrichment balance."""
+    if target not in TOPUP_TARGETS or credits <= 0:
+        raise TopupError("Invalid top-up")
+    if target == "requests":
+        return await store.grant_credits(scope_id, credits, "topup", ref=ref, note=f"Top-up: {credits} request credits")
+    from app.waterfall import service as waterfall  # lazy import keeps billing importable on its own
+
+    if not user_id:
+        raise TopupError("A user is required for email lookup credits")
+    await waterfall.grant(user_id, credits, f"Top-up: {credits} email lookup credits")
+    return True
+
+
+async def start_topup(*, provider_name: str, scope_id: str, user_id: str, credits: int, target: str, email: str) -> dict:
+    price = topup_price_usd(credits)
+    if price is None or target not in TOPUP_TARGETS:
+        raise TopupError("Choose one of the available credit packs")
+    provider = get_provider(provider_name)
+    session = await provider.create_topup_session(
+        scope_id=scope_id, user_id=user_id, credits=credits, price_usd=price, target=target, customer_email=email,
+        success_url=f"{settings.FRONTEND_URL}/billing?topup=success",
+        cancel_url=f"{settings.FRONTEND_URL}/billing?topup=cancelled",
+    )
+    settled = False
+    if provider.settles_immediately:
+        await apply_topup(scope_id, user_id, credits, target, ref=f"topup:{provider_name}:{session.id}")
+        settled = True
+    return {"id": session.id, "url": session.url, "provider": session.provider, "settled": settled,
+            "credits": credits, "target": target}
 
 
 async def _scope_for(event: NormalizedEvent) -> str | None:
@@ -62,6 +99,12 @@ async def _apply(provider: str, ev: NormalizedEvent) -> str:
                  "status": "paid", "url": inv.get("url")},
             )
         return "invoice_recorded"
+
+    if ev.kind == "topup_paid":
+        t = ev.topup
+        applied = await apply_topup(scope, t.get("user_id"), int(t.get("credits") or 0), t.get("target") or "requests",
+                                    ref=f"topup:{provider}:{ev.event_id}")
+        return "topup_credited" if applied else "topup_duplicate"
 
     if ev.kind == "invoice_failed":
         await store.upsert_subscription(scope, {"status": "past_due"})

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import clsx from 'clsx'
-import { Check, CreditCard, Receipt, Sparkles } from 'lucide-react'
+import { Check, Coins, CreditCard, Mail, Receipt, Sparkles } from 'lucide-react'
 import { api } from '../api'
 import { Button, EmptyState, ErrorState, PageHeader, Skeleton } from '../components/kit'
 import { useStaggerIn } from '../components/motion/useStaggerIn'
@@ -38,11 +38,17 @@ export default function Billing() {
   const [busyPlan, setBusyPlan] = useState('')
   const [provider, setProvider] = useState('')
   const [notice, setNotice] = useState('')
+  const [topup, setTopup] = useState(null) // { packs, providers, can_manage } or null when unavailable
+  const [pack, setPack] = useState(100)
+  const [target, setTarget] = useState('requests')
+  const [buying, setBuying] = useState(false)
+  const [topupMsg, setTopupMsg] = useState(null) // { ok, text }
 
   const load = useCallback(() => {
     setState((s) => ({ ...s, status: 'loading' }))
-    Promise.all([api.get('/billing/summary'), api.get('/billing/plans'), api.get('/billing/invoices')])
-      .then(([summary, plans, inv]) => {
+    Promise.all([api.get('/billing/summary'), api.get('/billing/plans'), api.get('/billing/invoices'), api.get('/billing/topup').catch(() => null)])
+      .then(([summary, plans, inv, top]) => {
+        setTopup(top)
         const providers = plans?.providers || []
         setProvider((p) => p || providers[0] || '')
         setState({ status: 'ready', summary, plans: plans?.plans || [], providers, invoices: inv?.invoices || [], error: '' })
@@ -64,6 +70,26 @@ export default function Billing() {
     }
   }
 
+  const buyCredits = async (e) => {
+    e.preventDefault()
+    setBuying(true)
+    setTopupMsg(null)
+    try {
+      const res = await api.post('/billing/topup', { credits: Number(pack), target })
+      if (res.settled) {
+        setTopupMsg({ ok: true, text: `Added ${res.credits} ${target === 'requests' ? 'request' : 'email lookup'} credits.` })
+        load()
+      } else if (res.url) {
+        window.location.assign(res.url)
+        return
+      }
+    } catch (err) {
+      setTopupMsg({ ok: false, text: err.message || 'Could not add credits.' })
+    } finally {
+      setBuying(false)
+    }
+  }
+
   const { summary, plans, providers, invoices } = state
   const checkoutFlag = params.get('checkout')
 
@@ -75,6 +101,7 @@ export default function Billing() {
         </div>
 
         {checkoutFlag === 'success' && <p role="status" className="mb-4 rounded-xl bg-ok-soft p-3 text-sm font-medium text-ok">Thanks! Your plan updates as soon as the payment is confirmed, usually within a minute.</p>}
+        {params.get('topup') === 'success' && <p role="status" className="mb-4 rounded-xl bg-ok-soft p-3 text-sm font-medium text-ok">Thanks! Your credits are added as soon as the payment is confirmed, usually within a minute.</p>}
         {checkoutFlag === 'cancelled' && <p role="status" className="mb-4 rounded-xl bg-warn-soft p-3 text-sm font-medium text-warn">Checkout was cancelled. Nothing was charged.</p>}
 
         {state.status === 'loading' && (
@@ -93,10 +120,60 @@ export default function Billing() {
                 <Meter label="Credits spent this month" used={summary.usage.credits_spent} limit={summary.credits.monthly_grant} />
               </div>
               <p className="mt-5 text-sm text-muted">
-                Credit balance: <strong className="tabular-nums text-ink">{summary.credits.balance}</strong>
-                {summary.subscription?.status && <> · Subscription: <strong className="capitalize text-ink">{summary.subscription.status.replace('_', ' ')}</strong></>}
+                {summary.subscription?.status ? <>Subscription: <strong className="capitalize text-ink">{summary.subscription.status.replace('_', ' ')}</strong></> : 'No paid subscription.'}
                 {summary.subscription?.status === 'past_due' && <span className="ml-1 font-semibold text-bad">Payment failed. Update your payment method.</span>}
               </p>
+            </Section>
+
+            <Section id="credits" title="Credits" description="Two separate balances. Request credits pay for lead requests; email lookup credits pay for finding emails with Hunter, Snov or People Data Labs." icon={Coins}>
+              <dl className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl border border-line p-4">
+                  <dt className="flex items-center gap-2 text-sm font-semibold text-ink"><Coins aria-hidden="true" className="h-4 w-4 text-primary-600" />{summary.credits.label || 'Request credits'}</dt>
+                  <dd className="mt-1 text-3xl font-black tabular-nums text-ink">{summary.credits.balance}</dd>
+                  <dd className="mt-1 text-xs text-muted">{summary.credits.monthly_grant} added each month with your plan. Spent when you create a lead request.</dd>
+                </div>
+                {summary.enrichment_credits && (
+                  <div className="rounded-xl border border-line p-4">
+                    <dt className="flex items-center gap-2 text-sm font-semibold text-ink"><Mail aria-hidden="true" className="h-4 w-4 text-primary-600" />{summary.enrichment_credits.label || 'Email lookup credits'}</dt>
+                    <dd aria-label="Email lookup credit balance" className="mt-1 text-3xl font-black tabular-nums text-ink">{summary.enrichment_credits.balance}</dd>
+                    <dd className="mt-1 text-xs text-muted">Yours alone, not shared with the organization. Spent only on hits that use the platform's provider keys.</dd>
+                  </div>
+                )}
+              </dl>
+              {summary.credits.recent?.length > 0 && (
+                <ul aria-label="Recent request credit activity" className="mt-4 divide-y divide-line rounded-xl border border-line text-sm">
+                  {summary.credits.recent.map((c, i) => (
+                    <li key={i} className="flex items-center justify-between gap-3 px-4 py-2">
+                      <span className="min-w-0 truncate text-ink">{c.label || c.kind}{c.note ? <span className="text-muted"> · {c.note}</span> : null}</span>
+                      <span className={clsx('tabular-nums font-semibold', c.amount < 0 ? 'text-muted' : 'text-ok')}>{c.amount > 0 ? '+' : ''}{c.amount}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {topup && (
+                topup.providers?.length > 0 ? (
+                  <form onSubmit={buyCredits} className="mt-5 flex flex-wrap items-end gap-3">
+                    <div>
+                      <label htmlFor="topup-pack" className="label">Credit pack</label>
+                      <select id="topup-pack" className="input h-10 py-0 text-sm" value={pack} disabled={!topup.can_manage || buying} onChange={(e) => setPack(e.target.value)}>
+                        {topup.packs.map((p) => <option key={p.credits} value={p.credits}>{p.credits} credits, ${p.price_usd}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="topup-target" className="label">Add to</label>
+                      <select id="topup-target" className="input h-10 py-0 text-sm" value={target} disabled={!topup.can_manage || buying} onChange={(e) => setTarget(e.target.value)}>
+                        <option value="requests">Request credits</option>
+                        <option value="enrichment">Email lookup credits</option>
+                      </select>
+                    </div>
+                    <Button type="submit" loading={buying} disabled={!topup.can_manage}>Add credits</Button>
+                    {!topup.can_manage && <p className="basis-full text-xs text-muted">Only owners and admins can add credits.</p>}
+                  </form>
+                ) : (
+                  <p className="mt-5 text-sm text-muted">Adding credits is not enabled on this server yet.</p>
+                )
+              )}
+              {topupMsg && <p role={topupMsg.ok ? 'status' : 'alert'} className={clsx('mt-4 rounded-xl p-3 text-sm font-medium', topupMsg.ok ? 'bg-ok-soft text-ok' : 'bg-bad-soft text-bad')}>{topupMsg.text}</p>}
             </Section>
 
             <Section id="plans" title="Plans" description={summary.can_manage ? 'Upgrade any time. Limits reset on the 1st of each month.' : 'Only owners and admins can change the plan.'} icon={CreditCard}>

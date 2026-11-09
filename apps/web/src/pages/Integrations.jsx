@@ -105,7 +105,7 @@ function Enrichment() {
     try { await enrichApi.setKey(p, drafts[p]); setDrafts({ ...drafts, [p]: '' }); toast.push({ type: 'success', message: 'Key saved.' }); load() } catch (err) { toast.push({ type: 'error', message: err.message || 'Could not save the key.' }) }
   }
   return (
-    <Section title="Enrichment credits" description="Emails are looked up in order: existing scrape, Hunter, Snov, People Data Labs. You pay credits only for hits on platform keys; your own keys cost no credits.">
+    <Section title="Email lookup credits" description="These are separate from the request credits on your Billing page. Emails are looked up in order: existing scrape, Hunter, Snov, People Data Labs. You pay credits only for hits on platform keys; your own keys cost no credits.">
       <Loadable state={state} onRetry={load} label="credits">
         {data && (
           <>
