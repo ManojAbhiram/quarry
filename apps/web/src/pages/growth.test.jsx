@@ -84,7 +84,7 @@ describe('TeamSettings', () => {
   it('shows the invite link after inviting and validates the email', async () => {
     asRole('admin')
     api.get.mockImplementation(route)
-    api.post.mockResolvedValue({ id: 'i2', invite_url: 'http://app/invite?token=abc', emailed: false })
+    api.post.mockResolvedValue({ id: 'i2', invite_url: 'http://app/invite?token=abc', email_status: 'disabled' })
     const user = userEvent.setup()
     wrap(<TeamSettings />)
     await user.click(await screen.findByRole('button', { name: /Send invite/ }))
@@ -92,6 +92,7 @@ describe('TeamSettings', () => {
     await user.type(screen.getByLabelText('Email'), 'a@b.co')
     await user.click(screen.getByRole('button', { name: /Send invite/ }))
     expect(await screen.findByText('http://app/invite?token=abc')).toBeInTheDocument()
+    expect(screen.getByText('Email not set up, share the link')).toBeInTheDocument()
     expect(api.post).toHaveBeenCalledWith('/orgs/o1/invites', { email: 'a@b.co', role: 'member' })
   })
 
