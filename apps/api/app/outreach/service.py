@@ -79,6 +79,50 @@ async def save_mailbox(user_id: str, data: dict, box_id: str | None = None) -> d
     return mailbox_public(doc)
 
 
+def connection_warning(result: dict) -> str | None:
+    """A one-line warning for a failed connection test, or None when it passed."""
+    if result["ok"]:
+        return None
+    parts = [f"{name.upper()}: {result[name]['error']}" for name in ("smtp", "imap") if result[name].get("ok") is False]
+    return "Saved, but the connection test failed. " + "; ".join(parts)
+
+
+async def test_connection(user_id: str, data: dict, box_id: str | None = None) -> dict:
+    """Try SMTP and IMAP logins through the swappable ports. Never raises for a failed login: per-protocol results.
+
+    With `box_id`, blank fields and passwords fall back to the stored mailbox, so the edit dialog can retest.
+    """
+    stored = await _boxes.get(_id=box_id, user_id=user_id) if box_id else None
+    if box_id and not stored:
+        raise LookupError("mailbox not found")
+    merged = dict(stored or {})
+    merged.update({k: data[k] for k in _BOX_FIELDS if data.get(k) not in (None, "")})
+    for secret in SECRET_FIELDS:
+        if data.get(secret):
+            merged[f"{secret}_enc"] = encrypt_secret(data[secret])
+    if not merged.get("smtp_host"):
+        raise OutreachError("smtp_host is required to test the connection")
+    merged.setdefault("email", data.get("email") or data.get("smtp_username") or "")
+    creds = mailbox_creds(merged)
+
+    async def attempt(fn, label: str) -> dict:
+        try:
+            await fn(creds)
+            return {"ok": True, "error": None}
+        except SendError as exc:
+            return {"ok": False, "error": str(exc) or f"{label} login failed"}
+        except Exception as exc:  # noqa: BLE001  adapters must not take the endpoint down
+            logger.warning("mailbox %s test failed: %s", label, exc)
+            return {"ok": False, "error": f"{label} check failed: {exc}"}
+
+    smtp = await attempt(ports.smtp.verify_login, "SMTP")
+    if creds.imap_host:
+        imap = await attempt(ports.imap.check_login, "IMAP")
+    else:
+        imap = {"ok": None, "error": None, "skipped": True}
+    return {"ok": smtp["ok"] and imap["ok"] is not False, "smtp": smtp, "imap": imap}
+
+
 async def get_owned(table, doc_id: str, user_id: str) -> dict:
     doc = await table.get(_id=doc_id, user_id=user_id)
     if not doc:

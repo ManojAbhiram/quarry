@@ -5,6 +5,7 @@ const e = encodeURIComponent
 
 export const outreachApi = {
   mailboxes: () => api.get('/outreach/mailboxes'),
+  testMailbox: (d) => api.post('/outreach/mailboxes/test', d),
   createMailbox: (d) => api.post('/outreach/mailboxes', d),
   updateMailbox: (id, d) => api.put(`/outreach/mailboxes/${e(id)}`, d),
   deleteMailbox: (id) => api.delete(`/outreach/mailboxes/${e(id)}`),

@@ -7,6 +7,7 @@ const ToastContext = createContext(null)
 const TONES = {
   success: 'border-ok/40',
   error: 'border-bad/50',
+  warning: 'border-warn/50',
   info: 'border-line',
 }
 
@@ -24,7 +25,7 @@ export function ToastProvider({ children }) {
     ({ type = 'info', message, duration }) => {
       const id = ++nextId.current
       setToasts((all) => [...all, { id, type, message }])
-      const ms = duration ?? (type === 'error' ? 0 : 5000)
+      const ms = duration ?? (type === 'error' ? 0 : type === 'warning' ? 10000 : 5000)
       if (ms > 0) setTimeout(() => dismiss(id), ms)
       return id
     },
