@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
-import { Bell, Check, ChevronDown, CreditCard, FolderDot, HelpCircle, LogOut, Moon, Plug, Plus, Search, ShieldCheck, Sun, UserCircle, Users } from 'lucide-react'
+import { Bell, Check, ChevronDown, CreditCard, FolderDot, HelpCircle, LogOut, Moon, PanelLeft, Plug, Plus, Search, ShieldCheck, Sun, UserCircle, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useLeads } from '../context/LeadContext'
@@ -10,40 +10,16 @@ import BrandLogo from './BrandLogo'
 import PaletteSwitcher from './PaletteSwitcher'
 import OrgSwitcher from './OrgSwitcher'
 import HelpDrawer from './HelpDrawer'
+import { SIDEBAR_ID } from './sidebar/Sidebar'
 
 const ICON_BUTTON =
   'flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface/80 text-muted shadow-sm transition-all duration-200 hover:bg-surface hover:text-ink hover:shadow-md active:scale-95'
-
-const NAV = [
-  { to: '/lead-requests', label: 'Requests', also: '/request/' },
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/lead-lists', label: 'Lead lists' },
-  { to: '/outreach', label: 'Outreach' },
-  { to: '/watch', label: 'Watch' },
-  { to: '/integrations', label: 'Integrations' },
-]
 
 function initialsOf(name) {
   if (!name) return 'U'
   const parts = name.trim().split(/\s+/)
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   return parts[0].slice(0, 2).toUpperCase()
-}
-
-function NavItem({ to, label, also, pathname }) {
-  const active = pathname === to || pathname.startsWith(`${to}/`) || (also && pathname.startsWith(also))
-  return (
-    <Link
-      to={to}
-      aria-current={active ? 'page' : undefined}
-      className={clsx(
-        'whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium transition-all duration-200',
-        active ? 'bg-primary-50 font-semibold text-primary-800 shadow-sm ring-1 ring-primary-200/70 dark:bg-primary-950/60 dark:text-primary-300 dark:ring-primary-900/60' : 'text-muted hover:bg-head hover:text-ink',
-      )}
-    >
-      {label}
-    </Link>
-  )
 }
 
 function NotificationIcon({ type }) {
@@ -55,7 +31,12 @@ function NotificationIcon({ type }) {
   )
 }
 
-export default function Header() {
+/**
+ * Slim top bar: search, request switcher, notifications, help, palette and theme. When a `sidebar` (from
+ * useSidebar) is passed it also holds the sidebar toggle, and the brand, workspace switcher, New request button
+ * and account menu appear here only while the sidebar is not showing them. Without `sidebar` it is standalone.
+ */
+export default function Header({ sidebar }) {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const { requests, globalSearchQuery, setGlobalSearchQuery, notifications, markAllRead, toggleRead, clearNotification } = useLeads()
@@ -65,6 +46,8 @@ export default function Header() {
   const [helpOpen, setHelpOpen] = useState(false)
   const searchRef = useRef(null)
   const helpButtonRef = useRef(null)
+  const standalone = !sidebar || (!sidebar.visible && !sidebar.isMobile)
+  const compactNew = standalone || sidebar.isMobile
 
   const requestId = pathname.match(/\/request\/([^/]+)/)?.[1] || null
   const activeRequest = requestId ? requests.find((r) => r && String(r.id || r._id || '') === String(requestId)) : null
@@ -105,19 +88,29 @@ export default function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/70 bg-surface/80 px-4 py-3 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
-        <Link to="/lead-requests" className="flex shrink-0 items-center gap-2" aria-label="Quarry home">
-          <BrandLogo className="h-8 w-8 shrink-0 rounded-xl shadow-md shadow-primary-500/25" />
-          <span className="hidden text-lg font-black tracking-tight text-ink sm:block">Quarry</span>
-        </Link>
+      <header className="relative z-20 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/70 bg-surface/80 px-4 py-3 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
+        {sidebar && (
+          <button
+            type="button"
+            aria-label={sidebar.visible ? 'Hide sidebar' : 'Show sidebar'}
+            title={`${sidebar.visible ? 'Hide' : 'Show'} sidebar (Ctrl+B)`}
+            aria-expanded={sidebar.visible}
+            aria-controls={SIDEBAR_ID}
+            onClick={sidebar.toggle}
+            className={ICON_BUTTON}
+          >
+            <PanelLeft aria-hidden="true" className="h-4 w-4" />
+          </button>
+        )}
 
-        <OrgSwitcher />
+        {(standalone || sidebar.isMobile) && (
+          <Link to="/lead-requests" className="flex shrink-0 items-center gap-2" aria-label="Quarry home">
+            <BrandLogo className="h-8 w-8 shrink-0 rounded-xl shadow-md shadow-primary-500/25" />
+            <span className="hidden text-lg font-black tracking-tight text-ink sm:block">Quarry</span>
+          </Link>
+        )}
 
-        <nav aria-label="Main" className="order-last -mx-1 flex w-full items-center gap-1 overflow-x-auto md:order-none md:mx-0 md:w-auto">
-          {NAV.map((item) => (
-            <NavItem key={item.to} {...item} pathname={pathname} />
-          ))}
-        </nav>
+        {standalone && <OrgSwitcher />}
 
         {activeRequest && (
           <Menu
@@ -177,10 +170,12 @@ export default function Header() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Link to="/new-request" className="btn-primary !h-9 !px-3.5">
-            <Plus aria-hidden="true" className="h-4 w-4" />
-            <span className="sr-only sm:not-sr-only">New request</span>
-          </Link>
+          {compactNew && (
+            <Link to="/new-request" className="btn-primary !h-9 !px-3.5">
+              <Plus aria-hidden="true" className="h-4 w-4" />
+              <span className="sr-only sm:not-sr-only">New request</span>
+            </Link>
+          )}
 
           <Menu
             label={unread ? `Notifications, ${unread} unread` : 'Notifications'}
@@ -239,48 +234,50 @@ export default function Header() {
             {theme === 'light' ? <Moon aria-hidden="true" className="h-4 w-4" /> : <Sun aria-hidden="true" className="h-4 w-4" />}
           </button>
 
-          <Menu
-            label="Account menu"
-            buttonClassName="flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-gradient-to-br from-primary-100 to-accent-200 text-xs font-bold text-primary-800 shadow-sm ring-1 ring-primary-200/60 transition-all hover:ring-4 hover:ring-primary-500/15 active:scale-95 dark:border-line dark:from-primary-950 dark:to-accent-900 dark:text-primary-300 dark:ring-primary-900/60"
-            panelClassName="w-64 py-1"
-            button={initialsOf(user?.name || user?.email)}
-          >
-            {({ close }) => (
-              <>
-                <div className="border-b border-line px-4 py-3">
-                  <p className="text-xs text-muted">Signed in as</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-ink">{user?.name || 'User'}</p>
-                  <p className="truncate text-xs text-muted">{user?.email || ''}</p>
-                </div>
-                <div className="py-1">
-                  <Link to="/profile" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
-                    <UserCircle aria-hidden="true" className="h-4 w-4 text-muted" />
-                    Account settings
-                  </Link>
-                  <Link to="/compliance" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
-                    <ShieldCheck aria-hidden="true" className="h-4 w-4 text-muted" />
-                    Compliance
-                  </Link>
-                  <Link to="/team" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
-                    <Users aria-hidden="true" className="h-4 w-4 text-muted" />
-                    Team settings
-                  </Link>
-                  <Link to="/billing" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
-                    <CreditCard aria-hidden="true" className="h-4 w-4 text-muted" />
-                    Billing and usage
-                  </Link>
-                  <Link to="/integrations/crm" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
-                    <Plug aria-hidden="true" className="h-4 w-4 text-muted" />
-                    CRM integrations
-                  </Link>
-                  <button type="button" onClick={handleLogout} className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm font-semibold text-bad hover:bg-head">
-                    <LogOut aria-hidden="true" className="h-4 w-4" />
-                    Log out
-                  </button>
-                </div>
-              </>
-            )}
-          </Menu>
+          {standalone && (
+            <Menu
+              label="Account menu"
+              buttonClassName="flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-gradient-to-br from-primary-100 to-accent-200 text-xs font-bold text-primary-800 shadow-sm ring-1 ring-primary-200/60 transition-all hover:ring-4 hover:ring-primary-500/15 active:scale-95 dark:border-line dark:from-primary-950 dark:to-accent-900 dark:text-primary-300 dark:ring-primary-900/60"
+              panelClassName="w-64 py-1"
+              button={initialsOf(user?.name || user?.email)}
+            >
+              {({ close }) => (
+                <>
+                  <div className="border-b border-line px-4 py-3">
+                    <p className="text-xs text-muted">Signed in as</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-ink">{user?.name || 'User'}</p>
+                    <p className="truncate text-xs text-muted">{user?.email || ''}</p>
+                  </div>
+                  <div className="py-1">
+                    <Link to="/profile" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
+                      <UserCircle aria-hidden="true" className="h-4 w-4 text-muted" />
+                      Account settings
+                    </Link>
+                    <Link to="/compliance" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
+                      <ShieldCheck aria-hidden="true" className="h-4 w-4 text-muted" />
+                      Compliance
+                    </Link>
+                    <Link to="/team" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
+                      <Users aria-hidden="true" className="h-4 w-4 text-muted" />
+                      Team settings
+                    </Link>
+                    <Link to="/billing" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
+                      <CreditCard aria-hidden="true" className="h-4 w-4 text-muted" />
+                      Billing and usage
+                    </Link>
+                    <Link to="/integrations/crm" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
+                      <Plug aria-hidden="true" className="h-4 w-4 text-muted" />
+                      CRM integrations
+                    </Link>
+                    <button type="button" onClick={handleLogout} className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm font-semibold text-bad hover:bg-head">
+                      <LogOut aria-hidden="true" className="h-4 w-4" />
+                      Log out
+                    </button>
+                  </div>
+                </>
+              )}
+            </Menu>
+          )}
         </div>
       </header>
 
