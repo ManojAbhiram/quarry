@@ -69,9 +69,11 @@ function Preflight({ result }) {
   )
 }
 
-function MailboxesPanel() {
+function MailboxesPanel({ onChanged }) {
   const toast = useToast()
-  const { state, data, load } = useLoad(listBoxes)
+  const { state, data, load: loadBoxes } = useLoad(listBoxes)
+  // The sequence dialog reads the page-level mailbox list, so refresh it whenever a mailbox changes.
+  const load = async () => { await loadBoxes(); onChanged?.() }
   const [open, setOpen] = useState(false)
   const [pre, setPre] = useState({})
   const run = async (fn, ok) => {
@@ -254,13 +256,13 @@ function SequencesPanel({ boxes }) {
 
 export default function Outreach() {
   const [tab, setTab] = useState('sequences')
-  const { data } = useLoad(listBoxes)
+  const { data, load: reloadBoxes } = useLoad(listBoxes)
   return (
     <div className="h-full overflow-y-auto pb-12 page-container">
       <PageHeader title="Outreach" description="Personalised sequences with reply-first metrics. Open tracking is off by default." />
       <Tabs label="Outreach sections" value={tab} onChange={setTab} tabs={[['sequences', 'Sequences'], ['mailboxes', 'Mailboxes']]} />
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === 'sequences' ? <SequencesPanel boxes={data?.mailboxes || []} /> : <MailboxesPanel />}
+        {tab === 'sequences' ? <SequencesPanel boxes={data?.mailboxes || []} /> : <MailboxesPanel onChanged={reloadBoxes} />}
       </div>
     </div>
   )
