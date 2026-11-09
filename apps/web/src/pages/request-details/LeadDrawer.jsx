@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import CompanyLogo from '../../components/CompanyLogo'
 import { List, MailCheck } from 'lucide-react'
 import { api } from '../../api'
 import IntentPanel from '../../components/intent/IntentPanel'
@@ -61,6 +62,7 @@ export default function LeadDrawer({ lead, requestId, flags, onToggleFlag, onClo
       open
       onClose={onClose}
       title={name}
+      icon={<CompanyLogo name={name} website={lead.url} size="h-11 w-11" />}
       subtitle={lead.industry || 'Industry not available'}
       footer={
         <div className="flex flex-wrap items-center justify-between gap-2">

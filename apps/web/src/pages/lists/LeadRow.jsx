@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import { BookmarkCheck, Check, ExternalLink, Loader2, Trash2, X } from 'lucide-react'
 import { api } from '../../api'
 import { useToast } from '../../components/kit'
+import CompanyLogo from '../../components/CompanyLogo'
 
 function EmailBadge({ verified, confidence }) {
   if (verified === null || verified === undefined) return null
@@ -59,6 +60,7 @@ export default function LeadRow({ lead, selected, onToggleSelect, onRemove }) {
           aria-label={`Select ${label}`}
           className="h-5 w-5 shrink-0 cursor-pointer rounded accent-primary-600"
         />
+        <CompanyLogo name={label} website={lead.url} size="h-9 w-9" />
         <div className="min-w-0 flex-1 px-1">
           <p className="break-words text-sm font-semibold text-ink line-clamp-2" title={label}>
             {label}

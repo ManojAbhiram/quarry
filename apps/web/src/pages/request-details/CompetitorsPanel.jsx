@@ -2,6 +2,7 @@ import { useState } from 'react'
 import clsx from 'clsx'
 import { Compass, Loader2 } from 'lucide-react'
 import { Button, EmptyState, useToast } from '../../components/kit'
+import CompanyLogo from '../../components/CompanyLogo'
 import { defaultCompetitorFilters, filterCompetitors } from './competitors'
 import { PAGE_SIZE, pageSlice } from './leadHelpers'
 import { Dash, Drawer, ExtLink, ScoreBar, SearchInput, SelectFilter, Tag } from './ui'
@@ -133,7 +134,9 @@ export default function CompetitorsPanel({ competitors, isRunning, requestId }) 
             return (
               <li key={comp.name + comp.website} className={clsx('rounded-lg border bg-surface p-4', picked ? 'border-primary-500' : 'border-line')}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <CompanyLogo name={comp.name} website={show(comp.website) ? comp.website : ''} size="h-11 w-11" />
+                    <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-sm font-semibold text-ink break-words">{comp.name}</h3>
                       <Tag>{comp.tier}</Tag>
@@ -141,6 +144,7 @@ export default function CompetitorsPanel({ competitors, isRunning, requestId }) 
                     <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs">
                       {show(comp.website) && <ExtLink href={comp.website}>{comp.website.replace(/^https?:\/\/(www\.)?/, '')}</ExtLink>}
                       {show(comp.linkedin_url) && <ExtLink href={comp.linkedin_url}>LinkedIn</ExtLink>}
+                    </div>
                     </div>
                   </div>
                   <Button variant={picked ? 'primary' : 'secondary'} size="sm" aria-pressed={picked} onClick={() => toggleCompare(comp)} className="min-h-10 sm:min-h-0">

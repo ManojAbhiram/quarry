@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import { ChevronRight } from 'lucide-react'
 import { IntentScoreBadge } from '../../components/intent/IntentPanel'
 import { contactOf, leadKey, matchScore } from './leadHelpers'
+import CompanyLogo from '../../components/CompanyLogo'
 import { Dash, EmailStatusBadge, ExtLink, ScoreBar } from './ui'
 import LeadActionsMenu, { FlagTags } from './LeadActions'
 
@@ -141,15 +142,20 @@ export default function LeadsTable({ leads, selected, onToggleSelect, onToggleAl
                 <tr key={lead._originalIndex} data-flip-id={wide ? `d-${lead._originalIndex}` : undefined} data-reveal-row={i < 8 ? '' : undefined} onClick={() => onOpen(lead)} className={clsx('cursor-pointer border-t border-line align-top bg-surface/0 hover:bg-primary-50/70 hover:shadow-[inset_3px_0_0_rgb(var(--p-500))] dark:hover:bg-primary-950/30', isSelected && 'bg-primary-50/60 dark:bg-primary-950/30')}>
                   <td className="px-2 py-2.5"><SelectBox checked={isSelected} onChange={() => onToggleSelect(name)} label={`Select ${name}`} /></td>
                   <td className="min-w-0 px-3 py-2.5">
-                    <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(lead) }} className="max-w-full text-left text-sm font-semibold text-ink break-words hover:text-primary-700 hover:underline dark:hover:text-primary-300">
-                      {name}
-                    </button>
-                    <p className="text-xs text-muted break-words">{[lead.industry, lead.location].filter(Boolean).join(' · ')}</p>
-                    <Explanation text={lead.match_explanation} />
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                      <ExtLink href={lead.url}>Website</ExtLink>
-                      <ExtLink href={lead.linkedin_url}>LinkedIn</ExtLink>
-                      <FlagTags flags={flags} />
+                    <div className="flex items-start gap-3">
+                      <CompanyLogo name={name} website={lead.url} size="h-10 w-10" className="mt-0.5" />
+                      <div className="min-w-0 flex-1">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(lead) }} className="max-w-full text-left text-sm font-semibold text-ink break-words hover:text-primary-700 hover:underline dark:hover:text-primary-300">
+                          {name}
+                        </button>
+                        <p className="text-xs text-muted break-words">{[lead.industry, lead.location].filter(Boolean).join(' · ')}</p>
+                        <Explanation text={lead.match_explanation} />
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                          <ExtLink href={lead.url}>Website</ExtLink>
+                          <ExtLink href={lead.linkedin_url}>LinkedIn</ExtLink>
+                          <FlagTags flags={flags} />
+                        </div>
+                      </div>
                     </div>
                   </td>
                   <td className="min-w-0 px-3 py-2.5">

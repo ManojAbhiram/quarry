@@ -9,7 +9,7 @@ import { emailStatus } from './emailStatus'
  * opens, is kept inside while it is open, and returns to the element that opened it.
  * (Built here for the request details screen; a candidate for promotion into the kit.)
  */
-export function Drawer({ open, onClose, title, subtitle, children, footer, width = 'max-w-2xl' }) {
+export function Drawer({ open, onClose, title, subtitle, icon, children, footer, width = 'max-w-2xl' }) {
   const panelRef = useRef(null)
   const closeRef = useRef(null)
   const titleId = useId()
@@ -68,9 +68,12 @@ export function Drawer({ open, onClose, title, subtitle, children, footer, width
       >
         <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-primary-500/10 to-transparent" />
         <div className="relative flex items-start justify-between gap-3 border-b border-line px-4 py-4 sm:px-6">
-          <div className="min-w-0">
-            <h2 id={titleId} className="text-lg font-black tracking-tight text-ink break-words">{title}</h2>
-            {subtitle && <p className="mt-0.5 text-xs text-muted break-words">{subtitle}</p>}
+          <div className="flex min-w-0 items-start gap-3">
+            {icon}
+            <div className="min-w-0">
+              <h2 id={titleId} className="text-lg font-black tracking-tight text-ink break-words">{title}</h2>
+              {subtitle && <p className="mt-0.5 text-xs text-muted break-words">{subtitle}</p>}
+            </div>
           </div>
           <button ref={closeRef} type="button" onClick={onClose} aria-label="Close" className="-mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-head hover:text-ink">
             <X aria-hidden="true" className="h-5 w-5" />
