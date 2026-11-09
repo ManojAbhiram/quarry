@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import func, select
 
@@ -38,8 +38,27 @@ async def get_decision_makers_for_request(request_id: str) -> List[dict]:
             "snippet": dm.get("snippet"),
             "recent_activity_summary": dm.get("recent_activity_summary"),
             "recent_posts": dm.get("recent_posts") or [],
+            "email_status": dm.get("email_status"),
+            "email_checked_at": dm.get("email_checked_at"),
+            "email_status_reason": dm.get("email_status_reason"),
+            "provenance": dm.get("provenance") or {},
         })
     return result
+
+
+async def get_decision_maker_for_user(dm_id: str, user_id: str) -> Optional[dict]:
+    """The decision maker `dm_id` if its lead belongs to `user_id`, else None."""
+    dm = await _dms.get(_id=str(dm_id))
+    if not dm or not dm.get("lead_id"):
+        return None
+    lead = await _leads.get(_id=dm["lead_id"])
+    if not lead or str(lead.get("user_id")) != str(user_id):
+        return None
+    return dm
+
+
+async def update_decision_maker(dm_id: str, fields: dict) -> None:
+    await _dms.update(str(dm_id), fields)
 
 
 async def count_decision_makers_by_lead(lead_ids: list[str]) -> dict[str, int]:

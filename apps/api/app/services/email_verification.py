@@ -1,32 +1,23 @@
 """
-Email Verification Service
-==========================
-Verifies email addresses using two techniques:
-  1. DNS MX-record lookup (does the domain have a mail server?)
-  2. SMTP RCPT-TO probe (does the mailbox exist? – best-effort)
+Email verification service (compatibility layer)
+================================================
+The checks live in `app.verification` (local syntax/MX/disposable/role checks, optional SMTP probe with catch-all
+detection, optional paid providers). This module keeps the older entry points and the SMTP helper used by tests.
 
-Returns:
-  {
-      "email": str,
-      "verified": bool,
-      "confidence": "high" | "medium" | "low",
-      "method": str,
-      "reason": str,
-  }
+Results carry `status` (verified | likely | risky | invalid), `reason`, `method`, `checked_at`, plus the legacy
+`verified` bool and `confidence` (high | medium | low).
 """
 
 from __future__ import annotations
 
-import asyncio
 import re
 import smtplib
 import socket
-from typing import Optional
 
 import dns.resolver  # dnspython – already in pyproject.toml
 
-from app.core.logger import logger
 from app.core.url_guard import UnsafeURLError, resolve_public
+from app.verification import VerifierConfig, verify, verify_many
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -83,103 +74,28 @@ def _smtp_verify(mx_host: str, email: str, timeout: int = 5) -> tuple[bool, str]
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Public API (thin wrappers over app.verification, kept for existing callers)
 # ---------------------------------------------------------------------------
 
-async def verify_email(email: str, smtp_probe: bool = True) -> dict:
+async def verify_email(email: str, smtp_probe: bool | None = None, config: VerifierConfig | None = None) -> dict:
+    """Verify one address. Returns the status result as a dict (new `status`/`checked_at` plus the legacy keys).
+
+    `config` carries the user's provider and SMTP preference; `smtp_probe` overrides only the probe flag.
     """
-    Asynchronously verify a single email address.
-
-    Parameters:
-      • smtp_probe – when False, skip the (slow, often port-25-blocked) SMTP
-        RCPT probe and rely on MX-record validation only. Used by the lead
-        pipeline for fast, non-blocking bulk verification; the on-demand
-        per-lead endpoint keeps the full SMTP probe for higher confidence.
-
-    Confidence levels:
-      • high   – MX record found **and** SMTP probe accepted
-      • medium – MX record found but SMTP probe inconclusive / skipped
-      • low    – syntax OK but no MX record (or syntax invalid)
-    """
-    email = (email or "").strip()
-
-    if not email or not _is_valid_syntax(email):
-        return {
-            "email": email,
-            "verified": False,
-            "confidence": "low",
-            "method": "syntax_check",
-            "reason": "Invalid email syntax",
-        }
-
-    domain = email.split("@")[-1].lower()
-
-    # --- Step 1: MX lookup (run in thread pool to avoid blocking the event loop) ---
-    loop = asyncio.get_event_loop()
-    mx_hosts: list[str] = await loop.run_in_executor(None, _get_mx_records, domain)
-
-    if not mx_hosts:
-        return {
-            "email": email,
-            "verified": False,
-            "confidence": "low",
-            "method": "dns_mx",
-            "reason": f"No MX records for domain '{domain}'",
-        }
-
-    # MX-only mode: a valid MX record means the domain can receive mail. Treat as
-    # "likely deliverable" (medium confidence) without the expensive SMTP probe.
-    if not smtp_probe:
-        return {
-            "email": email,
-            "verified": True,
-            "confidence": "medium",
-            "method": "dns_mx",
-            "reason": f"MX record found for '{domain}' (SMTP probe skipped)",
-        }
-
-    # --- Step 2: SMTP probe (best-effort, non-blocking) ---
-    mx_host = mx_hosts[0]
-    try:
-        accepted, reason = await asyncio.wait_for(
-            loop.run_in_executor(None, _smtp_verify, mx_host, email),
-            timeout=8,
-        )
-    except asyncio.TimeoutError:
-        accepted, reason = False, "SMTP probe timed out"
-
-    if accepted:
-        return {
-            "email": email,
-            "verified": True,
-            "confidence": "high",
-            "method": "smtp_rcpt",
-            "reason": reason,
-        }
-    else:
-        # SMTP refused but MX exists → medium confidence (mailbox may still be valid
-        # if the server uses catch-all or greylisting)
-        logger.debug("Email SMTP probe inconclusive for %s: %s", email, reason)
-        return {
-            "email": email,
-            "verified": True,   # treat MX-valid as "likely deliverable"
-            "confidence": "medium",
-            "method": "dns_mx",
-            "reason": f"MX record found for '{domain}'; SMTP probe: {reason}",
-        }
+    config = config or VerifierConfig()
+    if smtp_probe is not None:
+        config = VerifierConfig(smtp_probe=smtp_probe, provider=config.provider)
+    return (await verify(email, config)).to_dict()
 
 
 async def verify_emails_batch(
     emails: list[str],
     concurrency: int = 5,
-    smtp_probe: bool = True,
+    smtp_probe: bool | None = None,
+    config: VerifierConfig | None = None,
 ) -> list[dict]:
     """Verify multiple emails concurrently, up to *concurrency* at a time."""
-    sem = asyncio.Semaphore(concurrency)
-
-    async def _limited(email: str) -> dict:
-        async with sem:
-            return await verify_email(email, smtp_probe=smtp_probe)
-
-    tasks = [_limited(e) for e in emails]
-    return await asyncio.gather(*tasks)
+    config = config or VerifierConfig()
+    if smtp_probe is not None:
+        config = VerifierConfig(smtp_probe=smtp_probe, provider=config.provider)
+    return [r.to_dict() for r in await verify_many(emails, config, concurrency)]

@@ -108,6 +108,9 @@ async def save_enriched_leads_to_db(
                 "email_confidence": item.get("email_confidence"),
                 "email_verify_method": item.get("email_verify_method"),
                 "email_verify_reason": item.get("email_verify_reason"),
+                "email_status": item.get("email_status"),
+                "email_checked_at": item.get("email_checked_at"),
+                "email_catch_all": item.get("email_catch_all"),
                 "updated_at": now,
             }
             existing_lead = await _leads.get(request_id=request_id, url=lead_url)
@@ -248,6 +251,9 @@ async def get_normalized_leads_for_request(request_id: str) -> list[dict]:
             "phone": nl.get("phone"),
             "email_verified": nl.get("email_verified"),
             "email_confidence": nl.get("email_confidence"),
+            "email_status": nl.get("email_status"),
+            "email_checked_at": nl.get("email_checked_at"),
+            "email_status_reason": nl.get("email_status_reason") or nl.get("email_verify_reason"),
             "match_score": str(score if score is not None else "0"),
             "snippet": nl.get("snippet"),
             "type": nl.get("lead_type", "enriched"),

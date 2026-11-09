@@ -34,6 +34,7 @@ from app.services.export_service import (
     generate_decision_makers_pdf,
 )
 from app.services.email_verification import verify_email, verify_emails_batch
+from app.verification import VerifierConfig
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 
@@ -491,7 +492,7 @@ async def verify_single_email(
     Verify a single email address using DNS MX lookup + SMTP probe.
     Saves the result back to the lead record (if lead_id provided).
     """
-    result = await verify_email(body.email)
+    result = await verify_email(body.email, config=VerifierConfig.from_user(current_user))
     return result
 
 
@@ -502,7 +503,7 @@ async def verify_emails_in_batch(
 ):
     """Verify multiple emails concurrently (up to 50)."""
     emails = body.emails[:50]  # safety cap
-    results = await verify_emails_batch(emails)
+    results = await verify_emails_batch(emails, config=VerifierConfig.from_user(current_user))
     return {"results": results}
 
 
@@ -525,7 +526,7 @@ async def verify_and_save_email(
     if not email:
         raise HTTPException(status_code=400, detail="Lead has no email address to verify")
 
-    result = await verify_email(email)
+    result = await verify_email(email, config=VerifierConfig.from_user(current_user))
 
     # Persist verification result on the lead document
     await update_lead_fields(lead_id, {
@@ -533,6 +534,10 @@ async def verify_and_save_email(
         "email_confidence": result["confidence"],
         "email_verify_method": result["method"],
         "email_verify_reason": result["reason"],
+        "email_status": result["status"],
+        "email_checked_at": result["checked_at"],
+        "email_status_reason": result["reason"],
+        "email_catch_all": result["catch_all"],
     })
 
     return result
