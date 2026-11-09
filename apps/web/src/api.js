@@ -188,6 +188,7 @@ export const api = {
   get: (path) => request('GET', path),
   post: (path, body) => request('POST', path, body),
   put: (path, body) => request('PUT', path, body),
+  patch: (path, body) => request('PATCH', path, body),
   delete: (path) => request('DELETE', path),
 
 
@@ -283,4 +284,5 @@ export const api = {
   // Public opt-out (no sign-in): the token comes from the link in the email footer.
   getOptOut: (token) => publicRequest('GET', `/public/opt-out?token=${encodeURIComponent(token)}`),
   confirmOptOut: (token) => publicRequest('POST', '/public/opt-out', { token }),
+  exportLeadsCsv: (source, id) => requestDownload(`/integrations/export/${source}/${encodeURIComponent(id)}.csv`, `quarry_${source}_${id}.csv`),
 }

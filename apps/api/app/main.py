@@ -16,6 +16,7 @@ from app.api import compliance as compliance_router
 from app.api import usage as usage_router
 from app.api import lists as lead_lists_router
 from app.core.config import settings
+from app.p3 import wiring as p3_wiring
 from app.core.logger import logger
 import traceback
 
@@ -30,7 +31,9 @@ async def lifespan(app: FastAPI):
     orphaned = await fail_orphaned_requests(exclude_ids=await pipeline_jobs.pending_pipeline_request_ids())
     if orphaned:
         logger.warning("Marked %d interrupted request(s) as Failed after restart", orphaned)
+    p3_wiring.start_background()
     yield
+    await p3_wiring.stop_background()
     logger.info(f"Shutting down {settings.PROJECT_NAME}...")
     await jobs.stop_worker()
     await close_db()
@@ -74,6 +77,7 @@ app.include_router(verification_router.router, prefix=settings.API_V1_STR)
 app.include_router(compliance_router.router, prefix=settings.API_V1_STR)
 app.include_router(compliance_router.public_router, prefix=settings.API_V1_STR)
 app.include_router(usage_router.router, prefix=settings.API_V1_STR)
+p3_wiring.include_routers(app, settings.API_V1_STR)
 
 
 @app.get(f"{settings.API_V1_STR}/health")

@@ -166,3 +166,4 @@ TABLES: dict[str, DocTable] = {
 
 # Phase 2 (data trust and compliance) tables live in their own module; importing it registers them in TABLES.
 from app.db import models_trust  # noqa: E402,F401
+from app.p3 import models as _p3_models  # noqa: E402,F401  (registers Phase 3 tables into Base/TABLES)
