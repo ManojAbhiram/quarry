@@ -10,7 +10,7 @@ from app.db.decision_makers import insert_decision_maker_if_new
 from app.db.lead_enrichments import upsert_lead_enrichment
 from app.db.models import TABLES, Lead as LeadRow
 from app.compliance.region import infer_region
-from app.provenance import build_contact_provenance, build_lead_provenance
+from app.provenance import build_lead_provenance
 from app.schemas.leads import Lead
 
 _leads = TABLES["leads"]
