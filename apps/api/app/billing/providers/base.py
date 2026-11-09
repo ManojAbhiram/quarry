@@ -29,7 +29,7 @@ class CheckoutSession:
 class NormalizedEvent:
     """What the billing service needs from any provider webhook.
 
-    kind: subscription_updated | subscription_canceled | invoice_paid | invoice_failed | ignored
+    kind: subscription_updated | subscription_canceled | invoice_paid | invoice_failed | topup_paid | ignored
     """
 
     event_id: str
@@ -41,10 +41,22 @@ class NormalizedEvent:
     subscription_id: Optional[str] = None
     period_end: Optional[int] = None  # unix seconds
     invoice: dict = field(default_factory=dict)  # id, amount (minor units), currency, status, url
+    topup: dict = field(default_factory=dict)  # credits, target ("requests"|"enrichment"), user_id (kind="topup_paid")
 
 
 class PaymentProvider(ABC):
     name: str
+    # True for providers that take payment synchronously (the mock): credits are applied right after the session is
+    # created instead of waiting for a webhook.
+    settles_immediately: bool = False
+    supports_topup: bool = False
+
+    async def create_topup_session(
+        self, *, scope_id: str, user_id: str, credits: int, price_usd: int, target: str, customer_email: str,
+        success_url: str, cancel_url: str,
+    ) -> CheckoutSession:
+        """One-off purchase of `credits`. Providers that cannot do this keep the default."""
+        raise ProviderNotConfigured(f"{self.name} does not support credit top-ups")
 
     @abstractmethod
     def is_configured(self) -> bool: ...

@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 
 from app.billing.store import get_plan_for_scope
@@ -13,6 +13,7 @@ from app.db.lead_lists import _attach_lead_ids
 from app.db.models import TABLES
 from app.schemas.requests import request_to_out
 from app.services.auth import get_current_user
+from app.services.email import smtp_configured
 from app.services.requests import _fetch_enrich_map
 from app.teams import store
 from app.teams.deps import OrgContext, org_member
@@ -123,7 +124,8 @@ async def remove_member(user_id: str, ctx: OrgContext = Depends(org_member("view
 # -- invites ------------------------------------------------------------------------------------------------------
 
 def _invite_out(i: dict) -> dict:
-    return {"id": i["_id"], "email": i["email"], "role": i["role"], "expires_at": _iso(i["expires_at"])}
+    return {"id": i["_id"], "email": i["email"], "role": i["role"], "expires_at": _iso(i["expires_at"]),
+            "email_status": i.get("email_status") or "disabled"}
 
 
 @router.get("/{org_id}/invites")
@@ -131,8 +133,27 @@ async def invites(ctx: OrgContext = Depends(org_member("admin"))):
     return {"invites": [_invite_out(i) for i in await store.list_pending_invites(ctx.org_id)]}
 
 
+async def _email_invite(invite_id: str, to_email: str, org_name: str, inviter: str, link: str) -> None:
+    """Background task: send the invite email and record the outcome on the invite."""
+    try:
+        await send_invite_email(to_email, org_name, inviter, link)
+        fields = {"email_status": "sent", "email_error": None}
+    except Exception as exc:  # SMTP is optional: the inviter can still copy the link
+        logger.warning("Invite email not sent: %s", exc)
+        fields = {"email_status": "failed", "email_error": str(exc)[:300]}
+    try:
+        await TABLES["org_invites"].update(invite_id, fields)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not record invite email status: %s", exc)
+
+
 @router.post("/{org_id}/invites", status_code=201)
-async def invite(body: InviteCreate, ctx: OrgContext = Depends(org_member("admin"))):
+async def invite(body: InviteCreate, background: BackgroundTasks, ctx: OrgContext = Depends(org_member("admin"))):
+    """Create the invite and return the link at once. The email is sent in the background.
+
+    `email_status`: disabled (SMTP not configured, nothing sent), queued (sending now), later sent or failed
+    (visible on the invite list).
+    """
     plan = await get_plan_for_scope(ctx.org_id)
     try:
         doc, token = await store.create_invite(ctx.org_id, body.email, body.role, str(ctx.user["_id"]), plan.seats)
@@ -140,13 +161,13 @@ async def invite(body: InviteCreate, ctx: OrgContext = Depends(org_member("admin
         _fail(e)
     link = f"{settings.FRONTEND_URL}/invite?token={token}"
     org = await TABLES["organizations"].get(_id=ctx.org_id)
-    emailed = False
-    try:
-        await send_invite_email(doc["email"], org.get("name", "a team"), ctx.user.get("name") or "A teammate", link)
-        emailed = True
-    except Exception as exc:  # SMTP is optional: the inviter can still copy the link
-        logger.warning("Invite email not sent: %s", exc)
-    return {**_invite_out(doc), "invite_url": link, "emailed": emailed}
+    status = "queued" if smtp_configured() else "disabled"
+    await TABLES["org_invites"].update(doc["_id"], {"email_status": status})
+    doc["email_status"] = status
+    if status == "queued":
+        background.add_task(_email_invite, doc["_id"], doc["email"], org.get("name", "a team"),
+                            ctx.user.get("name") or "A teammate", link)
+    return {**_invite_out(doc), "invite_url": link}
 
 
 @router.delete("/{org_id}/invites/{invite_id}", status_code=204)

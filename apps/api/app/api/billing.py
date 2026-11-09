@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.billing import service, store
-from app.billing.plans import PLANS, plan_to_dict
+from app.billing.plans import PLANS, TOPUP_PACKS, TOPUP_TARGETS, plan_to_dict
 from app.billing.providers.base import InvalidSignature, ProviderNotConfigured
-from app.billing.providers.registry import available_providers, default_provider_name, get_provider
+from app.billing.providers.registry import available_providers, default_provider_name, get_provider, topup_providers
 from app.core.logger import logger
 from app.teams.deps import Workspace, get_workspace, workspace_role
 
@@ -22,6 +22,48 @@ def _iso(v):
 class CheckoutBody(BaseModel):
     plan: Literal["pro", "team"]
     provider: Optional[Literal["stripe", "razorpay"]] = None
+
+
+KIND_LABELS = {"grant": "Monthly plan credits", "request_created": "Lead request", "topup": "Top-up"}
+
+
+async def _enrichment_balance(user: dict) -> int:
+    from app.waterfall import service as waterfall  # lazy: keeps billing importable without the waterfall module
+
+    return await waterfall.balance(str(user["_id"]))
+
+
+class TopupBody(BaseModel):
+    credits: int
+    target: Literal["requests", "enrichment"] = "requests"
+    provider: Optional[str] = None
+
+
+@router.get("/topup")
+async def topup_options(ws: Workspace = Depends(get_workspace)):
+    return {"packs": list(TOPUP_PACKS), "targets": list(TOPUP_TARGETS), "providers": topup_providers(),
+            "can_manage": not ws.org_id or ws.role in ("owner", "admin")}
+
+
+@router.post("/topup")
+async def topup(body: TopupBody, ws: Workspace = Depends(workspace_role("admin"))):
+    """Buy credits through the payment provider. Owners and admins only. The mock provider credits immediately; real
+    providers return a hosted checkout URL and the credits arrive with the paid webhook."""
+    name = body.provider or (topup_providers() or [""])[0]
+    if name not in topup_providers():
+        raise HTTPException(status_code=503, detail="Credit top-ups are not available on this server")
+    try:
+        return await service.start_topup(
+            provider_name=name, scope_id=ws.scope_id, user_id=str(ws.user["_id"]), credits=body.credits,
+            target=body.target, email=ws.user.get("email") or "",
+        )
+    except service.TopupError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None
+    except ProviderNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e)) from None
+    except Exception as e:
+        logger.error("Top-up failed for %s: %s", ws.scope_id, e)
+        raise HTTPException(status_code=502, detail="The payment provider could not start the top-up") from None
 
 
 @router.get("/plans")
@@ -45,9 +87,13 @@ async def summary(ws: Workspace = Depends(get_workspace)):
             "current_period_end": _iso(sub.get("current_period_end")),
         } if sub else None,
         "usage": {**usage, "requests_limit": plan.requests_per_month},
-        "credits": {"balance": await store.credit_balance(scope), "monthly_grant": plan.credits_per_month,
-                    "recent": [{"kind": e["kind"], "amount": e["amount"], "note": e.get("note", ""),
-                                "created_at": _iso(e.get("created_at"))} for e in ledger]},
+        # Two separate balances, labelled so they are never confused: request credits are spent creating lead
+        # requests (plan grant + top-ups); email lookup credits are spent finding emails through paid providers.
+        "credits": {"label": "Request credits", "balance": await store.credit_balance(scope),
+                    "monthly_grant": plan.credits_per_month,
+                    "recent": [{"kind": e["kind"], "label": KIND_LABELS.get(e["kind"], e["kind"]), "amount": e["amount"],
+                                "note": e.get("note", ""), "created_at": _iso(e.get("created_at"))} for e in ledger]},
+        "enrichment_credits": {"label": "Email lookup credits", "balance": await _enrichment_balance(ws.user)},
         "can_manage": not ws.org_id or ws.role in ("owner", "admin"),
     }
 

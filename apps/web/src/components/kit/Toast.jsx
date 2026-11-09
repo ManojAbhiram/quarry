@@ -7,6 +7,7 @@ const ToastContext = createContext(null)
 const TONES = {
   success: 'border-ok/40',
   error: 'border-bad/50',
+  warning: 'border-warn/50',
   info: 'border-line',
 }
 
@@ -24,7 +25,7 @@ export function ToastProvider({ children }) {
     ({ type = 'info', message, duration }) => {
       const id = ++nextId.current
       setToasts((all) => [...all, { id, type, message }])
-      const ms = duration ?? (type === 'error' ? 0 : 5000)
+      const ms = duration ?? (type === 'error' ? 0 : type === 'warning' ? 10000 : 5000)
       if (ms > 0) setTimeout(() => dismiss(id), ms)
       return id
     },
@@ -36,7 +37,14 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4 sm:items-end">
+      {/* Top-right, just under the sticky header: toasts used to sit bottom-right and covered the primary button of
+          the form above them. The region itself ignores pointer events so it never blocks clicks beside a toast. */}
+      <div
+        role="region"
+        aria-label="Notifications"
+        data-testid="toast-region"
+        className="pointer-events-none fixed inset-x-0 top-16 z-50 flex flex-col items-center gap-2 px-4 pt-2 sm:items-end"
+      >
         {toasts.map((t) => (
           <div
             key={t.id}

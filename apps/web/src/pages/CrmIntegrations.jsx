@@ -11,8 +11,12 @@ const STATUS_STYLE = {
   synced: 'bg-ok-soft text-ok ring-ok/20',
   failed: 'bg-bad-soft text-bad ring-bad/20',
   not_synced: 'bg-head text-muted ring-line',
+  queued: 'bg-head text-muted ring-line',
+  syncing: 'bg-primary-50 text-primary-800 ring-primary-500/20 dark:bg-primary-950/60 dark:text-primary-300',
 }
-const STATUS_LABEL = { synced: 'Synced', failed: 'Failed', not_synced: 'Not synced' }
+const STATUS_LABEL = { synced: 'Synced', failed: 'Failed', not_synced: 'Not synced', queued: 'Queued', syncing: 'Syncing' }
+const POLL_MS = 1500
+const JOB_DONE = ['succeeded', 'failed', 'cancelled']
 
 function Connection({ data, onChange }) {
   const toast = useToast()
@@ -158,6 +162,8 @@ function Push({ canPush }) {
   const [loadingSync, setLoadingSync] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [syncError, setSyncError] = useState('')
+  const [jobId, setJobId] = useState(null)
+  const [tick, setTick] = useState(0)
   const titles = useRef({})
 
   useEffect(() => {
@@ -166,34 +172,72 @@ function Push({ canPush }) {
       .catch(() => setLists({ status: 'error', items: [] }))
   }, [])
 
-  const loadSync = useCallback(async (id) => {
+  const loadSync = useCallback(async (id, { silent = false } = {}) => {
     if (!id) return setSync(null)
-    setLoadingSync(true)
-    setSyncError('')
+    if (!silent) {
+      setLoadingSync(true)
+      setSyncError('')
+    }
     try {
       const [s, list] = await Promise.all([api.get(`/integrations/hubspot/sync?list_id=${encodeURIComponent(id)}`), api.get(`/lists/${encodeURIComponent(id)}`)])
       titles.current = Object.fromEntries((list?.leads || []).map((l) => [l.id, l.title || l.url]))
       setSync(s)
     } catch (err) {
-      setSyncError(err.message || 'Could not load sync status.')
-      setSync(null)
+      if (!silent) {
+        setSyncError(err.message || 'Could not load sync status.')
+        setSync(null)
+      }
     } finally {
-      setLoadingSync(false)
+      if (!silent) setLoadingSync(false)
     }
   }, [])
-  useEffect(() => { loadSync(listId) }, [listId, loadSync])
+  useEffect(() => { setJobId(null); setPushing(false); loadSync(listId) }, [listId, loadSync])
+
+  const finish = useCallback((job) => {
+    setJobId(null)
+    setPushing(false)
+    if (job.status === 'succeeded') {
+      const { synced = 0, failed = 0 } = job.result?.summary || {}
+      toast.push({ type: failed ? 'error' : 'success', message: failed ? `${synced} synced, ${failed} failed. See details below.` : `${synced} lead${synced === 1 ? '' : 's'} synced to HubSpot.` })
+    } else {
+      toast.push({ type: 'error', message: job.error || 'The push did not finish. Retry the failed leads.' })
+    }
+  }, [toast])
+
+  // While a push job is queued or running (started here, or found in progress when the page opened), poll the job and
+  // the per-lead status every couple of seconds so leads flip from Queued to Syncing to Synced as they are processed.
+  const resuming = sync?.counts?.in_progress > 0
+  useEffect(() => {
+    if (!listId || (!jobId && !resuming)) return undefined
+    const t = setTimeout(async () => {
+      try {
+        const job = jobId ? await api.get(`/jobs/${encodeURIComponent(jobId)}`) : null
+        await loadSync(listId, { silent: true })
+        if (job && JOB_DONE.includes(job.status)) finish(job)
+      } catch {
+        /* a failed poll is retried on the next tick */
+      } finally {
+        setTick((n) => n + 1)
+      }
+    }, POLL_MS)
+    return () => clearTimeout(t)
+  }, [jobId, resuming, listId, tick, loadSync, finish])
 
   const push = async (onlyFailed) => {
     setPushing(true)
     try {
       const r = await api.post('/integrations/hubspot/push', { list_id: listId, only_failed: onlyFailed })
-      const { synced, failed } = r.summary
-      toast.push({ type: failed ? 'error' : 'success', message: failed ? `${synced} synced, ${failed} failed. See details below.` : `${synced} lead${synced === 1 ? '' : 's'} synced to HubSpot.` })
-      await loadSync(listId)
+      if (!r.job_id) {
+        setPushing(false)
+        toast.push({ type: 'success', message: 'That list has no leads to push.' })
+        return
+      }
+      toast.push({ type: 'info', message: 'Push started. Leads update below as they sync.' })
+      setJobId(r.job_id)
+      await loadSync(listId, { silent: true })
     } catch (err) {
-      toast.push({ type: 'error', message: err.message || 'Push failed.' })
-    } finally {
       setPushing(false)
+      toast.push({ type: 'error', message: err.message || 'Push failed.' })
     }
   }
 
@@ -211,14 +255,14 @@ function Push({ canPush }) {
             {lists.items.map((l) => <option key={l._id} value={l._id}>{l.name} ({(l.lead_ids || []).length})</option>)}
           </select>
         </div>
-        {canPush && <Button disabled={!listId} loading={pushing} onClick={() => push(false)}>Push to HubSpot</Button>}
-        {canPush && sync?.counts?.failed > 0 && <Button variant="secondary" disabled={pushing} onClick={() => push(true)}><RefreshCw aria-hidden="true" className="h-4 w-4" /> Retry failed</Button>}
+        {canPush && <Button disabled={!listId || resuming} loading={pushing} onClick={() => push(false)}>Push to HubSpot</Button>}
+        {canPush && sync?.counts?.failed > 0 && <Button variant="secondary" disabled={pushing || resuming} onClick={() => push(true)}><RefreshCw aria-hidden="true" className="h-4 w-4" /> Retry failed</Button>}
       </div>
       {loadingSync && <Skeleton className="h-24 w-full" />}
       {syncError && <p role="alert" className="rounded-xl bg-bad-soft p-3 text-sm font-medium text-bad">{syncError}</p>}
       {sync && !loadingSync && (
         <>
-          <p className="text-sm text-muted" aria-live="polite">{sync.counts.synced} synced · {sync.counts.failed} failed · {sync.counts.not_synced} not synced</p>
+          <p className="text-sm text-muted" aria-live="polite">{sync.counts.synced} synced · {sync.counts.failed} failed · {sync.counts.not_synced} not synced{sync.counts.in_progress > 0 ? ` · ${sync.counts.in_progress} in progress` : ''}</p>
           <ul className="divide-y divide-line rounded-xl border border-line" aria-label="Sync status per lead">
             {sync.leads.map((l) => (
               <li key={l.lead_id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">

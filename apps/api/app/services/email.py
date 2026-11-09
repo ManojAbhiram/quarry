@@ -11,6 +11,11 @@ class SmtpNotConfigured(RuntimeError):
     pass
 
 
+def smtp_configured() -> bool:
+    """True when outgoing app email (resets, invites) can be attempted at all."""
+    return bool(settings.SMTP_USERNAME.strip() and settings.SMTP_PASSWORD.replace(" ", ""))
+
+
 async def _deliver(msg: MIMEMultipart) -> None:
     """Send via SMTP. Port 465 uses implicit TLS; anything else uses STARTTLS."""
     username = settings.SMTP_USERNAME.strip()

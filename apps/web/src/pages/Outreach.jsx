@@ -23,18 +23,47 @@ function useLoad(fn) {
 const listBoxes = () => outreachApi.mailboxes()
 const listSeqs = () => outreachApi.sequences()
 
+function TestResult({ testing, result }) {
+  if (testing) return <p role="status" className="text-sm text-muted sm:col-span-2">Testing SMTP and IMAP logins...</p>
+  const rows = [['SMTP', result.smtp], ['IMAP', result.imap]]
+  return (
+    <ul aria-label="Connection test results" className="space-y-1 text-sm sm:col-span-2">
+      {rows.map(([name, r]) => (
+        <li key={name} className="flex flex-wrap items-center gap-2">
+          <Pill tone={r.skipped ? 'info' : r.ok ? 'ok' : 'bad'}>{name}: {r.skipped ? 'not configured' : r.ok ? 'connected' : 'failed'}</Pill>
+          {r.error && <span className="text-muted">{r.error}</span>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function MailboxDialog({ open, onClose, onSaved }) {
   const toast = useToast()
   const [form, setForm] = useState(BLANK_BOX)
   const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [result, setResult] = useState(null)
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
+  const payload = () => ({ ...form, smtp_port: Number(form.smtp_port), daily_cap: Number(form.daily_cap) })
+  const runTest = async () => {
+    setTesting(true)
+    setResult(null)
+    try {
+      setResult(await outreachApi.testMailbox(payload()))
+    } catch (err) {
+      setResult({ ok: false, smtp: { ok: false, error: err.message || 'The test could not run.' }, imap: { ok: null, skipped: true } })
+    } finally { setTesting(false) }
+  }
   const submit = async (e) => {
     e.preventDefault()
     setSaving(true)
     try {
-      await outreachApi.createMailbox({ ...form, smtp_port: Number(form.smtp_port), daily_cap: Number(form.daily_cap) })
-      toast.push({ type: 'success', message: 'Mailbox connected.' })
+      const saved = await outreachApi.createMailbox(payload())
+      if (saved?.warning) toast.push({ type: 'warning', message: saved.warning })
+      else toast.push({ type: 'success', message: 'Mailbox connected.' })
       setForm(BLANK_BOX)
+      setResult(null)
       onSaved()
       onClose()
     } catch (err) {
@@ -53,7 +82,12 @@ function MailboxDialog({ open, onClose, onSaved }) {
         <Field label="IMAP password" type="password" autoComplete="off" value={form.imap_password} onChange={set('imap_password')} hint="Leave blank to reuse the SMTP password." />
         <Field label="Daily send cap" type="number" min="1" value={form.daily_cap} onChange={set('daily_cap')} />
         <label className="flex items-center gap-2 text-sm text-ink sm:col-span-2"><input type="checkbox" className="h-4 w-4 accent-primary-600" checked={form.warmup} onChange={set('warmup')} />Ramp up gradually (warmup)</label>
-        <div className="flex justify-end gap-2 sm:col-span-2"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>Connect</Button></div>
+        {(testing || result) && <TestResult testing={testing} result={result} />}
+        <div className="flex flex-wrap justify-end gap-2 sm:col-span-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={runTest} loading={testing} disabled={!form.smtp_host || !form.smtp_password}>Test connection</Button>
+          <Button type="submit" loading={saving}>Connect</Button>
+        </div>
       </form>
     </Dialog>
   )

@@ -37,8 +37,14 @@ class MailboxCreds:
 class SmtpSender(Protocol):
     async def send(self, creds: MailboxCreds, message: EmailMessage) -> None: ...
 
+    async def verify_login(self, creds: MailboxCreds) -> None:
+        """Connect and authenticate without sending. Raises SendError with a readable message on failure."""
+
 
 class ImapPoller(Protocol):
+    async def check_login(self, creds: MailboxCreds) -> None:
+        """Connect and authenticate. Raises SendError with a readable message on failure."""
+
     async def fetch_new(self, creds: MailboxCreds, after_uid: int) -> list[tuple[int, bytes]]:
         """Return (uid, raw RFC822 bytes) for INBOX messages with uid > after_uid, ascending."""
 
@@ -70,7 +76,44 @@ class RealSmtp:
             raise SendError(str(exc), permanent=False) from exc
 
 
+    async def verify_login(self, creds: MailboxCreds) -> None:
+        use_ssl = creds.smtp_port == 465
+        client = aiosmtplib.SMTP(hostname=creds.smtp_host, port=creds.smtp_port, use_tls=use_ssl, start_tls=not use_ssl,
+                                 timeout=10)
+        try:
+            await client.connect()
+            await client.login(creds.smtp_username, creds.smtp_password.replace(" ", ""))
+        except aiosmtplib.SMTPAuthenticationError as exc:
+            raise SendError(f"SMTP login was rejected: {exc.message}", permanent=True) from exc
+        except (aiosmtplib.SMTPException, OSError, asyncio.TimeoutError) as exc:
+            raise SendError(f"Could not reach {creds.smtp_host}:{creds.smtp_port}: {exc}") from exc
+        finally:
+            try:
+                await client.quit()
+            except Exception:  # noqa: BLE001
+                pass
+
+
 class RealImap:
+    async def check_login(self, creds: MailboxCreds) -> None:
+        await asyncio.to_thread(self._login, creds)
+
+    @staticmethod
+    def _login(creds: MailboxCreds) -> None:
+        try:
+            conn = imaplib.IMAP4_SSL(creds.imap_host, creds.imap_port, ssl_context=ssl.create_default_context(), timeout=10)
+        except (OSError, imaplib.IMAP4.error) as exc:
+            raise SendError(f"Could not reach {creds.imap_host}:{creds.imap_port}: {exc}") from exc
+        try:
+            conn.login(creds.imap_username or creds.smtp_username, (creds.imap_password or creds.smtp_password).replace(" ", ""))
+        except (imaplib.IMAP4.error, OSError) as exc:
+            raise SendError(f"IMAP login was rejected: {exc}", permanent=True) from exc
+        finally:
+            try:
+                conn.logout()
+            except Exception:  # noqa: BLE001
+                pass
+
     async def fetch_new(self, creds: MailboxCreds, after_uid: int) -> list[tuple[int, bytes]]:
         return await asyncio.to_thread(self._fetch, creds, after_uid)
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { ToastProvider } from '../components/kit'
@@ -84,7 +84,7 @@ describe('TeamSettings', () => {
   it('shows the invite link after inviting and validates the email', async () => {
     asRole('admin')
     api.get.mockImplementation(route)
-    api.post.mockResolvedValue({ id: 'i2', invite_url: 'http://app/invite?token=abc', emailed: false })
+    api.post.mockResolvedValue({ id: 'i2', invite_url: 'http://app/invite?token=abc', email_status: 'disabled' })
     const user = userEvent.setup()
     wrap(<TeamSettings />)
     await user.click(await screen.findByRole('button', { name: /Send invite/ }))
@@ -92,6 +92,7 @@ describe('TeamSettings', () => {
     await user.type(screen.getByLabelText('Email'), 'a@b.co')
     await user.click(screen.getByRole('button', { name: /Send invite/ }))
     expect(await screen.findByText('http://app/invite?token=abc')).toBeInTheDocument()
+    expect(screen.getByText('Email not set up, share the link')).toBeInTheDocument()
     expect(api.post).toHaveBeenCalledWith('/orgs/o1/invites', { email: 'a@b.co', role: 'member' })
   })
 
@@ -141,6 +142,49 @@ describe('Billing', () => {
     expect(screen.getByRole('progressbar', { name: 'Lead requests this month' })).toHaveAttribute('aria-valuenow', '3')
     expect(screen.getByText('22')).toBeInTheDocument()
     expect(screen.getByText('No invoices yet')).toBeInTheDocument()
+  })
+
+  it('labels the two credit balances and lets an admin add credits', async () => {
+    const TOPUP = { packs: [{ credits: 100, price_usd: 10 }, { credits: 500, price_usd: 40 }], providers: ['mock'], can_manage: true }
+    api.get.mockImplementation((p) => Promise.resolve(
+      p === '/billing/summary' ? { ...SUMMARY, credits: { ...SUMMARY.credits, label: 'Request credits', recent: [{ kind: 'topup', label: 'Top-up', amount: 100, note: '' }] }, enrichment_credits: { label: 'Email lookup credits', balance: 97 } }
+        : p === '/billing/plans' ? PLANS : p === '/billing/topup' ? TOPUP : { invoices: [] }))
+    api.post.mockResolvedValue({ settled: true, credits: 500, target: 'enrichment' })
+    const user = userEvent.setup()
+    wrap(<Billing />)
+    expect(await screen.findByText('Request credits', { selector: 'dt' })).toBeInTheDocument()
+    expect(screen.getByText('Email lookup credits', { selector: 'dt' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Email lookup credit balance')).toHaveTextContent('97')
+    expect(screen.getByRole('list', { name: 'Recent request credit activity' })).toHaveTextContent('Top-up')
+    await user.selectOptions(screen.getByLabelText('Credit pack'), '500')
+    await user.selectOptions(screen.getByLabelText('Add to'), 'enrichment')
+    await user.click(screen.getByRole('button', { name: 'Add credits' }))
+    expect(api.post).toHaveBeenCalledWith('/billing/topup', { credits: 500, target: 'enrichment' })
+    expect(await screen.findByText('Added 500 email lookup credits.')).toBeInTheDocument()
+  })
+
+  it('hides the top-up form when no provider is enabled and disables it for non-admins', async () => {
+    wrap(<Billing />)
+    expect(await screen.findByRole('heading', { name: 'Free plan' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add credits' })).not.toBeInTheDocument()
+    cleanup()
+    api.get.mockImplementation((p) => Promise.resolve(
+      p === '/billing/summary' ? SUMMARY : p === '/billing/plans' ? PLANS
+        : p === '/billing/topup' ? { packs: [{ credits: 100, price_usd: 10 }], providers: ['mock'], can_manage: false } : { invoices: [] }))
+    wrap(<Billing />)
+    expect(await screen.findByRole('button', { name: 'Add credits' })).toBeDisabled()
+    expect(screen.getByText('Only owners and admins can add credits.')).toBeInTheDocument()
+  })
+
+  it('shows the error when adding credits fails', async () => {
+    api.get.mockImplementation((p) => Promise.resolve(
+      p === '/billing/summary' ? SUMMARY : p === '/billing/plans' ? PLANS
+        : p === '/billing/topup' ? { packs: [{ credits: 100, price_usd: 10 }], providers: ['mock'], can_manage: true } : { invoices: [] }))
+    api.post.mockRejectedValue(new Error('The payment provider could not start the top-up'))
+    const user = userEvent.setup()
+    wrap(<Billing />)
+    await user.click(await screen.findByRole('button', { name: 'Add credits' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not start the top-up')
   })
 
   it('starts checkout for an upgrade', async () => {
@@ -200,12 +244,13 @@ describe('Integrations', () => {
             : { counts: { synced: 0, failed: 0, not_synced: 2 }, leads: [{ lead_id: 'a', status: 'not_synced' }, { lead_id: 'b', status: 'not_synced' }] },
         )
       }
+      if (p === '/jobs/j1') return Promise.resolve({ status: 'succeeded', result: { summary: { synced: 1, failed: 1, skipped: 0 } } })
       if (p === '/hooks') return Promise.resolve({ hooks: [] })
       return Promise.reject(new Error('unexpected ' + p))
     })
     api.post.mockImplementation(() => {
       synced = true
-      return Promise.resolve({ summary: { synced: 1, failed: 1, skipped: 0 }, results: [] })
+      return Promise.resolve({ job_id: 'j1', status: 'queued', total: 2 })
     })
     const user = userEvent.setup()
     wrap(<Integrations />)
@@ -216,8 +261,35 @@ describe('Integrations', () => {
     expect(await screen.findByText('Acme')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Push to HubSpot' }))
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/integrations/hubspot/push', { list_id: 'l1', only_failed: false }))
-    expect(await screen.findByText('HubSpot is unavailable (will work on retry)')).toBeInTheDocument()
+    expect(await screen.findByText('Push started. Leads update below as they sync.')).toBeInTheDocument()
+    expect(await screen.findByText('HubSpot is unavailable (will work on retry)', {}, { timeout: 5000 })).toBeInTheDocument()
+    expect(await screen.findByText('1 synced, 1 failed. See details below.', {}, { timeout: 5000 })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Retry failed/ })).toBeInTheDocument()
+  })
+
+  it('shows leads as in progress while a push runs and resumes polling on reload', async () => {
+    const connected = { ...base, integrations: [{ provider: 'hubspot', connected: true, auth_type: 'private_app', info: { portal_id: 7 } }] }
+    let polls = 0
+    api.get.mockImplementation((p) => {
+      if (p === '/integrations') return Promise.resolve(connected)
+      if (p === '/integrations/hubspot/mapping') return Promise.resolve({ mapping: { company: { name: 'name' }, contact: { email: 'email' } } })
+      if (p === '/lists') return Promise.resolve({ lists: [{ _id: 'l1', name: 'Hot', lead_ids: ['a'] }] })
+      if (p === '/lists/l1') return Promise.resolve({ leads: [{ id: 'a', title: 'Acme' }] })
+      if (p.startsWith('/integrations/hubspot/sync')) {
+        polls += 1
+        return Promise.resolve(polls < 2
+          ? { counts: { synced: 0, failed: 0, not_synced: 0, in_progress: 1 }, leads: [{ lead_id: 'a', status: 'syncing' }] }
+          : { counts: { synced: 1, failed: 0, not_synced: 0, in_progress: 0 }, leads: [{ lead_id: 'a', status: 'synced' }] })
+      }
+      if (p === '/hooks') return Promise.resolve({ hooks: [] })
+      return Promise.reject(new Error('unexpected ' + p))
+    })
+    const user = userEvent.setup()
+    wrap(<Integrations />)
+    await user.selectOptions(await screen.findByLabelText('Lead list'), 'l1')
+    expect(await screen.findByText('Syncing')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Push to HubSpot' })).toBeDisabled()
+    expect(await screen.findByText('Synced', {}, { timeout: 5000 })).toBeInTheDocument()
   })
 
   it('shows an error with retry', async () => {

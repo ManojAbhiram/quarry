@@ -6,6 +6,8 @@ import { contactOf, leadKey, matchScore } from './leadHelpers'
 import CompanyLogo from '../../components/CompanyLogo'
 import { Dash, EmailStatusBadge, EnrichmentFailedBadge, ExtLink, ScoreBar } from './ui'
 import LeadActionsMenu, { FlagTags } from './LeadActions'
+import { RowSignals } from './SignalChips'
+import { domainOf } from './signals'
 
 const LONG_EXPLANATION = 70
 const WIDE = '(min-width: 768px)'
@@ -66,7 +68,8 @@ function EmailCell({ lead }) {
   )
 }
 
-export default function LeadsTable({ leads, selected, onToggleSelect, onToggleAll, onOpen, flagsFor, onToggleFlag }) {
+export default function LeadsTable({ leads, selected, onToggleSelect, onToggleAll, onOpen, flagsFor, onToggleFlag, signalsByDomain = {}, signalState = 'ready' }) {
+  const signalsOf = (lead) => signalsByDomain[domainOf(lead.url)]
   const wide = useWide()
   const allSelected = leads.length > 0 && leads.every((l) => selected.has(leadKey(l)))
   const rowProps = (lead) => {
@@ -91,6 +94,7 @@ export default function LeadsTable({ leads, selected, onToggleSelect, onToggleAl
                   </button>
                   <p className="text-xs text-muted break-words">{[lead.industry, lead.location].filter(Boolean).join(' · ') || 'No industry or location'}</p>
                   <EnrichmentFailedBadge lead={lead} className="mt-1" />
+                  <RowSignals signals={signalsOf(lead)} state={signalState} />
                 </div>
                 <LeadActionsMenu name={name} flags={flags} onToggle={(kind) => onToggleFlag(name, kind)} leadIds={[lead._id || lead.id]} />
               </div>
@@ -151,6 +155,7 @@ export default function LeadsTable({ leads, selected, onToggleSelect, onToggleAl
                         </button>
                         <p className="text-xs text-muted break-words">{[lead.industry, lead.location].filter(Boolean).join(' · ')}</p>
                         <EnrichmentFailedBadge lead={lead} className="mt-1" />
+                        <RowSignals signals={signalsOf(lead)} state={signalState} />
                         <Explanation text={lead.match_explanation} />
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                           <ExtLink href={lead.url}>Website</ExtLink>

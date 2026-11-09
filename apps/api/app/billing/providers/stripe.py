@@ -29,6 +29,7 @@ def _status(stripe_status: str) -> str:
 
 class StripeProvider(PaymentProvider):
     name = "stripe"
+    supports_topup = True
 
     def __init__(self, client: Optional[httpx.AsyncClient] = None, now=time.time):
         self._client = client
@@ -65,6 +66,38 @@ class StripeProvider(PaymentProvider):
         body = res.json()
         return CheckoutSession(id=body["id"], url=body["url"], provider=self.name)
 
+    async def create_topup_session(self, *, scope_id, user_id, credits, price_usd, target, customer_email,
+                                   success_url, cancel_url):
+        key = env("STRIPE_SECRET_KEY")
+        if not key:
+            raise ProviderNotConfigured("Stripe is not configured")
+        form = {
+            "mode": "payment",
+            "line_items[0][price_data][currency]": "usd",
+            "line_items[0][price_data][unit_amount]": str(price_usd * 100),
+            "line_items[0][price_data][product_data][name]": f"{credits} Quarry credits",
+            "line_items[0][quantity]": "1",
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+            "client_reference_id": scope_id,
+            "customer_email": customer_email,
+            "metadata[kind]": "topup",
+            "metadata[scope_id]": scope_id,
+            "metadata[user_id]": user_id,
+            "metadata[credits]": str(credits),
+            "metadata[target]": target,
+        }
+        client = self._client or httpx.AsyncClient(timeout=20)
+        try:
+            res = await client.post(f"{API}/checkout/sessions", data=form, auth=(key, ""))
+        finally:
+            if self._client is None:
+                await client.aclose()
+        if res.status_code >= 400:
+            raise RuntimeError(f"Stripe top-up checkout failed ({res.status_code})")
+        body = res.json()
+        return CheckoutSession(id=body["id"], url=body["url"], provider=self.name)
+
     # Stripe-Signature: t=<unix>,v1=<hex hmac sha256 of "<t>.<payload>">[,v1=...]
     def verify_webhook(self, payload: bytes, headers: dict) -> None:
         secret = env("STRIPE_WEBHOOK_SECRET")
@@ -88,6 +121,14 @@ class StripeProvider(PaymentProvider):
         obj = (evt.get("data") or {}).get("object") or {}
         meta = obj.get("metadata") or {}
 
+        if typ == "checkout.session.completed" and meta.get("kind") == "topup":
+            if obj.get("payment_status", "paid") != "paid":
+                return NormalizedEvent(eid, "ignored")
+            return NormalizedEvent(
+                eid, "topup_paid", scope_id=meta.get("scope_id") or obj.get("client_reference_id"),
+                topup={"credits": int(meta.get("credits") or 0), "target": meta.get("target") or "requests",
+                       "user_id": meta.get("user_id")},
+            )
         if typ == "checkout.session.completed":
             return NormalizedEvent(
                 eid, "subscription_updated",

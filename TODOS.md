@@ -62,7 +62,7 @@ _None open._
 
 ## Deferred from /qa on 2026-11-09 (develop, after merging roadmap phases 1-4)
 
-### Test the connection when a mailbox is connected
+### Test the connection when a mailbox is connected (DONE: `POST /api/outreach/mailboxes/test`)
 
 **What:** `POST /api/outreach/mailboxes` saves any SMTP/IMAP settings, including an unreachable host such as `smtp.invalid`, with no check. Add a "Test connection" step (SMTP login, IMAP login) before saving, and show the result in the dialog.
 
@@ -70,19 +70,19 @@ _None open._
 
 **Priority:** P2
 
-### Team invite blocks the request while SMTP is tried
+### Team invite blocks the request while SMTP is tried (DONE: background send, `email_status`)
 
 **What:** `POST /api/orgs/{id}/invites` awaits the email send, so a failing SMTP setup makes the request take about 4 seconds before it returns the link. Send in the background and return the link immediately (the `emailed` flag would then need to become an async status).
 
 **Severity:** Low. **Priority:** P3
 
-### Toasts cover the action they report on
+### Toasts cover the action they report on (DONE: toasts moved to the top)
 
 **What:** Error toasts appear bottom-right and can overlap the primary button of the form above (seen on Integrations > Add webhook). Consider placing them above the fold or offsetting them from form actions.
 
 **Severity:** Low (cosmetic). **Priority:** P3
 
-### No schema migrations: existing databases do not get new columns
+### No schema migrations: existing databases do not get new columns (DONE: `app/db/migrations.py`)
 
 **What:** Tables come from `create_all`, which never alters an existing table. During this QA a hot-reloading dev server created `credit_ledger` with another phase's columns mid-merge, and Billing returned HTTP 500 until the (empty) table was dropped. Add Alembic (or a small versioned migration runner) before any hosted deployment, and give each phase's tables unique names.
 

@@ -106,10 +106,33 @@ async def list_mailboxes(user: dict = Depends(get_current_user)):
     return {"mailboxes": [_ser(service.mailbox_public(b)) for b in boxes]}
 
 
+class MailboxTestIn(MailboxIn):
+    box_id: Optional[str] = None  # retest a saved mailbox; blank fields fall back to the stored values
+
+
+@router.post("/mailboxes/test")
+@_wrap
+async def test_mailbox(body: MailboxTestIn, user: dict = Depends(get_current_user)):
+    """Attempt SMTP and IMAP logins without saving. Returns per-protocol {ok, error}; failures are not HTTP errors."""
+    data = body.model_dump(exclude_unset=True)
+    return await service.test_connection(_uid(user), data, data.pop("box_id", None))
+
+
 @router.post("/mailboxes", status_code=201)
 @_wrap
 async def create_mailbox(body: MailboxIn, user: dict = Depends(get_current_user)):
-    return _ser(await service.save_mailbox(_uid(user), body.model_dump(exclude_unset=True)))
+    data = body.model_dump(exclude_unset=True)
+    box = await service.save_mailbox(_uid(user), data)
+    # Saving is never blocked by an unreachable server, but the user is told about it.
+    try:
+        result = await service.test_connection(_uid(user), {}, box["_id"])
+    except Exception:  # noqa: BLE001
+        result = None
+    out = _ser(box)
+    if result is not None:
+        out["connection_test"] = result
+        out["warning"] = service.connection_warning(result)
+    return out
 
 
 @router.put("/mailboxes/{box_id}")
