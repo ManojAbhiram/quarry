@@ -47,7 +47,7 @@ export default function PaletteSwitcher({ align = 'right' }) {
       {open && (
         <div
           role="menu"
-          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full z-50 mt-2 w-64 rounded-2xl border border-white/60 bg-surface/95 p-2 shadow-xl backdrop-blur-xl animate-fade-in dark:border-line`}
+          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full z-50 mt-2 w-64 animate-pop-in ${align === 'right' ? 'origin-top-right' : 'origin-top-left'} rounded-2xl border border-white/60 bg-surface/95 p-2 shadow-2xl shadow-primary-900/10 ring-1 ring-line/50 backdrop-blur-xl dark:border-line`}
         >
           <p className="px-3 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">Colour palette</p>
           {PALETTES.map((p) => {

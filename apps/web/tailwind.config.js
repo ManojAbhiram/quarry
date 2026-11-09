@@ -47,6 +47,7 @@ export default {
       animation: {
         'fade-in': 'fadeIn 0.5s ease-out forwards',
         'slide-up': 'slideUp 0.6s ease-out forwards',
+        'pop-in': 'popIn 0.16s cubic-bezier(0.16, 1, 0.3, 1) both',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         // Aceternity UI: spotlight.jsx and aurora-background.jsx
         spotlight: 'spotlight 2s ease .75s 1 forwards',
@@ -60,6 +61,10 @@ export default {
         aurora: {
           from: { backgroundPosition: '50% 50%, 50% 50%' },
           to: { backgroundPosition: '350% 50%, 350% 50%' },
+        },
+        popIn: {
+          '0%': { opacity: '0', transform: 'translateY(-4px) scale(0.96)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
         },
         fadeIn: {
           '0%': { opacity: '0' },
