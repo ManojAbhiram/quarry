@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
 
 vi.mock('../../api', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
-vi.mock('../../context/ThemeContext', () => ({ useTheme: () => ({ theme: 'light', toggleTheme: vi.fn() }) }))
+vi.mock('../../context/ThemeContext', () => ({ useTheme: () => ({ theme: 'light', toggleTheme: vi.fn(), palette: 'indigo', setPalette: vi.fn() }) }))
 
 const auth = { login: vi.fn(), register: vi.fn(), applyAuth: vi.fn() }
 vi.mock('../../context/AuthContext', () => ({ useAuth: () => auth }))
@@ -324,5 +324,35 @@ describe('GoogleCallback', () => {
     open('?access_token=t&refresh_token=r')
     expect(await screen.findByRole('alert')).toHaveTextContent(/Google sign-in failed/)
     expect(localStorage.getItem('token')).toBeNull()
+  })
+})
+
+describe('Auth screen visual layer', () => {
+  const open = () => renderAt('/login', <Login />, '/login')
+
+  it('always has the brand headline and three feature cards in the DOM', () => {
+    open()
+    expect(screen.getByText(/Find the companies worth contacting/i)).toBeInTheDocument()
+    expect(screen.getAllByTestId('auth-feature')).toHaveLength(3)
+  })
+
+  it('keeps decorative layers hidden from assistive tech', () => {
+    open()
+    expect(screen.getByTestId('backdrop')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByTestId('auth-aurora')).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('offers the palette switcher and theme toggle', () => {
+    open()
+    expect(screen.getByRole('button', { name: /Colour palette/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Switch to dark theme/i })).toBeInTheDocument()
+  })
+
+  it('has exactly one h1, the form title, and the form comes before the brand panel in the DOM', () => {
+    open()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    const form = screen.getByRole('button', { name: /^Sign in$/ })
+    const headline = screen.getByText(/Find the companies worth contacting/i)
+    expect(form.compareDocumentPosition(headline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })
