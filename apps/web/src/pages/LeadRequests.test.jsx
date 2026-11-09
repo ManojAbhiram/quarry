@@ -177,4 +177,24 @@ describe('LeadRequests', () => {
       expect(screen.getByText('Healthy run')).toBeInTheDocument()
     })
   })
+
+  describe('motion hooks', () => {
+    it('gives every row a stable flip id and keeps rows reorderable by sort', async () => {
+      setup()
+      await screen.findByText('Healthy run')
+      expect(row('Healthy run')).toHaveAttribute('data-flip-id', 'a')
+      expect(row('Broken key')).toHaveAttribute('data-flip-id', 'c')
+      await userEvent.selectOptions(screen.getByLabelText('Sort by'), 'Name')
+      const ids = screen.getAllByRole('listitem').map((li) => li.getAttribute('data-flip-id'))
+      expect(ids[0]).toBe('c')
+      expect(ids).toHaveLength(7)
+      expect(row('Healthy run')).toBeVisible()
+    })
+
+    it('renders the ICP match as a score pill', async () => {
+      setup()
+      await screen.findByText('Healthy run')
+      expect(within(row('Healthy run')).getAllByText('74%').length).toBeGreaterThan(0)
+    })
+  })
 })

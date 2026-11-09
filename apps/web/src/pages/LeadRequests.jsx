@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import clsx from 'clsx'
-import { Search, Copy, Trash2, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react'
+import { Search, Copy, Trash2, ChevronLeft, ChevronRight, ArrowRight, Loader2, FileEdit, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useLeads } from '../context/LeadContext'
 import { EmptyState, ErrorState, PageHeader, Skeleton, StatusBadge, useToast } from '../components/kit'
+import { useStaggerIn } from '../components/motion/useStaggerIn'
+import { useFlip } from '../components/motion/useFlip'
+import { GlowingEffect } from '@/components/ui/glowing-effect'
 import ConfirmDialog from './requests/ConfirmDialog'
 
 const ITEMS_PER_PAGE = 10
@@ -11,17 +14,17 @@ const SORTS = ['Last updated', 'Name', 'Status']
 
 // The filters offered in the stat strip and the select. "Running" covers both Active and Pending.
 const FILTERS = [
-  { value: 'Running', label: 'Running', statuses: ['Active', 'Pending'] },
-  { value: 'Draft', label: 'Draft', statuses: ['Draft'] },
-  { value: 'Failed', label: 'Failed', statuses: ['Failed'] },
-  { value: 'Completed', label: 'Completed', statuses: ['Completed'] },
+  { value: 'Running', label: 'Running', statuses: ['Active', 'Pending'], Icon: Loader2, tile: 'from-primary-500 to-accent-500' },
+  { value: 'Draft', label: 'Draft', statuses: ['Draft'], Icon: FileEdit, tile: 'from-slate-500 to-slate-700' },
+  { value: 'Failed', label: 'Failed', statuses: ['Failed'], Icon: AlertTriangle, tile: 'from-red-500 to-rose-700' },
+  { value: 'Completed', label: 'Completed', statuses: ['Completed'], Icon: CheckCircle2, tile: 'from-emerald-500 to-teal-700' },
 ]
 
 // Rows: name | status | companies | contacts | ICP match | updated | actions (from lg; below that each row is a card)
 const GRID = 'lg:grid lg:grid-cols-[minmax(0,1fr)_7.5rem_5.5rem_5.5rem_5rem_6.5rem_6.5rem] lg:items-center lg:gap-3'
 
 const ICON_BUTTON =
-  'inline-flex h-10 w-10 items-center justify-center rounded-md text-muted transition-colors hover:bg-head hover:text-ink lg:h-8 lg:w-8 disabled:opacity-40'
+  'inline-flex h-10 w-10 items-center justify-center rounded-xl text-muted transition-colors hover:bg-head hover:text-ink lg:h-8 lg:w-8 disabled:opacity-40'
 
 const num = (n) => (Number(n) > 0 ? Number(n).toLocaleString() : '—')
 
@@ -43,21 +46,35 @@ function filterKey(filter) {
   return filter === 'Active' || filter === 'Pending' ? 'Running' : filter
 }
 
-function Tile({ label, value, pressed, onClick }) {
+function Tile({ label, value, pressed, onClick, Icon, tile }) {
   return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      onClick={onClick}
-      className={clsx(
-        'flex min-h-[3.5rem] flex-col items-start justify-center rounded-lg border px-4 py-2 text-left transition-colors',
-        pressed ? 'border-primary-600 bg-primary-50 dark:border-primary-400 dark:bg-primary-950/60' : 'border-line bg-surface hover:bg-head',
-      )}
-    >
-      <span className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</span>
-      <span className="text-2xl font-bold tabular-nums text-ink">{value}</span>
-    </button>
+    <div data-reveal className="relative rounded-2xl">
+      <GlowingEffect spread={40} glow disabled={false} proximity={64} inactiveZone={0.01} borderWidth={2} />
+      <button
+        type="button"
+        aria-pressed={pressed}
+        onClick={onClick}
+        className={clsx(
+          'relative flex min-h-[4.5rem] w-full items-center gap-3 rounded-2xl border bg-surface/85 px-4 py-3 text-left shadow-soft backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift',
+          pressed ? 'border-primary-500 ring-2 ring-primary-500/30 dark:border-primary-400' : 'border-white/70 dark:border-line/60',
+        )}
+      >
+        <span className={clsx('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-lg ring-1 ring-white/30', tile)}>
+          <Icon aria-hidden="true" className="h-5 w-5" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-xs font-semibold uppercase tracking-wide text-muted">{label}</span>
+          <span className="block text-3xl font-black leading-tight tracking-tight tabular-nums text-ink">{value}</span>
+        </span>
+      </button>
+    </div>
   )
+}
+
+function ScorePill({ score }) {
+  if (score == null) return <span>—</span>
+  const tone = score >= 70 ? 'from-emerald-600 to-teal-700' : score >= 40 ? 'from-amber-700 to-orange-800' : 'from-slate-600 to-slate-800'
+  return <span className={clsx('inline-flex items-center rounded-full bg-gradient-to-r px-2.5 py-0.5 text-xs font-bold tabular-nums text-white shadow-sm ring-1 ring-white/20', tone)}>{score}%</span>
 }
 
 function ListSkeleton() {
@@ -87,6 +104,7 @@ export default function LeadRequests() {
   const [loadState, setLoadState] = useState('loading') // loading | ready | error
   const [toDelete, setToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const pageRef = useRef(null)
 
   // The dashboard can link here with a status filter in the router state.
   useEffect(() => {
@@ -139,6 +157,9 @@ export default function LeadRequests() {
   const currentPage = Math.min(page, totalPages)
   const visible = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
+  const capture = useFlip(pageRef, [visible.map((r) => r.id).join()])
+  useStaggerIn(pageRef, { selector: '[data-reveal], [data-row]', dependencies: [loadState === 'ready'] })
+
   const open = (req) => {
     const status = (req.status || 'Pending').toLowerCase()
     if (status === 'draft' || status === 'pending') {
@@ -162,6 +183,7 @@ export default function LeadRequests() {
   const confirmDelete = async () => {
     if (!toDelete || deleting) return
     setDeleting(true)
+    capture()
     try {
       await deleteRequest(toDelete.id)
       toast.push({ type: 'success', message: `Deleted "${toDelete.title || 'Untitled'}".` })
@@ -174,12 +196,14 @@ export default function LeadRequests() {
   }
 
   const clearFilters = () => {
+    capture()
     setStatusFilter('All')
     setGlobalSearchQuery('')
     setPage(1)
   }
 
   const toggleFilter = (value) => {
+    capture()
     setStatusFilter((prev) => (prev === value ? 'All' : value))
     setPage(1)
   }
@@ -188,12 +212,15 @@ export default function LeadRequests() {
   const showError = loadState === 'error' && list.length === 0
 
   return (
-    <div id="lead-requests-page" className="page-container h-full overflow-y-auto pb-12">
-      <PageHeader title="Requests" description="Every lead search you have started, and how each one is doing." />
+    <div ref={pageRef} id="lead-requests-page" className="page-container h-full overflow-y-auto pb-12">
+      <PageHeader
+        title="Requests"
+        description="Every lead search you have started, and how each one is doing."
+      />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {FILTERS.map((f) => (
-          <Tile key={f.value} label={f.label} value={counts[f.value]} pressed={statusFilter === f.value} onClick={() => toggleFilter(f.value)} />
+          <Tile key={f.value} Icon={f.Icon} tile={f.tile} label={f.label} value={counts[f.value]} pressed={statusFilter === f.value} onClick={() => toggleFilter(f.value)} />
         ))}
       </div>
 
@@ -207,6 +234,7 @@ export default function LeadRequests() {
             placeholder="Search requests"
             value={globalSearchQuery || ''}
             onChange={(e) => {
+              capture()
               setGlobalSearchQuery(e.target.value)
               setPage(1)
             }}
@@ -217,6 +245,7 @@ export default function LeadRequests() {
           aria-label="Filter by status"
           value={statusFilter}
           onChange={(e) => {
+            capture()
             setStatusFilter(e.target.value)
             setPage(1)
           }}
@@ -229,7 +258,10 @@ export default function LeadRequests() {
             </option>
           ))}
         </select>
-        <select aria-label="Sort by" value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="input w-auto">
+        <select aria-label="Sort by" value={sortBy} onChange={(e) => {
+            capture()
+            setSortBy(e.target.value)
+          }} className="input w-auto">
           {SORTS.map((s) => (
             <option key={s} value={s}>
               Sort: {s}
@@ -247,7 +279,7 @@ export default function LeadRequests() {
         </p>
       )}
 
-      <div className="card">
+      <div className="card ring-1 ring-primary-500/5">
         {showSkeleton ? (
           <ListSkeleton />
         ) : showError ? (
@@ -258,7 +290,7 @@ export default function LeadRequests() {
           <EmptyState title="No requests match" description="Nothing fits the current search and filter." action={{ label: 'Clear filters', onClick: clearFilters }} />
         ) : (
           <>
-            <div aria-hidden="true" className={clsx(GRID, 'hidden border-b border-line bg-head px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted')}>
+            <div aria-hidden="true" className={clsx(GRID, 'hidden border-b border-line bg-gradient-to-r from-head to-primary-50/60 px-4 py-2.5 text-xs dark:to-primary-950/30 font-semibold uppercase tracking-wide text-muted')}>
               <span>Request</span>
               <span>Status</span>
               <span className="text-right">Companies</span>
@@ -272,9 +304,9 @@ export default function LeadRequests() {
                 const note = describe(req)
                 const title = req.title || 'Untitled'
                 return (
-                  <li key={req.id} className={clsx(GRID, 'flex flex-col gap-2 px-4 py-3 lg:py-2.5', i > 0 && 'border-t border-line')}>
+                  <li key={req.id} data-flip-id={req.id} data-row className={clsx(GRID, 'flex flex-col gap-2 px-4 py-3 transition-[background-color,box-shadow] duration-200 hover:bg-primary-50/60 hover:shadow-soft dark:hover:bg-primary-950/30 lg:py-3', i > 0 && 'border-t border-line')}>
                     <div className="min-w-0">
-                      <button type="button" title={title} onClick={() => open(req)} className="block w-full min-w-0 truncate rounded text-left text-sm font-semibold text-ink hover:text-primary-700 dark:hover:text-primary-300">
+                      <button type="button" title={title} onClick={() => open(req)} className="block w-full min-w-0 truncate rounded text-left text-sm font-bold tracking-tight text-ink hover:text-primary-700 dark:hover:text-primary-300">
                         {title}
                       </button>
                       {note.text && (
@@ -301,7 +333,9 @@ export default function LeadRequests() {
                     </p>
                     <span className="hidden text-right text-sm tabular-nums text-ink lg:block">{num(req.companies_count)}</span>
                     <span className="hidden text-right text-sm tabular-nums text-ink lg:block">{num(req.contacts_count)}</span>
-                    <span className="hidden text-right text-sm tabular-nums text-ink lg:block">{req.icp_match_score != null ? `${req.icp_match_score}%` : '—'}</span>
+                    <span className="hidden text-right text-sm text-ink lg:block">
+                      <ScorePill score={req.icp_match_score} />
+                    </span>
                     <span className="hidden text-xs text-muted lg:block">{req.updated_at || req.date || '—'}</span>
                     <div className="flex items-center gap-1 lg:justify-end">
                       <button type="button" aria-label={`Open ${title}`} title="Open" onClick={() => open(req)} className={ICON_BUTTON}>
@@ -324,13 +358,19 @@ export default function LeadRequests() {
                   {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length}
                 </span>
                 <div className="flex items-center gap-1">
-                  <button type="button" aria-label="Previous page" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} className={ICON_BUTTON}>
+                  <button type="button" aria-label="Previous page" disabled={currentPage === 1} onClick={() => {
+                      capture()
+                      setPage(currentPage - 1)
+                    }} className={ICON_BUTTON}>
                     <ChevronLeft aria-hidden="true" className="h-4 w-4" />
                   </button>
                   <span className="px-2 text-xs tabular-nums text-muted">
                     Page {currentPage} of {totalPages}
                   </span>
-                  <button type="button" aria-label="Next page" disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)} className={ICON_BUTTON}>
+                  <button type="button" aria-label="Next page" disabled={currentPage === totalPages} onClick={() => {
+                      capture()
+                      setPage(currentPage + 1)
+                    }} className={ICON_BUTTON}>
                     <ChevronRight aria-hidden="true" className="h-4 w-4" />
                   </button>
                 </div>

@@ -72,9 +72,9 @@ export default function AdditionalDetails({ values, onChange, disabled = false }
             <span className="label" id={`${panelId}-geo`}>
               Target geographies
             </span>
-            <div className="flex min-h-[2.5rem] flex-wrap items-center gap-2 rounded-md border border-line bg-surface px-3 py-1.5">
+            <div className="flex min-h-[2.5rem] flex-wrap items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5">
               {geos.map((g) => (
-                <span key={g} className="inline-flex items-center gap-1 rounded-md bg-primary-50 px-2 py-1 text-xs font-medium text-primary-800 dark:bg-primary-950/60 dark:text-primary-300">
+                <span key={g} className="inline-flex items-center gap-1 rounded-xl bg-primary-50 px-2 py-1 text-xs font-medium text-primary-800 dark:bg-primary-950/60 dark:text-primary-300">
                   {g}
                   <button type="button" aria-label={`Remove ${g}`} disabled={disabled} onClick={() => toggleGeo(g)} className="-mr-1 flex h-5 w-5 items-center justify-center rounded hover:bg-primary-100 dark:hover:bg-primary-900">
                     <X aria-hidden="true" className="h-3 w-3" />
@@ -106,7 +106,7 @@ export default function AdditionalDetails({ values, onChange, disabled = false }
                   type="button"
                   disabled={disabled}
                   onClick={() => toggleGeo(g)}
-                  className="inline-flex h-10 items-center rounded-md border border-line px-3 text-xs font-medium text-muted transition-colors hover:bg-head hover:text-ink sm:h-8"
+                  className="inline-flex h-10 items-center rounded-xl border border-line px-3 text-xs font-medium text-muted transition-colors hover:bg-head hover:text-ink sm:h-8"
                 >
                   + {g}
                 </button>

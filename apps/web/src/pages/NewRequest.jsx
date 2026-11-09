@@ -9,6 +9,8 @@ import WorkflowSidebar from '../components/request/WorkflowSidebar'
 import SourceTabs from '../components/request/SourceTabs'
 import AdditionalDetails from '../components/request/AdditionalDetails'
 import IcpCard from '../components/request/IcpCard'
+import StepTransition from '../components/request/StepTransition'
+import Reveal from '../components/motion/Reveal'
 import SearchKeyNotice, { useSearchKey } from './requests/SearchKeyNotice'
 import CommandPalette from './requests/CommandPalette'
 
@@ -381,15 +383,19 @@ export default function NewRequest() {
         <main ref={mainRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
             {launched ? (
-              <div className="card flex flex-col items-center px-6 py-14 text-center">
-                <CheckCircle2 aria-hidden="true" className="mb-3 h-8 w-8 text-ok" />
-                <h1 className="text-2xl font-bold text-ink">Request launched</h1>
+              <div className="card flex flex-col items-center px-6 py-14 text-center shadow-lift">
+                <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white shadow-lg shadow-emerald-600/30 ring-1 ring-white/30">
+                  <CheckCircle2 aria-hidden="true" className="h-8 w-8" />
+                </span>
+                <h1 className="text-2xl font-black tracking-tight text-ink">Request launched</h1>
                 <p className="mt-2 max-w-md text-sm text-muted">Quarry is finding companies that match your ICP. Open the list to follow its progress. You will be taken there in a few seconds.</p>
                 <Button className="mt-5" onClick={() => navigate('/lead-requests')}>
                   View requests
                 </Button>
               </div>
-            ) : step === 1 ? (
+            ) : (
+              <StepTransition stepKey={step}>
+            {step === 1 ? (
               <form onSubmit={handleGenerateIcp} noValidate className="space-y-5">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted lg:hidden">Step 1 of 2</p>
                 <PageHeader
@@ -531,7 +537,7 @@ export default function NewRequest() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Reveal className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {DIMENSION_KEYS.map((key) => (
                     <IcpCard
                       key={key}
@@ -563,19 +569,21 @@ export default function NewRequest() {
                       onCancel={() => setEditingCard(null)}
                     />
                   ))}
-                </div>
+                </Reveal>
               </div>
+            )}
+              </StepTransition>
             )}
           </div>
         </main>
 
         {!launched && (
-          <footer className="shrink-0 border-t border-line bg-surface px-4 py-3 sm:px-6">
+          <footer className="shrink-0 border-t border-line bg-surface/80 px-4 py-3 shadow-lift backdrop-blur-xl sm:px-6">
             <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3">
               {step === 1 ? (
                 <div className="flex items-center gap-3">
-                  <div role="progressbar" aria-label="Profile completeness" aria-valuemin={0} aria-valuemax={100} aria-valuenow={completeness} className="h-1.5 w-28 overflow-hidden rounded-full bg-head">
-                    <div className="h-full rounded-full bg-primary-600 transition-[width] dark:bg-primary-400" style={{ width: `${completeness}%` }} />
+                  <div role="progressbar" aria-label="Profile completeness" aria-valuemin={0} aria-valuemax={100} aria-valuenow={completeness} className="h-2 w-28 overflow-hidden rounded-full bg-head ring-1 ring-inset ring-line">
+                    <div className="h-full rounded-full bg-gradient-to-r from-primary-500 to-accent-500 shadow-[0_0_10px_rgb(var(--p-500)/0.5)] transition-[width] duration-500" style={{ width: `${completeness}%` }} />
                   </div>
                   <span className="text-sm tabular-nums text-muted">{completeness}% filled in</span>
                 </div>

@@ -1,4 +1,5 @@
 import { useId, useState } from 'react'
+import { GlowingEffect } from '@/components/ui/glowing-effect'
 import clsx from 'clsx'
 import { Pencil, Check, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, CircleAlert, Layers, Globe, Shield, UserCheck, Activity, Terminal } from 'lucide-react'
 
@@ -47,19 +48,23 @@ export default function IcpCard({ dimensionKey, value, editing, draft, onChangeD
   const visible = expanded ? points : points.slice(0, 3)
 
   return (
-    <section aria-label={meta.label} className="card flex flex-col">
+    <div data-reveal className="relative h-full rounded-2xl">
+    <GlowingEffect spread={40} glow disabled={false} proximity={64} inactiveZone={0.01} borderWidth={2} />
+    <section aria-label={meta.label} className="card relative flex h-full flex-col ring-1 ring-primary-500/5 hover:-translate-y-0.5 hover:shadow-lift">
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-2">
           <h3 className="flex min-w-0 items-start gap-2 text-sm font-semibold text-ink">
-            <meta.Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
-            <span className="min-w-0 break-words">{meta.label}</span>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 text-white shadow-md ring-1 ring-white/30">
+              <meta.Icon aria-hidden="true" className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 break-words pt-1.5 font-bold tracking-tight">{meta.label}</span>
           </h3>
           {!editing && (
             <button
               type="button"
               onClick={() => onStartEdit(dimensionKey)}
               aria-label={`Edit ${meta.label}`}
-              className="inline-flex h-10 items-center gap-1 rounded-md px-2 text-xs font-semibold text-muted transition-colors hover:bg-head hover:text-ink sm:h-8"
+              className="inline-flex h-10 items-center gap-1 rounded-xl px-2.5 text-xs font-semibold text-muted transition-colors hover:bg-head hover:text-ink sm:h-8"
             >
               <Pencil aria-hidden="true" className="h-3 w-3" />
               Edit
@@ -68,7 +73,7 @@ export default function IcpCard({ dimensionKey, value, editing, draft, onChangeD
         </div>
 
         <div>
-          <span className={clsx('inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold', badge.tone)}>
+          <span className={clsx('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ring-current/15', badge.tone)}>
             <badge.Icon aria-hidden="true" className="h-3.5 w-3.5" />
             {badge.label}
           </span>
@@ -100,11 +105,11 @@ export default function IcpCard({ dimensionKey, value, editing, draft, onChangeD
               <button
                 type="button"
                 onClick={() => onSave(dimensionKey)}
-                className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-md border border-primary-600 bg-primary-600 text-sm font-semibold text-white transition-colors hover:bg-primary-700 dark:border-primary-400 dark:bg-primary-400 dark:text-app dark:hover:bg-primary-300"
+                className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-transparent bg-gradient-to-br from-btn to-btn-hover text-sm font-semibold text-white shadow-lg shadow-primary-600/25 transition-all hover:brightness-110 active:scale-95"
               >
                 <Check aria-hidden="true" className="h-3.5 w-3.5" /> Save changes
               </button>
-              <button type="button" onClick={onCancel} className="inline-flex h-10 items-center rounded-md border border-line px-4 text-sm font-semibold text-ink transition-colors hover:bg-head">
+              <button type="button" onClick={onCancel} className="inline-flex h-10 items-center rounded-xl border border-line px-4 text-sm font-semibold text-ink transition-colors hover:bg-head">
                 Cancel
               </button>
             </div>
@@ -139,5 +144,6 @@ export default function IcpCard({ dimensionKey, value, editing, draft, onChangeD
         )}
       </div>
     </section>
+    </div>
   )
 }

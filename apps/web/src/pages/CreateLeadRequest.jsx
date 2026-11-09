@@ -82,9 +82,9 @@ export default function CreateLeadRequest() {
 
         <SearchKeyNotice state={searchKey} className="mb-5" />
 
-        <form onSubmit={handleCreate} noValidate className="card space-y-6 p-5 sm:p-6">
+        <form onSubmit={handleCreate} noValidate className="card space-y-6 p-5 shadow-lift ring-1 ring-primary-500/5 sm:p-6">
           {error && (
-            <div role="alert" className="rounded-md bg-bad-soft p-3 text-sm font-medium text-bad">
+            <div role="alert" className="rounded-xl bg-bad-soft p-3 text-sm font-medium text-bad">
               {error}
             </div>
           )}
@@ -104,12 +104,14 @@ export default function CreateLeadRequest() {
                     disabled={loading}
                     onClick={() => setFlowType(f.id)}
                     className={clsx(
-                      'rounded-lg border p-4 text-left transition-colors disabled:opacity-60',
-                      selected ? 'border-primary-600 bg-primary-50 dark:border-primary-400 dark:bg-primary-950/60' : 'border-line bg-surface hover:bg-head',
+                      'group rounded-2xl border p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift disabled:opacity-60',
+                      selected ? 'border-primary-500 bg-primary-50 shadow-lift ring-2 ring-primary-500/30 dark:border-primary-400 dark:bg-primary-950/60' : 'border-line bg-surface/80 shadow-sm hover:border-primary-300 hover:bg-surface',
                     )}
                   >
-                    <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-                      <Icon aria-hidden="true" className={clsx('h-4 w-4', selected ? 'text-primary-700 dark:text-primary-300' : 'text-muted')} />
+                    <span className="flex items-center gap-3 text-sm font-bold tracking-tight text-ink">
+                      <span className={clsx('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 transition-all', selected ? 'bg-gradient-to-br from-primary-500 to-accent-500 text-white shadow-lg ring-white/30' : 'bg-head text-muted ring-line group-hover:text-primary-700')}>
+                        <Icon aria-hidden="true" className="h-4 w-4" />
+                      </span>
                       {f.title}
                     </span>
                     <span className="mt-1.5 block text-xs text-muted">{f.description}</span>

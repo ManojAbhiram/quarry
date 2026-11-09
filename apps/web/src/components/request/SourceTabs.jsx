@@ -66,7 +66,7 @@ export default function SourceTabs({
 
   return (
     <section className="card">
-      <div role="tablist" aria-label="Where to read your product from" className="flex border-b border-line">
+      <div role="tablist" aria-label="Where to read your product from" className="flex border-b border-line bg-gradient-to-r from-head to-transparent">
         {TABS.map(({ id, label, Icon }) => (
           <button
             key={id}
@@ -78,7 +78,7 @@ export default function SourceTabs({
             onClick={() => onTabChange(id)}
             className={clsx(
               '-mb-px flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors sm:flex-none sm:px-5',
-              activeTab === id ? 'border-primary-600 text-primary-800 dark:border-primary-400 dark:text-primary-300' : 'border-transparent text-muted hover:text-ink',
+              activeTab === id ? 'border-primary-600 bg-primary-50/70 text-primary-800 dark:border-primary-400 dark:bg-primary-950/40 dark:text-primary-300' : 'border-transparent text-muted hover:bg-head/60 hover:text-ink',
             )}
           >
             <Icon aria-hidden="true" className="h-4 w-4" />
@@ -110,7 +110,7 @@ export default function SourceTabs({
                     disabled={disabled || !!generatingChip}
                     aria-busy={busy || undefined}
                     onClick={() => handleChipClick(chip)}
-                    className="inline-flex h-10 items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-xs font-semibold text-ink transition-colors hover:bg-head disabled:opacity-60 sm:h-8"
+                    className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-semibold text-ink transition-colors hover:bg-head disabled:opacity-60 sm:h-8"
                   >
                     {busy ? <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" /> : <Sparkles aria-hidden="true" className="h-3 w-3 text-muted" />}
                     {busy ? 'Generating…' : chip}
@@ -152,13 +152,13 @@ export default function SourceTabs({
           {scrapedUrls.length > 0 && (
             <ul className="space-y-2">
               {scrapedUrls.map((item, i) => (
-                <li key={`${item.url}-${i}`} className="rounded-md border border-line">
+                <li key={`${item.url}-${i}`} className="rounded-xl border border-line">
                   <div className="flex items-center gap-3 px-3 py-2">
                     <CheckCircle2 aria-hidden="true" className="h-4 w-4 shrink-0 text-ok" />
                     <span title={item.url} className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
                       {item.url}
                     </span>
-                    <button type="button" aria-label={`Remove ${item.url}`} onClick={() => onRemoveUrl(i)} className="flex h-10 w-10 items-center justify-center rounded-md text-muted hover:bg-head hover:text-bad sm:h-8 sm:w-8">
+                    <button type="button" aria-label={`Remove ${item.url}`} onClick={() => onRemoveUrl(i)} className="flex h-10 w-10 items-center justify-center rounded-xl text-muted hover:bg-head hover:text-bad sm:h-8 sm:w-8">
                       <X aria-hidden="true" className="h-4 w-4" />
                     </button>
                   </div>
@@ -178,7 +178,7 @@ export default function SourceTabs({
       {activeTab === 'documents' && (
         <div role="tabpanel" id="source-panel-documents" aria-labelledby="source-tab-documents" className="space-y-4 p-5">
           <div
-            className="rounded-md border border-dashed border-line p-6 text-center"
+            className="rounded-xl border border-dashed border-line p-6 text-center"
             onDrop={(e) => {
               e.preventDefault()
               if (!disabled) onFilesChange((prev) => [...prev, ...Array.from(e.dataTransfer.files)])
@@ -209,7 +209,7 @@ export default function SourceTabs({
           {uploadedFiles.length > 0 && (
             <ul className="space-y-2">
               {uploadedFiles.map((f, i) => (
-                <li key={`${f.name}-${i}`} className="flex items-center justify-between gap-3 rounded-md border border-line px-3 py-2">
+                <li key={`${f.name}-${i}`} className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2">
                   <span className="flex min-w-0 items-center gap-2">
                     <FileText aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" />
                     <span title={f.name} className="truncate text-sm font-medium text-ink">
@@ -218,7 +218,7 @@ export default function SourceTabs({
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     <span className="text-xs tabular-nums text-muted">{formatSize(f.size)}</span>
-                    <button type="button" aria-label={`Remove ${f.name}`} onClick={() => onRemoveFile(i)} className="flex h-10 w-10 items-center justify-center rounded-md text-muted hover:bg-head hover:text-bad sm:h-8 sm:w-8">
+                    <button type="button" aria-label={`Remove ${f.name}`} onClick={() => onRemoveFile(i)} className="flex h-10 w-10 items-center justify-center rounded-xl text-muted hover:bg-head hover:text-bad sm:h-8 sm:w-8">
                       <X aria-hidden="true" className="h-4 w-4" />
                     </button>
                   </span>
