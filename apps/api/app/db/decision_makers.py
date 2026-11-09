@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from app.core.logger import logger
 from app.db import engine as _engine
 from app.db.models import TABLES, DecisionMaker, Lead
+from app.provenance import build_contact_provenance
 
 _dms = TABLES["decision_makers"]
 _leads = TABLES["leads"]
@@ -74,7 +75,7 @@ async def count_decision_makers_by_lead(lead_ids: list[str]) -> dict[str, int]:
         return {lead_id: count for lead_id, count in (await s.execute(stmt)).all()}
 
 
-async def insert_decision_maker_if_new(lead_id: str, dm_data: dict) -> None:
+async def insert_decision_maker_if_new(lead_id: str, dm_data: dict, fallback_source_url: str | None = None) -> None:
     linkedin_url = dm_data.get("linkedin_url") or dm_data.get("url") or ""
     for existing in await get_decision_makers_for_lead(lead_id):
         if existing.get("linkedin_url") == linkedin_url:
@@ -88,6 +89,7 @@ async def insert_decision_maker_if_new(lead_id: str, dm_data: dict) -> None:
         "snippet": dm_data.get("snippet") or None,
         "recent_activity_summary": dm_data.get("recent_activity_summary") or None,
         "recent_posts": dm_data.get("recent_posts") or [],
+        "provenance": build_contact_provenance(dm_data, fallback_source_url, datetime.utcnow().isoformat() + "Z"),
         "created_at": datetime.utcnow(),
     })
     logger.info("Inserted decision_maker for lead %s: %s", lead_id, dm_data.get("name"))

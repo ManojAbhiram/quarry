@@ -9,6 +9,8 @@ from app.db.companies import get_company_by_id, upsert_company
 from app.db.decision_makers import insert_decision_maker_if_new
 from app.db.lead_enrichments import upsert_lead_enrichment
 from app.db.models import TABLES, Lead as LeadRow
+from app.compliance.region import infer_region
+from app.provenance import build_contact_provenance, build_lead_provenance
 from app.schemas.leads import Lead
 
 _leads = TABLES["leads"]
@@ -93,6 +95,9 @@ async def save_enriched_leads_to_db(
             except (ValueError, TypeError):
                 match_score_float = 0.0
 
+            region = infer_region(
+                lead_url, location=item.get("location") or item.get("headquarters"), email=item.get("contact_email")
+            )
             lead_doc = {
                 "request_id": request_id,
                 "user_id": user_id,
@@ -111,6 +116,9 @@ async def save_enriched_leads_to_db(
                 "email_status": item.get("email_status"),
                 "email_checked_at": item.get("email_checked_at"),
                 "email_catch_all": item.get("email_catch_all"),
+                "provenance": build_lead_provenance(item, now.isoformat() + "Z"),
+                "region": region["region"],
+                "region_note": region["note"],
                 "updated_at": now,
             }
             existing_lead = await _leads.get(request_id=request_id, url=lead_url)
@@ -139,7 +147,7 @@ async def save_enriched_leads_to_db(
 
             for dm in item.get("decision_makers") or []:
                 try:
-                    await insert_decision_maker_if_new(lead_id, dm)
+                    await insert_decision_maker_if_new(lead_id, dm, fallback_source_url=lead_url)
                 except Exception as exc:
                     logger.warning("Failed to insert decision_maker for lead %s: %s", lead_id, exc)
 
@@ -236,11 +244,21 @@ async def get_normalized_leads_for_request(request_id: str) -> list[dict]:
                 "snippet": d.get("snippet"),
                 "recent_activity_summary": d.get("recent_activity_summary"),
                 "recent_posts": d.get("recent_posts") or [],
+                "id": d.get("_id"),
+                "email_status": d.get("email_status"),
+                "email_checked_at": d.get("email_checked_at"),
+                "email_status_reason": d.get("email_status_reason"),
+                "provenance": d.get("provenance") or {},
             }
             for d in raw_dms
         ]
 
         score = nl.get("match_score")
+        region = (
+            {"region": nl.get("region"), "note": nl.get("region_note")}
+            if nl.get("region")
+            else infer_region(nl.get("url"), location=company_doc.get("headquarters"))
+        )
         combined.append({
             "id": lead_id,
             "_id": lead_id,
@@ -254,6 +272,10 @@ async def get_normalized_leads_for_request(request_id: str) -> list[dict]:
             "email_status": nl.get("email_status"),
             "email_checked_at": nl.get("email_checked_at"),
             "email_status_reason": nl.get("email_status_reason") or nl.get("email_verify_reason"),
+            "provenance": nl.get("provenance") or {},
+            "region": region.get("region"),
+            "region_note": region.get("note"),
+            "rejected_at": nl.get("rejected_at"),
             "match_score": str(score if score is not None else "0"),
             "snippet": nl.get("snippet"),
             "type": nl.get("lead_type", "enriched"),
