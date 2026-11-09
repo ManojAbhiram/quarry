@@ -9,6 +9,7 @@ import ConfirmDialog from './requests/ConfirmDialog'
 import ListCard, { DEFAULT_COLOR } from './lists/ListCard'
 import LeadRow from './lists/LeadRow'
 import CreateListDialog from './lists/CreateListDialog'
+import SharedWork from './shared/SharedWork'
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
@@ -295,6 +296,8 @@ export default function LeadLists() {
           </section>
         )}
       </div>
+
+      <SharedWork kind="lists" excludeIds={lists.map((l) => l.id || l._id)} />
 
       <CreateListDialog open={showCreate} existingNames={existingNames} onCreate={handleCreate} onClose={() => setShowCreate(false)} />
       <ConfirmDialog

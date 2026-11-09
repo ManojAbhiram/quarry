@@ -8,6 +8,7 @@ import { useStaggerIn } from '../components/motion/useStaggerIn'
 import { useFlip } from '../components/motion/useFlip'
 import { GlowingEffect } from '@/components/ui/glowing-effect'
 import ConfirmDialog from './requests/ConfirmDialog'
+import SharedWork from './shared/SharedWork'
 
 const ITEMS_PER_PAGE = 10
 const SORTS = ['Last updated', 'Name', 'Status']
@@ -379,6 +380,8 @@ export default function LeadRequests() {
           </>
         )}
       </div>
+
+      <SharedWork kind="requests" excludeIds={list.map((r) => r.id)} />
 
       <ConfirmDialog
         open={!!toDelete}
