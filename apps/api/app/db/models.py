@@ -149,3 +149,6 @@ TABLES: dict[str, DocTable] = {
     "lead_lists": DocTable(LeadList),
     "serper_cache": DocTable(SerperCache),
 }
+
+
+from app.db import growth_models  # noqa: E402,F401  (registers the Phase 4 tables on Base/TABLES)

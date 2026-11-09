@@ -9,6 +9,7 @@ from app.api import auth, users, requests, leads, request_intake, competitors, t
 from app.api import google_auth
 from app.api import organizations
 from app.api import lists as lead_lists_router
+from app.api import teams as teams_router, billing as billing_router
 from app.core.config import settings
 from app.core.logger import logger
 import traceback
@@ -59,6 +60,8 @@ app.include_router(tech_stack.router, prefix=settings.API_V1_STR)
 app.include_router(organizations.router, prefix=settings.API_V1_STR)
 app.include_router(google_auth.router, prefix=settings.API_V1_STR)
 app.include_router(lead_lists_router.router, prefix=settings.API_V1_STR)
+app.include_router(teams_router.router, prefix=settings.API_V1_STR)
+app.include_router(billing_router.router, prefix=settings.API_V1_STR)
 
 
 @app.get(f"{settings.API_V1_STR}/health")
