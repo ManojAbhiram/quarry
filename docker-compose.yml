@@ -1,0 +1,26 @@
+# Local production-like run:  cp .env.production.example .env.production  (fill it in)  then
+#   docker compose up --build
+# Web: http://localhost:8080   API (direct): http://localhost:8000/api/health
+services:
+  api:
+    build: ./apps/api
+    env_file: .env.production
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////data/quarry.db
+    volumes:
+      - quarry-data:/data
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  web:
+    build: ./apps/web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  quarry-data:
