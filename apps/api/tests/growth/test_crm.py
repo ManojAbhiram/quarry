@@ -383,3 +383,29 @@ async def test_adding_leads_to_list_emits_list_updated(api, signup, monkeypatch)
     await api.post(f"/api/lists/{lst}/leads", json={"lead_ids": [lid]}, headers=h)
     await hooks.drain()
     assert got and got[0]["event"] == "list.updated" and got[0]["list"]["lead_count"] == 1
+
+
+async def test_oauth_callback_checks_state_and_exchanges_code(api, signup, monkeypatch):
+    h, uid = await signup("oauth2@x.com")
+    await upsert_subscription(f"user:{uid}", {"plan": "pro", "status": "active"})
+    monkeypatch.setenv("HUBSPOT_CLIENT_ID", "cid")
+    monkeypatch.setenv("HUBSPOT_CLIENT_SECRET", "sec")
+    url = (await api.get("/api/integrations/hubspot/oauth/url", headers=h)).json()
+    forged = await api.post("/api/integrations/hubspot/oauth/callback", json={"code": "abc", "state": "x.y"}, headers=h)
+    assert forged.status_code == 400
+
+    real_client = httpx.AsyncClient
+
+    def handler(req: httpx.Request):
+        return httpx.Response(200, json={"access_token": "at", "refresh_token": "rt"})
+
+    monkeypatch.setattr("app.api.integrations.httpx.AsyncClient", lambda **kw: real_client(transport=httpx.MockTransport(handler)))
+
+    async def ok(self):
+        return {"portal_id": 5}
+
+    monkeypatch.setattr(HubSpotConnector, "test_connection", ok)
+    r = await api.post("/api/integrations/hubspot/oauth/callback", json={"code": "abc", "state": url["state"]}, headers=h)
+    assert r.status_code == 200 and r.json()["auth_type"] == "oauth"
+    conn = await service.get_connection(f"user:{uid}", "hubspot")
+    assert conn["refresh_enc"] and "rt" not in conn["refresh_enc"]

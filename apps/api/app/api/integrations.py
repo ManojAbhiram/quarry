@@ -1,4 +1,6 @@
 """Integrations API: HubSpot connection, field mapping, list push and sync status, plus REST hooks for Zapier/Make."""
+import hashlib
+import hmac
 import os
 import secrets
 from typing import Literal, Optional
@@ -103,12 +105,22 @@ async def connect_token(body: TokenBody, ws: Workspace = Depends(workspace_role(
     return await _connect(ws, body.access_token.strip(), None, "private_app")
 
 
+def _state_for(scope_id: str, nonce: str) -> str:
+    mac = hmac.new(settings.SECRET_KEY.encode(), f"hubspot:{scope_id}:{nonce}".encode(), hashlib.sha256).hexdigest()
+    return f"{nonce}.{mac}"
+
+
+def _state_ok(scope_id: str, state: Optional[str]) -> bool:
+    nonce, _, _mac = (state or "").partition(".")
+    return bool(nonce) and hmac.compare_digest(_state_for(scope_id, nonce), state or "")
+
+
 @router.get("/hubspot/oauth/url")
 async def oauth_url(ws: Workspace = Depends(workspace_role("admin"))):
     client_id = os.getenv("HUBSPOT_CLIENT_ID", "")
     if not client_id:
         raise HTTPException(status_code=503, detail="HubSpot OAuth is not configured on this server")
-    state = secrets.token_urlsafe(16)
+    state = _state_for(ws.scope_id, secrets.token_urlsafe(16))
     query = urlencode({"client_id": client_id, "redirect_uri": _redirect_uri(), "scope": OAUTH_SCOPES, "state": state})
     return {"url": f"{AUTHORIZE_URL}?{query}", "state": state}
 
@@ -118,6 +130,8 @@ async def oauth_callback(body: OAuthCallback, ws: Workspace = Depends(workspace_
     cid, secret = os.getenv("HUBSPOT_CLIENT_ID", ""), os.getenv("HUBSPOT_CLIENT_SECRET", "")
     if not (cid and secret):
         raise HTTPException(status_code=503, detail="HubSpot OAuth is not configured on this server")
+    if not _state_ok(ws.scope_id, body.state):
+        raise HTTPException(status_code=400, detail="The HubSpot sign-in could not be verified. Start again.")
     async with httpx.AsyncClient(timeout=20) as client:
         res = await client.post(TOKEN_URL, data={"grant_type": "authorization_code", "client_id": cid,
                                                  "client_secret": secret, "redirect_uri": _redirect_uri(),
