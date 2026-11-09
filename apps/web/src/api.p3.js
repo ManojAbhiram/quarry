@@ -5,6 +5,7 @@ const e = encodeURIComponent
 
 export const outreachApi = {
   mailboxes: () => api.get('/outreach/mailboxes'),
+  testMailbox: (d) => api.post('/outreach/mailboxes/test', d),
   createMailbox: (d) => api.post('/outreach/mailboxes', d),
   updateMailbox: (id, d) => api.put(`/outreach/mailboxes/${e(id)}`, d),
   deleteMailbox: (id) => api.delete(`/outreach/mailboxes/${e(id)}`),
@@ -39,6 +40,7 @@ export const watchApi = {
   deleteSearch: (id) => api.delete(`/watch/searches/${e(id)}`),
   runSearch: (id) => api.post(`/watch/searches/${e(id)}/run`),
   signals: (kind) => api.get(`/watch/signals${kind ? `?kind=${e(kind)}` : ''}`),
+  leadSignals: (leadId) => api.get(`/watch/leads/${e(leadId)}/signals`),
   scan: () => api.post('/watch/scan'),
 }
 

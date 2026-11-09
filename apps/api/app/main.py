@@ -11,6 +11,7 @@ from app.api import organizations
 from app.api import jobs as jobs_router
 from app import jobs
 from app.services import pipeline_jobs
+from app.crm import jobs as crm_jobs
 from app.api import verification as verification_router
 from app.api import compliance as compliance_router
 from app.api import usage as usage_router
@@ -27,6 +28,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting up {settings.PROJECT_NAME}...")
     await connect_db()
     pipeline_jobs.register_handlers()
+    crm_jobs.register_handlers()
     await jobs.start_worker()  # re-queues jobs left running by a previous process, then polls for work
     # Requests a queued/resumed pipeline job will re-run are not orphans.
     orphaned = await fail_orphaned_requests(exclude_ids=await pipeline_jobs.pending_pipeline_request_ids())

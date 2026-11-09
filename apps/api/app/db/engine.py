@@ -61,9 +61,9 @@ def json_loads(s: str):
 
 
 async def connect_db() -> None:
-    """Create the engine and any missing tables. Safe to call again after close_db()."""
+    """Create the engine and run schema migrations. Safe to call again after close_db()."""
     global engine, _sessionmaker, _read_sessionmaker, _write_lock
-    from app.db.models import Base  # imported here: models -> docstore -> engine would be circular
+    import app.db.models  # noqa: F401  registers every table; imported here (models -> docstore -> engine is circular)
 
     url = settings.DATABASE_URL
     logger.info("Opening database %s", url.split("///")[-1] if url.startswith("sqlite") else url.split("@")[-1])
@@ -93,8 +93,9 @@ async def connect_db() -> None:
     _write_lock = asyncio.Lock()
     _sessionmaker = async_sessionmaker(engine, class_=_WriteSession, expire_on_commit=False)
     _read_sessionmaker = async_sessionmaker(engine.execution_options(read_only=True), expire_on_commit=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    from app.db.migrations import run_migrations
+
+    await run_migrations(engine)  # versioned schema migrations (the baseline creates missing tables)
     from app.db.user_sessions import purge_expired_sessions  # circular at import time, like Base above
 
     await purge_expired_sessions()

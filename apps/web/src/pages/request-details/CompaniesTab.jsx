@@ -1,6 +1,8 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Inbox, List, SlidersHorizontal, ThumbsDown, ThumbsUp, Users } from 'lucide-react'
 import { api } from '../../api'
+import { watchApi } from '../../api.p3'
+import { groupByDomain } from './signals'
 import Reveal from '../../components/motion/Reveal'
 import { useFlip } from '../../components/motion/useFlip'
 import { Button, EmptyState, Menu, Skeleton } from '../../components/kit'
@@ -33,6 +35,17 @@ export default function CompaniesTab({ leads, lists, manualAdds, onManualChange,
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState(() => new Set())
+
+  // Detected hiring/funding/tech signals for every company the user watches, fetched once and matched by domain.
+  const [signals, setSignals] = useState({ state: 'loading', byDomain: {} })
+  useEffect(() => {
+    let alive = true
+    Promise.resolve()
+      .then(() => watchApi.signals())
+      .then((res) => alive && setSignals({ state: 'ready', byDomain: groupByDomain(res?.signals) }))
+      .catch(() => alive && setSignals({ state: 'error', byDomain: {} }))
+    return () => { alive = false }
+  }, [requestId])
 
   const effective = { ...filters, search: filters.search || globalSearch || '' }
   const filtered = filterLeads(leads, effective, lists, subTab)
@@ -94,7 +107,7 @@ export default function CompaniesTab({ leads, lists, manualAdds, onManualChange,
   } else {
     body = (
       <>
-        <LeadsTable leads={visible} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleAll} onOpen={onOpen} flagsFor={flagsFor} onToggleFlag={(name, kind) => { capture(); onToggleFlag(name, kind) }} />
+        <LeadsTable signalsByDomain={signals.byDomain} signalState={signals.state} leads={visible} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleAll} onOpen={onOpen} flagsFor={flagsFor} onToggleFlag={(name, kind) => { capture(); onToggleFlag(name, kind) }} />
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted" aria-live="polite">Showing <span className="tabular-nums font-semibold text-ink">{visible.length}</span> of <span className="tabular-nums font-semibold text-ink">{filtered.length}</span> companies</p>
           {remaining > 0 && <Button variant="secondary" onClick={() => { capture(); setPage(page + 1) }}>Show {Math.min(PAGE_SIZE, remaining)} more</Button>}

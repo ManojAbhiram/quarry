@@ -11,17 +11,29 @@ class FakeSmtp:
     def __init__(self):
         self.sent: list[EmailMessage] = []
         self.fail_with: SendError | None = None
+        self.login_error: SendError | None = None
+        self.logins = 0
 
     async def send(self, creds, message):
         if self.fail_with:
             raise self.fail_with
         self.sent.append(message)
 
+    async def verify_login(self, creds):
+        self.logins += 1
+        if self.login_error:
+            raise self.login_error
+
 
 class FakeImap:
     def __init__(self):
         self.inbox: list[tuple[int, bytes]] = []
         self.boom = False
+        self.login_error: SendError | None = None
+
+    async def check_login(self, creds):
+        if self.login_error:
+            raise self.login_error
 
     async def fetch_new(self, creds, after_uid):
         if self.boom:

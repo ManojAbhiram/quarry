@@ -5,21 +5,22 @@ import { Menu } from './kit'
 import { useOrg } from '../context/OrgContext'
 
 /** Header control to switch between the personal workspace and the organizations the user belongs to. */
-export default function OrgSwitcher() {
+export default function OrgSwitcher({ block = false, compact = false }) {
   const { orgs, activeOrg, switchOrg } = useOrg()
   const currentName = activeOrg ? activeOrg.name : 'Personal'
 
   return (
     <Menu
+      className={block ? 'w-full' : undefined}
       label={`Switch workspace, current: ${currentName}`}
       align="left"
-      buttonClassName="flex max-w-[9rem] items-center gap-1.5 rounded-xl border border-line bg-surface/80 px-3 py-2 text-xs font-semibold text-ink shadow-sm transition-all hover:bg-surface hover:shadow-md sm:max-w-[13rem]"
+      buttonClassName={clsx("flex items-center gap-1.5 rounded-xl border border-line bg-surface/80 text-xs font-semibold text-ink shadow-sm transition-all hover:bg-surface hover:shadow-md", block ? "w-full px-3 py-2.5" : "max-w-[9rem] px-3 py-2 sm:max-w-[13rem]", compact && "mx-auto h-10 w-10 justify-center !px-0")}
       panelClassName="w-72 py-1"
       button={
         <>
           {activeOrg ? <Building2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-primary-600 dark:text-primary-400" /> : <User aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted" />}
-          <span className="truncate">{currentName}</span>
-          <ChevronDown aria-hidden="true" className="h-3 w-3 shrink-0 text-muted" />
+          <span className={clsx('truncate', compact && 'sr-only')}>{currentName}</span>
+          {!compact && <ChevronDown aria-hidden="true" className={clsx('h-3 w-3 shrink-0 text-muted', block && 'ml-auto')} />}
         </>
       }
     >

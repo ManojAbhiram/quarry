@@ -6,11 +6,19 @@ def _bool(name: str, default: str = "false") -> bool:
     return os.getenv(name, default).lower() in ("1", "true", "yes")
 
 
+POSTAL_ADDRESS_PLACEHOLDER = "[Sender postal address: set OUTREACH_POSTAL_ADDRESS]"
+
+
 class P3Settings:
     @property
     def public_api_url(self) -> str:
         """Absolute base URL of this API as seen by email recipients (used in unsubscribe links)."""
         return os.getenv("PUBLIC_API_URL", "http://localhost:8000").rstrip("/")
+
+    @property
+    def postal_address(self) -> str:
+        """Sender postal address printed in every outreach footer (CAN-SPAM/GDPR style identification)."""
+        return os.getenv("OUTREACH_POSTAL_ADDRESS", "").strip() or POSTAL_ADDRESS_PLACEHOLDER
 
     @property
     def scheduler_enabled(self) -> bool:

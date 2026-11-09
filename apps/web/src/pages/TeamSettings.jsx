@@ -134,6 +134,13 @@ function Members({ org, me, canManage, onLeft, refreshOrgs }) {
   )
 }
 
+const EMAIL_STATUS = {
+  queued: 'Email sending...',
+  sent: 'Email sent',
+  failed: 'Email failed, share the link',
+  disabled: 'Email not set up, share the link',
+}
+
 function Invites({ org }) {
   const toast = useToast()
   const [email, setEmail] = useState('')
@@ -159,7 +166,7 @@ function Invites({ org }) {
       const res = await api.post(`/orgs/${org.id}/invites`, { email: email.trim(), role })
       setLink(res)
       setEmail('')
-      toast.push({ type: 'success', message: res.emailed ? 'Invitation emailed.' : 'Invite created. Copy the link to share it.' })
+      toast.push({ type: 'success', message: res.email_status === 'queued' ? 'Invite created. The email is being sent; you can also copy the link.' : 'Invite created. Email is not set up, so copy the link to share it.' })
       load()
     } catch (err) {
       setError(err.message || 'Could not send the invite.')
@@ -202,6 +209,7 @@ function Invites({ org }) {
       {link && (
         <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl bg-ok-soft p-3 text-sm">
           <code className="min-w-0 flex-1 break-all text-xs text-ink">{link.invite_url}</code>
+          <span className="text-xs text-muted">{EMAIL_STATUS[link.email_status] || EMAIL_STATUS.disabled}</span>
           <Button size="sm" variant="secondary" onClick={copy}><Copy aria-hidden="true" className="h-4 w-4" /> Copy link</Button>
         </div>
       )}
@@ -209,7 +217,7 @@ function Invites({ org }) {
         <ul className="divide-y divide-line rounded-xl border border-line" aria-label="Pending invites">
           {pending.items.map((i) => (
             <li key={i.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
-              <span className="min-w-0 truncate text-ink">{i.email} <span className="text-xs text-muted">as {i.role}</span></span>
+              <span className="min-w-0 truncate text-ink">{i.email} <span className="text-xs text-muted">as {i.role}</span> <span className="text-xs text-muted">({EMAIL_STATUS[i.email_status] || EMAIL_STATUS.disabled})</span></span>
               <Button size="sm" variant="ghost" onClick={() => revoke(i.id)} aria-label={`Revoke invite for ${i.email}`}>Revoke</Button>
             </li>
           ))}

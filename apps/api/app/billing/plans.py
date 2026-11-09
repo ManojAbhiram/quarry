@@ -27,6 +27,20 @@ DEFAULT_PLAN = "free"
 REQUEST_CREDIT_COST = 1  # credits debited when a lead request is created
 
 
+# Credit top-ups. "requests" credits live in the billing ledger and are spent creating lead requests; "enrichment"
+# credits (email lookups through Hunter/Snov/PDL) live in the per-user enrichment ledger.
+TOPUP_PACKS: tuple[dict, ...] = (
+    {"credits": 100, "price_usd": 10},
+    {"credits": 500, "price_usd": 40},
+    {"credits": 2000, "price_usd": 140},
+)
+TOPUP_TARGETS = ("requests", "enrichment")
+
+
+def topup_price_usd(credits: int) -> int | None:
+    return next((p["price_usd"] for p in TOPUP_PACKS if p["credits"] == credits), None)
+
+
 def get_plan(plan_id: str | None) -> Plan:
     return PLANS.get(plan_id or DEFAULT_PLAN, PLANS[DEFAULT_PLAN])
 

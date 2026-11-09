@@ -10,6 +10,7 @@ import { actionItems } from './LeadActions'
 import ListPicker from './ListPicker'
 import { emailStatus } from './emailStatus'
 import Provenance from '../../components/Provenance'
+import { LeadSignals } from './SignalChips'
 
 function Stat({ label, children }) {
   return (
@@ -276,6 +277,10 @@ export default function LeadDrawer({ lead, requestId, flags, onToggleFlag, onClo
       <Section title="Technology">
         {tech.length > 0 && <p className="mb-1.5 text-xs text-muted">Detected from the website<Provenance provenance={prov} field="tech_stack" label="the technology list" className="ml-1" /></p>}
         {tech.length > 0 ? <div className="flex flex-wrap gap-1.5">{tech.map((t, i) => <Tag key={i}>{t}</Tag>)}</div> : <p className="text-sm text-muted">No technology detected.</p>}
+      </Section>
+
+      <Section title="Detected signals">
+        <LeadSignals leadId={leadId} />
       </Section>
 
       <Section title="Growth signals">

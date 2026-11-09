@@ -99,6 +99,31 @@ async def _record(conn_id: str, lead_id: str, fields: dict, attempts: int) -> No
     )
 
 
+IN_PROGRESS = ("queued", "syncing")
+
+
+async def mark_queued(conn_id: str, lead_ids: list[str], *, only_failed: bool = False) -> None:
+    """Show leads as waiting for a background push. With only_failed, already-synced leads keep their status."""
+    existing = await sync_rows(conn_id, lead_ids)
+    for lid in lead_ids:
+        prev = existing.get(lid)
+        if only_failed and prev and prev.get("status") == "synced":
+            continue
+        await TABLES["crm_sync"].upsert({"connection_id": conn_id, "lead_id": lid}, {"status": "queued", "error": None})
+
+
+async def fail_unfinished(conn_id: Optional[str], lead_ids: list[str], message: str) -> None:
+    """Turn any lead still queued/syncing into a retryable failure (a push that died or skipped it)."""
+    if not conn_id:
+        return
+    for lid, row in (await sync_rows(conn_id, lead_ids)).items():
+        if row.get("status") in IN_PROGRESS:
+            await TABLES["crm_sync"].upsert(
+                {"connection_id": conn_id, "lead_id": lid},
+                {"status": "failed", "error": message, "retryable": True, "last_attempt_at": datetime.utcnow()},
+            )
+
+
 async def push_leads(conn: dict, connector: CrmConnector, leads: list[dict], dms_by_lead: dict[str, list[dict]],
                      *, only_failed: bool = False) -> dict:
     """Upsert each lead's company (and contacts) in the CRM. One lead failing never stops the batch.
@@ -116,6 +141,7 @@ async def push_leads(conn: dict, connector: CrmConnector, leads: list[dict], dms
             results.append({"lead_id": lid, "status": "skipped"})
             continue
         attempts = (prev.get("attempts", 0) if prev else 0) + 1
+        await TABLES["crm_sync"].upsert({"connection_id": conn["_id"], "lead_id": lid}, {"status": "syncing"})
         domain = lead_domain(lead)
         company_props = build_company(lead, mapping)
         if not company_props:
