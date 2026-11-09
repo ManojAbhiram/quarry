@@ -362,7 +362,7 @@ export default function TeamSettings() {
 
         {activeOrg && (
           <div className="space-y-6">
-            <Section id="org-details" title="Organization" description={`You are ${role === 'admin' ? 'an' : 'a'} ${role}.`} icon={Building2}>
+            <Section id="org-details" title="Organization" description={`You are ${/^[aeiou]/i.test(role) ? 'an' : 'a'} ${role}.`} icon={Building2}>
               <form onSubmit={rename} noValidate className="flex flex-wrap items-end gap-3">
                 <Field id="org-name" label="Name" className="min-w-[14rem] flex-1" value={name} maxLength={100} disabled={!can('admin') || renaming} onChange={(e) => setName(e.target.value)} hint={can('admin') ? undefined : 'Only admins can rename the organization.'} />
                 {can('admin') && <Button type="submit" loading={renaming} disabled={!name.trim() || name.trim() === activeOrg.name}>Save</Button>}
