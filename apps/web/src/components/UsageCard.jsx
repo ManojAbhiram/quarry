@@ -5,6 +5,8 @@ import { api } from '../api'
 import { Button, Skeleton } from './kit'
 
 const usd = (n) => `$${Number(n || 0).toFixed(2)}`
+// Per-call prices are fractions of a cent, so show up to four decimals instead of rounding to $0.00.
+const unitUsd = (n) => `$${parseFloat(Number(n || 0).toFixed(4))}`
 
 function Meter({ label, used, total, format = (n) => n }) {
   const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0
@@ -57,7 +59,7 @@ export default function UsageCard({ className }) {
           <Meter label="Runs" used={data.runs} total={data.quota.runs} />
           <Meter label="Estimated spend" used={data.cost_usd} total={data.quota.cost_usd} format={usd} />
           <p className="text-xs text-muted">
-            {data.search_calls} searches and {data.llm_calls} model calls so far, {data.samples} sample {data.samples === 1 ? 'run' : 'runs'}. Spend is an estimate at about {usd(data.unit_prices.search_call_usd)} per search and {usd(data.unit_prices.llm_call_usd)} per model call. Resets on the 1st.
+            {data.search_calls} searches and {data.llm_calls} model calls so far, {data.samples} sample {data.samples === 1 ? 'run' : 'runs'}. Spend is an estimate at about {unitUsd(data.unit_prices.search_call_usd)} per search and {unitUsd(data.unit_prices.llm_call_usd)} per model call. Resets on the 1st.
           </p>
         </div>
       )}
