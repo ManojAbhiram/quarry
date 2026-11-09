@@ -55,7 +55,7 @@ from app.services.email_verification import verify_emails_batch
 from app.verification import VerifierConfig
 from app import usage
 from app.verification.service import current_verifier
-from app.services.scraper import scrape_directory_links, scrape_url_with_discovery
+from app.services.scraper import scrape_directory_links
 from app.services.serper import fetch_leads_from_serper, current_serper_key
 from app.services.tech_stack import detect_infrastructure_profile_parallel
 
