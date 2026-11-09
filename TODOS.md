@@ -91,3 +91,17 @@ _None open._
 ### Real-service coverage not exercised
 
 Not tested in a browser or against live services: the full pipeline run (needs a Serper key), request details and lead drawer with real leads, email verification providers, outbound SMTP/IMAP, Stripe/Razorpay/HubSpot, and the cost estimate and sample run. These are covered only by mocked automated tests.
+
+## From /qa on 2026-11-09 (second pass: sidebar and next-tasks)
+
+### Dialog action buttons scroll out of view on short screens
+
+**What:** In the Connect mailbox dialog at 1280x720 (especially after Test connection adds result rows), the dialog is capped at 648px and scrolls, so Cancel and Connect sit below the fold. Make the dialog footer sticky.
+
+**Severity:** Low. **Priority:** P3. **Found by:** /qa, `.gstack/qa-reports/run-20261109T134911Z/`.
+
+### Single-member org cannot show a teammate's shared item
+
+**What:** The "Shared with <org>" section on Lead lists and Requests only shows items shared by teammates, so it could not be checked with one member. Re-check with two accounts in one org.
+
+**Priority:** P3
