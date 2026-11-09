@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { LeadProvider } from './context/LeadContext'
+import { OrgProvider } from './context/OrgContext'
 import { ThemeProvider } from './context/ThemeContext'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -17,6 +18,11 @@ import Profile from './pages/Profile'
 import Layout from './components/Layout'
 import LeadLists from './pages/LeadLists'
 import UiLab from './pages/UiLab'
+import TeamSettings from './pages/TeamSettings'
+import Billing from './pages/Billing'
+import Integrations from './pages/Integrations'
+import HubspotCallback from './pages/HubspotCallback'
+import AcceptInvite from './pages/AcceptInvite'
 import { BootScreen, ErrorBoundary, NotFound, ToastProvider } from './components/kit'
 
 function ProtectedRoute({ children }) {
@@ -41,6 +47,7 @@ function AppRoutes() {
         <Route path="/reset-password" element={<ResetPassword />} />
         {import.meta.env.DEV && <Route path="/ui-lab" element={<UiLab />} />}
         <Route path="/auth/google/callback" element={<GoogleCallback />} />
+        <Route path="/invite" element={<AcceptInvite />} />
 
         <Route
           path="/"
@@ -59,6 +66,10 @@ function AppRoutes() {
           <Route path="request/:id" element={<RequestDetails />} />
           <Route path="profile" element={<Profile />} />
           <Route path="lead-lists" element={<LeadLists />} />
+          <Route path="team" element={<TeamSettings />} />
+          <Route path="billing" element={<Billing />} />
+          <Route path="integrations" element={<Integrations />} />
+          <Route path="integrations/hubspot/callback" element={<HubspotCallback />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />
@@ -73,9 +84,11 @@ export default function App() {
       <ToastProvider>
         <BrowserRouter>
           <AuthProvider>
-            <LeadProvider>
-              <AppRoutes />
-            </LeadProvider>
+            <OrgProvider>
+              <LeadProvider>
+                <AppRoutes />
+              </LeadProvider>
+            </OrgProvider>
           </AuthProvider>
         </BrowserRouter>
       </ToastProvider>

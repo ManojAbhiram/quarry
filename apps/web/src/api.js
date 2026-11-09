@@ -6,6 +6,15 @@ function getToken() {
   return localStorage.getItem(STORAGE_KEYS.TOKEN)
 }
 
+/** The organization workspace the user switched to ('' = personal). Sent as X-Org-Id; the server verifies it. */
+export function getActiveOrgId() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.ACTIVE_ORG) || ''
+  } catch {
+    return ''
+  }
+}
+
 function getRefreshToken() {
   return localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)
 }
@@ -58,6 +67,8 @@ async function request(method, path, body) {
   const headers = { 'Content-Type': 'application/json' }
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
+  const orgId = getActiveOrgId()
+  if (orgId) headers['X-Org-Id'] = orgId
 
   const res = await send(`${BASE}${path}`, {
     method,
@@ -104,7 +115,8 @@ async function request(method, path, body) {
     if (Array.isArray(detail)) {
       throw httpError(detail[0]?.msg || 'Validation error', res.status)
     }
-    throw httpError(detail || 'Request failed', res.status)
+    // Plan-limit errors (402) carry { code, message }.
+    throw httpError((detail && typeof detail === 'object' ? detail.message : detail) || 'Request failed', res.status)
   }
   return data
 }
