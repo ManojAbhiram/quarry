@@ -40,6 +40,7 @@ export const watchApi = {
   deleteSearch: (id) => api.delete(`/watch/searches/${e(id)}`),
   runSearch: (id) => api.post(`/watch/searches/${e(id)}/run`),
   signals: (kind) => api.get(`/watch/signals${kind ? `?kind=${e(kind)}` : ''}`),
+  leadSignals: (leadId) => api.get(`/watch/leads/${e(leadId)}/signals`),
   scan: () => api.post('/watch/scan'),
 }
 
