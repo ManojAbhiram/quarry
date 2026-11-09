@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.billing.store import QuotaExceeded, consume_request_quota
 from app.teams.deps import Workspace, workspace_role
@@ -19,7 +19,7 @@ async def create_lead_request(
     try:  # plan limits + credit ledger (personal workspace, or the active organization via X-Org-Id)
         await consume_request_quota(ws.scope_id)
     except QuotaExceeded as e:
-        raise HTTPException(status_code=402, detail={"code": e.code, "message": e.message})
+        raise HTTPException(status_code=402, detail={"code": e.code, "message": e.message}) from None
     org_id = ws.org_id or current_user.get("org_id") or None
     return await svc.create_request(current_user["_id"], org_id, body)
 

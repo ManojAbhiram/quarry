@@ -66,18 +66,18 @@ async def checkout(body: CheckoutBody, ws: Workspace = Depends(workspace_role("a
     try:
         provider = get_provider(name)
     except KeyError:
-        raise HTTPException(status_code=422, detail="Unknown payment provider")
+        raise HTTPException(status_code=422, detail="Unknown payment provider") from None
     if not provider.is_configured():
-        raise HTTPException(status_code=503, detail=f"{name} payments are not configured on this server")
+        raise HTTPException(status_code=503, detail=f"{name} payments are not configured on this server") from None
     try:
         return await service.start_checkout(
             provider_name=name, scope_id=ws.scope_id, plan=body.plan, email=ws.user.get("email") or ""
         )
     except ProviderNotConfigured as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from None
     except Exception as e:
         logger.error("Checkout failed for %s: %s", ws.scope_id, e)
-        raise HTTPException(status_code=502, detail="The payment provider could not start checkout")
+        raise HTTPException(status_code=502, detail="The payment provider could not start checkout") from None
 
 
 @router.post("/webhooks/{provider}")
@@ -85,14 +85,14 @@ async def webhook(provider: str, request: Request):
     try:
         get_provider(provider)
     except KeyError:
-        raise HTTPException(status_code=404, detail="Unknown provider")
+        raise HTTPException(status_code=404, detail="Unknown provider") from None
     payload = await request.body()
     headers = {k.lower(): v for k, v in request.headers.items()}
     try:
         return await service.handle_webhook(provider, payload, headers)
     except InvalidSignature:
-        raise HTTPException(status_code=400, detail="Invalid signature")
+        raise HTTPException(status_code=400, detail="Invalid signature") from None
     except ProviderNotConfigured:
-        raise HTTPException(status_code=503, detail="Webhook secret not configured")
+        raise HTTPException(status_code=503, detail="Webhook secret not configured") from None
     except ValueError:
-        raise HTTPException(status_code=400, detail="Malformed payload")
+        raise HTTPException(status_code=400, detail="Malformed payload") from None

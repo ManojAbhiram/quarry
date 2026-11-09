@@ -4,6 +4,7 @@ from typing import List, Optional
 from sqlalchemy import func, select
 
 from app.core.logger import logger
+from app.crm.hooks import schedule_event
 from app.db import engine as _engine
 from app.db.companies import get_company_by_id, upsert_company
 from app.db.decision_makers import insert_decision_maker_if_new
@@ -116,6 +117,7 @@ async def save_enriched_leads_to_db(
                 await _leads.update(lead_id, lead_doc)
             else:
                 lead_id = await _leads.insert({**lead_doc, "created_at": now})
+                schedule_event(user_id, "lead.created", {"lead": {"id": lead_id, "title": lead_doc["title"], "url": lead_url, "email": lead_doc.get("email"), "match_score": match_score_float}})
         except Exception as exc:
             logger.warning("Failed to upsert lead (url=%s) to leads table: %s", lead_url, exc)
 
