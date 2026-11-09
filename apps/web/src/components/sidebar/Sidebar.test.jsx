@@ -370,3 +370,17 @@ describe('Sidebar', () => {
     })
   })
 })
+
+describe('sidebar scrollbar', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    stubMedia({ reduce: true })
+  })
+
+  it('hides the scrollbar on the nav but keeps it scrollable', () => {
+    renderShell()
+    const nav = within(sidebarEl()).getByRole('navigation', { name: 'Main' })
+    expect(nav).toHaveClass('scrollbar-hide')
+    expect(nav).toHaveClass('overflow-y-auto')
+  })
+})

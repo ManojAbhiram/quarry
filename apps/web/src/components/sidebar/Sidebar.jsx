@@ -394,7 +394,7 @@ export default function Sidebar({ sidebar }) {
             <OrgSwitcher block={!rail} compact={rail} />
           </div>
 
-          <nav ref={navRef} aria-label="Main" className="relative mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">
+          <nav ref={navRef} aria-label="Main" className="scrollbar-hide relative mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">
             <span
               ref={pillRef}
               aria-hidden="true"
