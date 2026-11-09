@@ -17,7 +17,6 @@ Lead generation pipeline — end-to-end flow:
 import asyncio
 import time
 import re
-from urllib.parse import urlparse
 
 import httpx
 
@@ -53,9 +52,9 @@ from app.services.llm import (
     summarize_linkedin_posts_from_serper,
 )
 from app.services.email_verification import verify_emails_batch
-from app.services.scraper import scrape_directory_links, scrape_url_with_discovery
+from app.services.scraper import scrape_directory_links
 from app.services.serper import fetch_leads_from_serper, current_serper_key
-from app.services.tech_stack import detect_technology_stacks_parallel, detect_infrastructure_profile_parallel
+from app.services.tech_stack import detect_infrastructure_profile_parallel
 
 # Limit how many _resolve_company() calls run concurrently so that a large
 # batch of companies does not fire hundreds of Serper requests simultaneously
@@ -374,7 +373,7 @@ async def _dedup_against_companies(items: list[dict]) -> list[dict]:
         seen_domains.add(domain)
         existing = await get_company_by_domain(domain)
         if existing:
-            from datetime import datetime, timezone
+            from datetime import datetime
             enriched_at = existing.get("enriched_at")
             if enriched_at:
                 age_hours = (datetime.utcnow() - enriched_at).total_seconds() / 3600
@@ -418,7 +417,7 @@ async def _scrape_and_extract(
             try:
                 from urllib.parse import urlparse as _urlparse
                 _parsed = _urlparse(url if url.startswith("http") else f"https://{url}")
-                _netloc = (_parsed.netloc or "").lstrip("www.")
+                _netloc = (_parsed.netloc or "").removeprefix("www.")
                 company_name = _netloc.split(".")[0].replace("-", " ").replace("_", " ").title()
             except Exception:
                 pass
@@ -572,7 +571,7 @@ async def _verify_lead_emails(enriched: list[dict]) -> None:
         logger.warning("Email verification batch failed: %s", exc)
         return
 
-    for lead, res in zip(to_verify, results):
+    for lead, res in zip(to_verify, results, strict=False):
         lead["email_verified"] = res.get("verified")
         lead["email_confidence"] = res.get("confidence")
         lead["email_verify_method"] = res.get("method")
@@ -927,6 +926,11 @@ async def run_lead_pipeline(request_id: str, request_payload: dict) -> list[dict
         except Exception as exc:
             logger.warning("Signal enrichment failed for request %s: %s", request_id, exc)
 
+        if settings.ICP_FILTER_ENABLED:
+            before = len(enriched)
+            enriched = filter_leads_by_icp(enriched, request_payload.get("icp_dimensions"))
+            logger.info("ICP filter kept %d of %d leads for request %s", len(enriched), before, request_id)
+
         if not await request_exists(request_id):
             logger.info("Request %s was deleted while running; discarding its results", request_id)
             return []
@@ -1126,12 +1130,17 @@ async def run_direct_companies_background(
 ICP_SCORE_THRESHOLD = settings.ICP_SCORE_THRESHOLD
 
 
+def filter_leads_by_icp(
+    leads: list[dict], icp_dimensions: dict | None, threshold: int | None = None
+) -> list[dict]:
+    """Drop leads scoring below the threshold or whose employee size cannot fit the ICP range.
 
-
-
-def filter_leads_by_icp(leads: list[dict], icp_dimensions: dict | None) -> list[dict]:
+    Leads whose enrichment failed are always kept: they have no score because the AI step failed, not because
+    they are a poor fit. Only applied by the pipeline when settings.ICP_FILTER_ENABLED is true.
+    """
     if not leads:
         return leads
+    min_score = ICP_SCORE_THRESHOLD if threshold is None else threshold
 
     def _score(lead: dict) -> int:
         try:
@@ -1139,7 +1148,7 @@ def filter_leads_by_icp(leads: list[dict], icp_dimensions: dict | None) -> list[
         except (ValueError, TypeError):
             return 0
 
-    leads = [l for l in leads if _score(l) >= ICP_SCORE_THRESHOLD]
+    leads = [ld for ld in leads if ld.get("enrichment_failed") or _score(ld) >= min_score]
 
     icp_employee_range: tuple[int, int] | None = None
     if isinstance(icp_dimensions, dict):
@@ -1190,11 +1199,44 @@ async def run_pipeline_background(
             raise
 
 
+# ── Retry a failed lead enrichment ────────────────────────────────────────────
+
+async def retry_lead_enrichment(lead_id: str, user_id: str) -> dict:
+    """Re-run the AI extraction for one lead whose enrichment failed. Raises LookupError if the lead is gone.
+
+    Returns {"lead_id", "enrichment_failed", "reason"}; a still-failing lead keeps its failure marker.
+    """
+    from app.db.leads import get_lead_for_user
+
+    lead = await get_lead_for_user(lead_id, user_id)
+    if not lead:
+        raise LookupError("Lead not found")
+    request_id = lead.get("request_id") or ""
+    req = await get_request_by_id(request_id, user_id) or {}
+    context = {
+        "business_type": req.get("business_type") or "",
+        "target_location": req.get("target_location") or "",
+        "ideal_lead_profile": req.get("ideal_lead_profile") or "",
+        "title": req.get("title") or "",
+    }
+    item = {"url": lead.get("url") or "", "title": lead.get("title") or "", "snippet": lead.get("snippet") or ""}
+    results = await _scrape_and_extract([item], context, request_id, user_id)
+    if not results:
+        raise RuntimeError("Nothing could be extracted for this lead")
+    result = results[0]
+    result["source_url"] = lead.get("url") or result.get("source_url")
+    await save_enriched_leads_to_db(request_id, user_id, [result])
+    return {
+        "lead_id": lead_id,
+        "enrichment_failed": bool(result.get("enrichment_failed")),
+        "reason": result.get("enrichment_failure_reason"),
+    }
+
+
 # ── Leads retrieval ───────────────────────────────────────────────────────────
 
 async def get_leads_for_request(request_id: str, user_id) -> dict:
     from fastapi import HTTPException
-    from app.db.icp_profiles import get_icp_profile
     from app.services.competitor_service import get_competitors
     doc = await get_request_by_id(request_id, user_id)
     if not doc:

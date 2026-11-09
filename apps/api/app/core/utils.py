@@ -7,7 +7,7 @@ that were previously duplicated across service and DB modules.
 
 import re
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import List, Optional
 from urllib.parse import urlparse
 
 

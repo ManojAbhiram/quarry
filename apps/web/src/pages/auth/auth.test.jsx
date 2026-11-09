@@ -302,28 +302,35 @@ describe('GoogleCallback', () => {
 
   it('shows a labelled loading state while it finishes', () => {
     api.get.mockReturnValue(new Promise(() => {}))
-    open('?access_token=t&refresh_token=r')
+    open('?login=success')
     expect(screen.getByRole('status')).toHaveTextContent('Completing sign in')
   })
 
   it('applies auth and goes to the app on success', async () => {
     api.get.mockResolvedValue({ id: 1 })
-    open('?access_token=t&refresh_token=r')
-    await waitFor(() => expect(auth.applyAuth).toHaveBeenCalled())
+    open('?login=success')
+    await waitFor(() => expect(auth.applyAuth).toHaveBeenCalledWith({ user: { id: 1 } }))
     expect(await screen.findByTestId('where')).toHaveTextContent('/lead-requests')
   })
 
-  it('shows an error with a link back to sign in when tokens are missing', () => {
+  it('shows an error with a link back to sign in when Google reports an error', () => {
     open('?error=access_denied')
     expect(screen.getByRole('alert')).toHaveTextContent(/Google sign-in failed/)
     expect(screen.getByRole('link', { name: /Back to sign in/ })).toHaveAttribute('href', '/login')
   })
 
-  it('shows the error and clears tokens when /users/me fails', async () => {
-    api.get.mockRejectedValue(httpErr(401))
+  it('ignores tokens in the URL: only the cookie flow is accepted', () => {
     open('?access_token=t&refresh_token=r')
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Google sign-in failed/)
+    expect(screen.getByRole('alert')).toHaveTextContent(/Google sign-in failed/)
+    expect(api.get).not.toHaveBeenCalled()
     expect(localStorage.getItem('token')).toBeNull()
+  })
+
+  it('shows the error when /users/me fails', async () => {
+    api.get.mockRejectedValue(httpErr(401))
+    open('?login=success')
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Google sign-in failed/)
+    expect(auth.applyAuth).not.toHaveBeenCalled()
   })
 })
 

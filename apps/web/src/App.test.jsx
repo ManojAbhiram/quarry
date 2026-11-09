@@ -32,19 +32,18 @@ describe('App routing and boot', () => {
   })
 
   it('shows a labelled loading state while the saved session is being checked', async () => {
-    localStorage.setItem('token', 'tok')
+    localStorage.setItem('session', '1')
     api.get.mockReturnValue(new Promise(() => {})) // never answers
     render(<App />)
     expect(await screen.findByRole('status')).toHaveTextContent('Loading')
   })
 
   it('shows an error with a retry when the server cannot be reached, and keeps the user signed in', async () => {
-    localStorage.setItem('token', 'tok')
-    localStorage.setItem('refresh_token', 'ref')
+    localStorage.setItem('session', '1')
     api.get.mockRejectedValueOnce(networkError())
     render(<App />)
     expect(await screen.findByRole('alert')).toHaveTextContent("Can't reach Quarry")
-    expect(localStorage.getItem('token')).toBe('tok')
+    expect(localStorage.getItem('session')).toBe('1')
 
     api.get.mockImplementation((path) => Promise.resolve(path === '/users/me' ? { name: 'Asha', email: 'a@b.co' } : []))
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))

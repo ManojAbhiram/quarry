@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
-import { STORAGE_KEYS } from '../config/constants'
 import { ErrorState } from '../components/kit'
 import { describeError } from './auth/authKit'
 
@@ -11,9 +10,9 @@ import { describeError } from './auth/authKit'
  * Handles the Google OAuth2 callback.
  *
  * Flow:
- *  1. Backend server-side OAuth exchange completes at /auth/google/callback
- *  2. Backend redirects to the web app at /auth/google/callback?access_token=...&refresh_token=...
- *  3. This page reads the tokens, fetches /users/me, and applies auth state
+ *  1. Backend server-side OAuth exchange completes at /api/auth/google/callback and sets the HttpOnly session cookies
+ *  2. Backend redirects to the web app at /auth/google/callback?login=success (no tokens in the URL)
+ *  3. This page fetches /users/me with the cookie and applies auth state
  */
 export default function GoogleCallback() {
   const [searchParams] = useSearchParams()
@@ -26,26 +25,17 @@ export default function GoogleCallback() {
     if (called.current) return
     called.current = true
 
-    const accessToken = searchParams.get('access_token')
-    const refreshToken = searchParams.get('refresh_token') || ''
-
-    if (searchParams.get('error') || !accessToken) {
+    if (searchParams.get('error') || searchParams.get('login') !== 'success') {
       setFailure('We could not complete sign in with Google. Try again from the sign-in page.')
       return
     }
 
-    // Store tokens so api.get can attach the Authorization header
-    localStorage.setItem(STORAGE_KEYS.TOKEN, accessToken)
-    if (refreshToken) localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken)
-
     api.get('/users/me')
       .then((user) => {
-        applyAuth({ access_token: accessToken, refresh_token: refreshToken, user })
+        applyAuth({ user })
         navigate('/lead-requests', { replace: true })
       })
       .catch((err) => {
-        localStorage.removeItem(STORAGE_KEYS.TOKEN)
-        localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
         setFailure(err?.isNetworkError ? describeError(err).message : 'We could not complete sign in with Google. Try again from the sign-in page.')
       })
     // Runs once on arrival: the one-time guard above stops a double fetch.

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 
-import httpx
-
 from app.core.config import settings
+from app.core.cookies import (
+    CSRF_COOKIE, REFRESH_COOKIE, check_csrf, clear_auth_cookies, new_csrf_token, set_auth_cookies,
+)
 from app.core.logger import logger
 from app.core.rate_limit import auth_rate_limit
 from app.db.users import (
@@ -26,7 +27,6 @@ from app.services.auth import (
     create_password_reset_token, verify_password_reset_token,
     refresh_token_expiry,
 )
-from app.services.users import find_or_create_google_user
 from app.services.email import send_password_reset_email
 from app.schemas import (
     RegisterRequest, LoginRequest, AuthResponse,
@@ -34,19 +34,17 @@ from app.schemas import (
     ForgotPasswordRequest, ResetPasswordRequest,
     user_to_out,
 )
-from app.schemas.auth import GoogleCallbackRequest, LogoutRequest
+from app.schemas.auth import LogoutRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # One message for every failed login, so the response never reveals whether an email is registered.
 INVALID_LOGIN = "Invalid email or password. If you signed up with Google, use Continue with Google."
 
-_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
-_GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(auth_rate_limit)])
-async def register(body: RegisterRequest, request: Request):
+async def register(body: RegisterRequest, request: Request, response: Response):
     if await get_user_by_email(body.email):
         logger.warning("Registration attempt for existing email: %s", body.email)
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -81,11 +79,12 @@ async def register(body: RegisterRequest, request: Request):
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )
+    set_auth_cookies(response, access_token, refresh_token)
     return AuthResponse(access_token=access_token, refresh_token=refresh_token, user=user_to_out(doc))
 
 
 @router.post("/login", response_model=AuthResponse, dependencies=[Depends(auth_rate_limit)])
-async def login(body: LoginRequest, request: Request):
+async def login(body: LoginRequest, request: Request, response: Response):
     await purge_expired_sessions()
     user = await get_user_by_email(body.email)
     if not user:
@@ -110,17 +109,25 @@ async def login(body: LoginRequest, request: Request):
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )
+    set_auth_cookies(response, access_token, refresh_token)
     return AuthResponse(access_token=access_token, refresh_token=refresh_token, user=user_to_out(user))
 
 
 @router.post("/refresh", response_model=RefreshResponse)
-async def refresh(body: RefreshRequest, request: Request):
-    user_id = await verify_refresh_token(body.refresh_token)
+async def refresh(request: Request, response: Response, body: RefreshRequest | None = None):
+    old_token = body.refresh_token if body and body.refresh_token else None
+    if not old_token:
+        old_token = request.cookies.get(REFRESH_COOKIE)
+        if old_token:
+            check_csrf(request)  # cookie-borne credential: require the CSRF header
+    if not old_token:
+        raise HTTPException(status_code=401, detail="Missing refresh token")
+    user_id = await verify_refresh_token(old_token)
     user = await get_user_by_id(user_id)
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
 
-    old_hash = hash_token(body.refresh_token)
+    old_hash = hash_token(old_token)
     session = await get_session_by_token_hash(old_hash)
     if session is None:
         raise HTTPException(status_code=401, detail="Session expired or already refreshed")
@@ -137,15 +144,32 @@ async def refresh(body: RefreshRequest, request: Request):
         user_agent=request.headers.get("user-agent"),
     )
     logger.info("Token refreshed for user_id: %s", user_id)
+    set_auth_cookies(response, new_access_token, new_refresh_token)
     return RefreshResponse(access_token=new_access_token, refresh_token=new_refresh_token)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(body: LogoutRequest):
-    if body.refresh_token:
-        await delete_session_by_token_hash(hash_token(body.refresh_token))
+async def logout(request: Request, response: Response, body: LogoutRequest | None = None):
+    token = (body.refresh_token if body else None) or request.cookies.get(REFRESH_COOKIE)
+    if token:
+        await delete_session_by_token_hash(hash_token(token))
         logger.info("Session invalidated via logout")
+    clear_auth_cookies(response)
     return None
+
+
+@router.get("/csrf")
+async def csrf_token(request: Request, response: Response):
+    """Return the CSRF token for the current cookie session (issuing a fresh cookie if it is missing)."""
+    token = request.cookies.get(CSRF_COOKIE)
+    if not token:
+        token = new_csrf_token()
+        response.set_cookie(
+            CSRF_COOKIE, token, max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400, httponly=False, path="/",
+            secure=settings.COOKIE_SECURE or settings.COOKIE_SAMESITE == "none", samesite=settings.COOKIE_SAMESITE,
+            domain=settings.COOKIE_DOMAIN or None,
+        )
+    return {"csrf_token": token}
 
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK, dependencies=[Depends(auth_rate_limit)])
@@ -177,63 +201,3 @@ async def reset_password(body: ResetPasswordRequest):
 async def get_google_auth_url():
     backend_oauth_start = settings.GOOGLE_REDIRECT_URI.removesuffix("/callback")
     return {"url": backend_oauth_start}
-
-
-@router.post("/google/callback", response_model=AuthResponse, dependencies=[Depends(auth_rate_limit)])
-async def google_callback_api(body: GoogleCallbackRequest, request: Request):
-    """Exchange a Google authorization code for app JWT tokens."""
-    redirect_uri = f"{settings.FRONTEND_URL}/auth/google/callback"
-
-    async with httpx.AsyncClient() as client:
-        token_resp = await client.post(
-            _GOOGLE_TOKEN_URL,
-            data={
-                "code": body.code,
-                "client_id": settings.GOOGLE_CLIENT_ID,
-                "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "redirect_uri": redirect_uri,
-                "grant_type": "authorization_code",
-            },
-        )
-
-    if token_resp.status_code != 200:
-        logger.error("Google token exchange failed: %s", token_resp.text)
-        raise HTTPException(status_code=401, detail="Google authentication failed")
-
-    google_access_token = token_resp.json().get("access_token")
-
-    async with httpx.AsyncClient() as client:
-        userinfo_resp = await client.get(
-            _GOOGLE_USERINFO_URL,
-            headers={"Authorization": f"Bearer {google_access_token}"},
-        )
-
-    if userinfo_resp.status_code != 200:
-        logger.error("Google userinfo fetch failed: %s", userinfo_resp.text)
-        raise HTTPException(status_code=401, detail="Failed to fetch Google user info")
-
-    profile = userinfo_resp.json()
-    google_id: str = profile.get("sub", "")
-    email: str = profile.get("email", "").lower().strip()
-    name: str = profile.get("name", email.split("@")[0] if email else "")
-
-    if not email:
-        raise HTTPException(status_code=400, detail="Google account has no email address")
-
-    user_id, user = await find_or_create_google_user(google_id, email, name)
-
-    app_access_token = create_access_token(user_id)
-    app_refresh_token = create_refresh_token(user_id)
-
-    await create_session(
-        user_id=user_id,
-        token_hash=hash_token(app_refresh_token),
-        expires_at=refresh_token_expiry(),
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
-    return AuthResponse(
-        access_token=app_access_token,
-        refresh_token=app_refresh_token,
-        user=user_to_out(user),
-    )

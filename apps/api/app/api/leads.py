@@ -1,6 +1,5 @@
 import asyncio
 import json
-import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, Response
@@ -10,20 +9,18 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.core.cookies import ACCESS_COOKIE
 from app.core.logger import logger
 from app.db.leads import get_lead_for_user, update_lead_fields
 from app.db.requests import get_request_by_id
 from app.db.signals import save_intent_analysis
 from app.db.users import get_user_serper_key
-from app.schemas.leads import LeadsListResponse
 from app.services.auth import bearer_scheme, get_current_user
 from app.services.serper import current_serper_key
 from app.services.leads import (
     get_decision_makers_service,
     get_leads_for_request,
     get_request_status_summary,
-    run_lead_pipeline,
-    run_pipeline_background,
 )
 from app.services.signals.orchestrator import collect_all_signals
 from app.services.export_service import (
@@ -51,7 +48,7 @@ async def _get_current_user_sse(
         detail="Invalid or expired token",
     )
 
-    raw_token = credentials.credentials if credentials else token
+    raw_token = credentials.credentials if credentials else (token or request.cookies.get(ACCESS_COOKIE))
     if not raw_token:
         raise credentials_exception
 
@@ -61,7 +58,7 @@ async def _get_current_user_sse(
         if user_id is None:
             raise credentials_exception
     except JWTError:
-        raise credentials_exception
+        raise credentials_exception from None
 
     user = await get_user_by_id(user_id)
     if user is None:
@@ -184,7 +181,7 @@ async def analyze_lead_intent(
         raise HTTPException(
             status_code=500,
             detail=f"Intent analysis failed: {str(exc)}",
-        )
+        ) from exc
 
 
     try:
@@ -536,6 +533,22 @@ async def verify_and_save_email(
     })
 
     return result
+
+
+@router.post("/{lead_id}/retry-enrichment", status_code=202)
+async def retry_enrichment(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Queue a re-run of the AI enrichment for a lead. Poll GET /jobs/{job_id} for the outcome."""
+    from app import jobs
+    from app.services.pipeline_jobs import LEAD_RETRY_ENRICHMENT
+
+    user_id = str(current_user["_id"])
+    lead = await get_lead_for_user(lead_id, user_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    job_id = await jobs.enqueue(
+        LEAD_RETRY_ENRICHMENT, {"lead_id": lead_id, "user_id": user_id}, owner_id=user_id, max_attempts=2
+    )
+    return {"job_id": job_id, "status": "queued"}
 
 
 # ---------------------------------------------------------------------------

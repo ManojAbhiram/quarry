@@ -1,12 +1,7 @@
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, Depends
 
-from app.schemas.request_intake import (
-    FindCompetitorsRequest,
-    ProductSimilarityResearchRequest,
-    ProductSimilarityResearchResponse,
-)
 from app.services.auth import get_current_user
 import app.services.competitor_service as svc
 

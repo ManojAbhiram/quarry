@@ -1,448 +1,119 @@
-# Low-Level Design — Quarry AI Lead Generation Agent
+# Low-Level Design: Quarry API
 
-## 1. Module & File Map
+## 1. Module map
 
-```
-apps/api/
-├── app/
-│   ├── main.py                   FastAPI app, middleware, lifespan, routers
-│   ├── core/
-│   │   ├── config.py             Settings class — all env vars with validation
-│   │   └── logger.py             Root logger configuration
-│   ├── db/
-│   │   ├── engine.py             Async SQLAlchemy engine + session (SQLite PRAGMAs)
-│   │   ├── models.py             Tables + TABLES registry
-│   │   ├── docstore.py           DocTable: document↔row helper
-│   │   └── leads.py (and other repositories)  Read/write functions per table
-│   ├── api/
-│   │   ├── auth.py               POST /register  POST /login
-│   │   ├── users.py              GET/PUT /me  PUT /me/password  DELETE /me
-│   │   ├── requests.py           GET/POST /requests  GET /requests/{id}  DELETE
-│   │   ├── leads.py              POST /leads  GET /leads  GET /leads/status/{id}
-│   │   └── scrape_leads.py       POST /scrape  (optional, direct-URL endpoint)
-│   ├── schemas/
-│   │   ├── __init__.py           Auth + user schemas, request_to_out, user_to_out
-│   │   ├── leads.py              Lead, CompleteLeadRequest, SearchQueryList, …
-│   │   └── users.py              Minimal user schema (reserved)
-│   └── services/
-│       ├── auth.py               JWT, bcrypt, get_current_user
-│       ├── leads.py              Pipeline orchestrator (10 steps)
-│       ├── groq.py               All Groq LLM calls
-│       ├── scraper.py            Async web scraper + sub-page discovery
-│       └── serper.py             Serper API client
-├── scraper/                      Standalone multi-provider scraper package
-│   ├── config.py                 API keys, model list, provider client init
-│   ├── engine.py                 scrape_leads_from_urls() entry point
-│   ├── fetcher.py                fetch_page(), extract_text()
-│   ├── discovery.py              discover_lead_pages()
-│   ├── parser.py                 parse_ai_response(), regex_fallback()
-│   ├── prompt.py                 SYSTEM_PROMPT, build_user_message()
-│   └── providers/
-│       ├── __init__.py           run_provider_chain() — ordered fallback chain
-│       ├── openrouter.py         13 free OpenRouter models in sequence
-│       ├── openai.py             gpt-4o-mini fallback
-│       ├── claude.py             claude-3-haiku fallback
-│       ├── gemini.py             gemini-1.5-flash fallback
-│       ├── grok.py               grok-beta fallback
-│       └── perplexity.py         llama-3.1-sonar fallback
-├── routers/
-│   └── leads.py                  Legacy direct-scrape router (not mounted)
-├── .env                          Local secrets (git-ignored)
-├── .env.example                  Template for onboarding
-├── pyproject.toml                uv/pip dependencies
-└── requirements.txt              Pip-compatible dependency list
-```
+| Module | Responsibility |
+| --- | --- |
+| `app/main.py` | App factory and lifespan: connect DB, register job handlers, start the worker, sweep orphaned requests; on shutdown stop the worker and close the DB. CORS, global 500 handler, router registration. |
+| `app/jobs.py` | Durable job queue and worker (section 3). |
+| `app/core/config.py` | `Settings` read from env at import; `SECRET_KEY` and `SERPER_API_KEY` are required. |
+| `app/core/cookies.py` | Session cookie helpers and CSRF double-submit check (section 5). |
+| `app/core/url_guard.py` | SSRF protection for outbound fetches (httpx, requests, Playwright). |
+| `app/core/rate_limit.py` | In-memory sliding-window limiter used by auth routes. |
+| `app/core/security_crypto.py` | Fernet-style encryption for stored user Serper keys. |
+| `app/core/scoring_config.py` | Score bands, pillar caps, confidence multipliers, decay constants. |
+| `app/db/engine.py` | Async SQLAlchemy engine, WAL pragmas, write lock + write/read sessions, `connect_db`/`close_db`. |
+| `app/db/docstore.py` | `DocTable`: maps flat documents to rows (`id`, key columns, JSON `data`). |
+| `app/db/models.py` | One model per table and the `TABLES` registry. |
+| `app/db/*.py` | One repository per table (requests, leads, companies, decision_makers, lead_enrichments, lead_lists, users, user_sessions, signals, erasure, ...). |
+| `app/services/leads.py` | Pipeline orchestrator: `run_lead_pipeline`, `run_direct_companies_pipeline`, `retry_lead_enrichment`, `filter_leads_by_icp`. |
+| `app/services/pipeline_jobs.py` | Job handlers (`pipeline.run`, `pipeline.direct`, `lead.retry_enrichment`) and startup helper `pending_pipeline_request_ids`. |
+| `app/services/llm.py` | LiteLLM calls, prompts, `_llm_json_completion`, `LLMCompletionError`, lead extraction. |
+| `app/services/scraper.py` | httpx + BeautifulSoup scraping, structured-data extraction, optional Playwright fallback. |
+| `app/services/serper.py` | Serper client with per-pipeline key via the `current_serper_key` ContextVar and a result cache table. |
+| `app/services/scoring.py` | 4-pillar intent score with decay. |
+| `app/services/company_enrichment.py`, `signals/*` | LinkedIn firmographics and funding/news/job/social/tech signals. |
+| `app/services/tech_stack*.py`, `infrastructure_detection.py`, `careers_tech_stack.py` | Technology fingerprinting. |
+| `app/services/product_similarity.py`, `competitor_service.py` | Competitor discovery and comparison. |
+| `app/services/export_service.py` | CSV, XLSX and PDF generation. |
+| `app/services/auth.py` | Password hashing, JWT creation/verification, `get_current_user`. |
 
----
+## 2. Data model
 
-## 2. Database Schema
+All tables have `id` (string PK) and `data` (JSON); the columns listed are the real, queryable key columns.
 
-### Collection: `users`
+| Table | Key columns | Notes |
+| --- | --- | --- |
+| `organizations` | `domain` (unique) | |
+| `users` | `email` (unique), `google_id` (unique), `org_id` | encrypted Serper key in `data` |
+| `user_sessions` | `user_id`, `token_hash` (unique), `expires_at` | hashed refresh tokens |
+| `requests` | `user_id`, `org_id`, `status`, `created_at`, `updated_at` | `failure_reason`, `queries`, list marks in `data` |
+| `product_intake`, `icp_profiles` | `request_id` (unique) | |
+| `competitor_analyses`, `competitors` | `request_id`/`analysis_id`, `url`, `match_score` | |
+| `leads` | `request_id`, `user_id`, `url`, `match_score`, `enrichment_status` | unique `(request_id, url)`; `enrichment_failed`, `enrichment_failure_reason`, email verification and intent fields in `data` |
+| `lead_enrichments` | `lead_id` (unique), `company_id` | |
+| `decision_makers` | `lead_id` | |
+| `companies` | `canonical_domain`, `crunchbase_id`, `linkedin_id` (all unique) | shared across requests, deduped by domain |
+| `lead_lists`, `lead_list_items` | `user_id`, `created_at`; `(list_id, lead_id)` | |
+| `serper_cache` | `query` (unique), `expires_at` | |
+| `jobs` | `kind`, `owner_id`, `status`, `run_at`, `created_at` | `payload`, `attempts`, `max_attempts`, `result`, `error`, `started_at`, `finished_at` in `data` |
 
-```json
-{
-  "_id":           ObjectId | string,
-  "email":         "user@example.com",
-  "name":          "Jane Smith",
-  "password_hash": "$2b$12$...",
-  "company":       "Acme Corp" | null,
-  "job_title":     "Sales Engineer" | null,
-  "phone":         "+1-555-000-0000" | null
-}
-```
-
-Indexes to add:
-```
-{ "email": 1 }   unique: true
-```
-
----
-
-### Collection: `requests`
-
-This is the primary working collection — one document per pipeline run.
-
-```json
-{
-  "_id":              "uuid4-string",
-  "user_id":          "ObjectId-as-string",
-  "title":            "Find EdTech leads in South India",
-  "business_type":    "SaaS CRM for colleges",
-  "target_location":  "Tamil Nadu, India",
-  "ideal_lead_profile": "Private engineering colleges with 1000+ students",
-  "budget_target_size": "50-500",
-  "status":           "Pending | Completed | Failed",
-  "created_at":       ISODate,
-  "updated_at":       ISODate,
-
-  "queries": [
-    "list of private engineering colleges Tamil Nadu",
-    "top engineering colleges in Chennai site:.edu.in"
-  ],
-
-  "leads": [
-    {
-      "user_id":     "...",
-      "title":       "SRM Institute of Science and Technology",
-      "url":         "https://www.srmist.edu.in",
-      "snippet":     "India's premier engineering university...",
-      "email":       "",
-      "phone":       "",
-      "description": "",
-      "match_score": "0",
-      "type":        "standalone"
-    }
-  ],
-
-  "enriched_leads": [
-    {
-      "user_id":       "...",
-      "title":         "SRM Institute of Science and Technology",
-      "url":           "https://www.srmist.edu.in",
-      "email":         "admissions@srmist.edu.in",
-      "phone":         "+91-44-2745-5510",
-      "description":   "Premier private university offering B.Tech programs",
-      "match_score":   "87",
-      "snippet":       "Expanding enrolment — procurement cycle open",
-      "type":          "enriched",
-      "company_name":  "SRM Institute",
-      "industry":      "Higher Education",
-      "location":      "Chennai, Tamil Nadu",
-      "contact_name":  "Dr. Rajesh Kumar",
-      "contact_title": "Director of Admissions"
-    }
-  ],
-
-  "has_enriched": true
-}
-```
-
-Indexes to add:
-```
-{ "user_id": 1, "created_at": -1 }
-{ "_id": 1, "user_id": 1 }
-{ "status": 1 }
-```
-
----
-
-## 3. Pydantic Schemas
-
-### `app/schemas/leads.py`
+## 3. Job queue (`app/jobs.py`)
 
 ```python
-class CompleteLeadRequest(BaseModel):
-    title:               str
-    business_type:       str
-    target_location:     str
-    ideal_lead_profile:  str
-    budget_target_size:  Optional[str] = None
-
-class Lead(BaseModel):
-    id:           Optional[str]   # alias="_id"
-    user_id:      str
-    title:        str
-    url:          str
-    email:        str
-    phone:        str
-    description:  str
-    match_score:  str
-    snippet:      str
-    type:         str
-
-class SearchQueryList(BaseModel):
-    queries: List[str]            # min 2, max 10
-
-class SiteClassification(BaseModel):
-    url:       str
-    site_type: Literal["standalone", "directory"]
-    reasoning: str
-
-class BatchClassificationResponse(BaseModel):
-    results: List[SiteClassification]
+job_id = await enqueue(kind, payload, owner_id=None, run_at=None, max_attempts=None)
+register_handler(kind, async_fn)        # async def fn(payload: dict) -> dict | None
 ```
 
-### `app/schemas/__init__.py`
-
-```python
-class RegisterRequest(BaseModel):
-    email:    EmailStr
-    password: str        # min 6 chars (validated)
-    name:     str
-
-class LoginRequest(BaseModel):
-    email:    EmailStr
-    password: str
-
-class UserOut(BaseModel):
-    id:        str
-    email:     str
-    name:      str
-    company:   Optional[str]
-    job_title: Optional[str]
-    phone:     Optional[str]
-
-class AuthResponse(BaseModel):
-    access_token: str
-    token_type:   str = "bearer"
-    user:         UserOut
-
-class LeadRequestCreate(BaseModel):
-    business_type:       str
-    ideal_lead_profile:  str
-    budget_target_size:  Optional[str]
-    target_location:     str
-
-class LeadRequestOut(BaseModel):
-    id:                  str
-    title:               str
-    business_type:       str
-    location:            str
-    status:              str
-    date:                str
-    ideal_lead_profile:  Optional[str]
-    budget_target_size:  Optional[str]
-
-class StatsOut(BaseModel):
-    total_leads: int
-    pending:     int
-    completed:   int
-```
-
----
-
-## 4. API Endpoints
-
-### Authentication
-
-| Method | Path | Auth | Request Body | Response |
-|--------|------|------|-------------|----------|
-| POST | `/api/auth/register` | None | `RegisterRequest` | `AuthResponse` 201 |
-| POST | `/api/auth/login` | None | `LoginRequest` | `AuthResponse` 200 |
-
-### Users
-
-| Method | Path | Auth | Request Body | Response |
-|--------|------|------|-------------|----------|
-| GET | `/api/users/me` | Bearer | — | `UserOut` |
-| PUT | `/api/users/me` | Bearer | `ProfileUpdate` | `UserOut` |
-| PUT | `/api/users/me/password` | Bearer | `PasswordUpdate` | 204 |
-| DELETE | `/api/users/me` | Bearer | — | 204 |
-
-### Lead Requests (metadata CRUD)
-
-| Method | Path | Auth | Request Body | Response |
-|--------|------|------|-------------|----------|
-| GET | `/api/requests` | Bearer | — | `List[LeadRequestOut]` |
-| POST | `/api/requests` | Bearer | `LeadRequestCreate` | `LeadRequestOut` 201 |
-| GET | `/api/requests/stats` | Bearer | — | `StatsOut` |
-| GET | `/api/requests/{id}` | Bearer | — | `LeadRequestOut` |
-| GET | `/api/requests/{id}/results` | Bearer | — | `GenerateLeadsResponse` |
-| DELETE | `/api/requests/{id}` | Bearer | — | 204 |
-
-### Lead Pipeline
-
-| Method | Path | Auth | Request Body | Response |
-|--------|------|------|-------------|----------|
-| POST | `/api/leads` | Bearer | `CompleteLeadRequest` | `{ request_id, status }` 202 |
-| GET | `/api/leads/status/{request_id}` | Bearer | — | `{ status, leads_count, queries_count }` |
-| GET | `/api/leads?request_id={id}` | Bearer | — | `{ leads, total_found, status }` |
-
-### Direct Scrape (optional)
-
-| Method | Path | Auth | Request Body | Response |
-|--------|------|------|-------------|----------|
-| POST | `/api/scrape` | Bearer | `ScrapeLeadsRequest` | `List[LeadOut]` |
-
-### Health
-
-| Method | Path | Auth | Response |
-|--------|------|------|----------|
-| GET | `/api/health` | None | `{ status, project, version }` |
-
----
-
-## 5. Function Signatures
-
-### `app/services/leads.py`
-
-```python
-async def run_lead_pipeline(request_id: str, request_payload: dict) -> list[dict]
-    """Full 10-step pipeline. request_payload must contain user_id."""
-
-async def handle_lead_request(current_user: dict, body: CompleteLeadRequest) -> dict
-    """Insert request + run pipeline. Returns { request_id, leads_count }."""
-
-# Internal helpers
-async def _generate_and_store_queries(request_id: str, payload: dict) -> list[str]
-async def _fetch_all_serper_results(queries: list[str]) -> list[dict]
-async def _expand_directories(directory_items: list[dict]) -> list[dict]
-async def _scrape_and_extract(standalone_items, context, request_id, user_id) -> list[dict]
-def   _deduplicate_urls(results: list[dict]) -> list[dict]
-```
-
-### `app/services/groq.py`
-
-```python
-async def generate_sales_queries(context: dict) -> list[str]
-    """Groq: generate 5 Google queries from ICP context. Returns [] on failure."""
-
-def classify_results_batch(serper_items: list[dict]) -> list[dict]
-    """Groq: classify URLs as standalone/directory. Returns [{url, site_type, reasoning}]."""
-
-def process_serper_results_batch(serper_data: list[dict]) -> tuple[list[dict], list[dict]]
-    """Classify + split into (standalone_leads, directory_sources)."""
-
-def extract_lead_from_page(page_text: str, url: str, context: dict) -> dict
-    """Groq: extract one lead's structured data from page text."""
-
-def extract_leads_from_pages(pages: list[dict], context: dict) -> list[dict]
-    """Iterate pages, call extract_lead_from_page, return enriched list."""
-```
-
-### `app/services/scraper.py`
-
-```python
-async def scrape_url_with_discovery(url: str) -> str
-    """
-    Async. Fetches homepage + discovers /contact /about /team sub-pages.
-    Returns combined cleaned text capped at MAX_SCRAPE_TEXT_CHARS.
-    """
-
-def scrape_url(url: str) -> str
-    """Sync. Single-page fetch + HTML clean. Run in thread executor."""
-
-def scrape_directory_links(directory_url: str) -> list[str]
-    """Sync. Scrape directory page, return all same-domain hrefs. Run in thread executor."""
-
-def _discover_subpages(html: str, base_url: str) -> list[str]
-    """Parse HTML for internal links matching contact/about/team keywords. Max 5."""
-
-def _clean_html(html: str) -> str
-    """Strip script/style/nav/footer tags; collapse whitespace."""
-```
-
-### `app/services/serper.py`
-
-```python
-async def fetch_leads_from_serper(query: str) -> dict
-    """POST to Serper API. Returns full response dict (access .get('organic'))."""
-```
-
-### `app/services/auth.py`
-
-```python
-def hash_password(password: str) -> str
-def verify_password(plain: str, hashed: str) -> bool
-def create_access_token(user_id: str) -> str
-async def get_current_user(credentials: HTTPAuthorizationCredentials) -> dict
-    """FastAPI dependency. Decodes JWT, fetches user from DB. Raises 401 on failure."""
-```
-
-### `app/db/leads.py`
-
-```python
-async def insert_complete_lead_request(request_data: dict, user_id: str) -> str
-    """Insert new request doc. Returns string _id."""
-
-async def update_request_status(request_id: str, status: str) -> None
-
-async def add_queries_to_lead_request(request_id: str, queries: list[str]) -> None
-
-async def process_and_save_standalone_leads(
-    serper_data: list[dict], request_id: str, user_id: str
-) -> List[Lead]
-    """Save pre-enrichment Lead objects (no contact data yet)."""
-
-async def save_leads_to_db(request_id: str, leads: List[Lead]) -> None
-    """Append Lead model instances to the request.leads array."""
-
-async def save_enriched_leads_to_db(
-    request_id: str, user_id: str, enriched: List[dict]
-) -> None
-    """Append extracted lead dicts to the request.enriched_leads array."""
-
-async def get_lead_request(request_id: str, user_id: str) -> dict | None
-```
-
-### Data model (`app/db/models.py`)
-
-Each table has a string `id` primary key, a few real columns (those used in filters, joins, sorting or unique constraints), and a JSON `data` column holding every other field. `DocTable` (`app/db/docstore.py`) maps flat dicts (with `_id`) to rows. `lead_lists` memberships live in `lead_list_items(list_id, lead_id, added_at)`.
-
----
-
-## 7. Groq LLM Call Summary
-
-| Function | Model | Purpose | Input | Output |
-|----------|-------|---------|-------|--------|
-| `generate_sales_queries` | `llama-3.3-70b-versatile` | Build search queries | Full ICP context JSON | `SearchQueryList` |
-| `classify_results_batch` | `llama-3.1-8b-instant` | Classify URLs | URL + title + snippet per result | `[{url, site_type, reasoning}]` |
-| `extract_lead_from_page` | `llama-3.1-8b-instant` | Extract contact data | Page text (≤8,000 chars) + ICP | Lead field JSON |
-
-All calls use `response_format: {"type": "json_object"}` to guarantee parseable output.
-
----
-
-## 8. Configuration Reference
-
-All values read from `.env` via `python-dotenv`.
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SECRET_KEY` | **Yes** | — | JWT signing secret (min 32 random chars) |
-| `GROQ_API_KEY` | **Yes** | — | Groq API key |
-| `SERPER_API_KEY` | **Yes** | — | Serper (Google Search) API key |
-| `DATABASE_URL` | No | `sqlite+aiosqlite:///./quarry.db` | SQLAlchemy async database URL |
-| `GROQ_MODEL` | No | `llama-3.3-70b-versatile` | Model for query generation |
-| `GROQ_MODEL_MINI` | No | `llama-3.1-8b-instant` | Model for classification + extraction |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `60` | JWT lifetime |
-| `SCRAPE_TIMEOUT` | No | `15` | Per-request HTTP timeout (seconds) |
-| `OPENROUTER_API_KEY` | No | — | Free LLM provider for /scrape endpoint |
-| `OPENAI_API_KEY` | No | — | Paid fallback for /scrape endpoint |
-| `ANTHROPIC_API_KEY` | No | — | Paid fallback for /scrape endpoint |
-| `GEMINI_API_KEY` | No | — | Paid fallback for /scrape endpoint |
-| `GROK_API_KEY` | No | — | Paid fallback for /scrape endpoint |
-| `PERPLEXITY_API_KEY` | No | — | Paid fallback for /scrape endpoint |
-
-The three Required keys are validated at startup by `_require()` in `config.py` — the server will not start without them.
-
----
-
-## 9. Error Handling
-
-| Layer | Mechanism |
-|-------|----------|
-| **Schema validation** | Pydantic raises `422 Unprocessable Entity` automatically for invalid request bodies |
-| **Auth failures** | `get_current_user` raises `401` with `"Invalid or expired token"` |
-| **Not found** | Endpoint raises `404` explicitly after `find_one` returns `None` |
-| **Pipeline exceptions** | `_run_pipeline_background` wraps entire pipeline in try/except; sets status = `"Failed"` |
-| **Groq call failure** | Each function returns `[]` / `{}` on exception — pipeline continues with empty data |
-| **Scrape failure** | `scrape_url_with_discovery` returns `""` on homepage failure; non-fatal sub-page failures logged and skipped |
-| **Serper failure** | Per-query failures logged as warnings; other queries continue |
-| **Global handler** | `app/main.py` exception handler logs full traceback server-side, returns `{"detail": "Internal server error"}` to client |
-
----
-
-## 10. Indexes
-
-Indexes and unique constraints are declared on the models in `app/db/models.py` and created with the tables at startup. There is nothing to run by hand.
+* Statuses: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
+* The worker loop (`start_worker` / `stop_worker`, owned by the lifespan) claims the oldest due `queued` row inside a
+  write transaction (status -> `running`, `attempts += 1`) and runs it as an asyncio task, up to
+  `JOB_WORKER_CONCURRENCY` at a time.
+* Outcomes: success stores `result`; `PermanentJobError` fails at once; any other exception re-queues with
+  `run_at = now + min(max, base * 2^(attempt-1))` until `max_attempts`, then `failed` with the error text.
+* `cancel_job`: a queued job becomes `cancelled`; a running job's task is cancelled (the handler sees
+  `CancelledError`) and the row becomes `cancelled`.
+* `recover_running_jobs` (called by `start_worker`): rows still `running` belong to a dead process; they are
+  re-queued, or failed if attempts are exhausted. A graceful shutdown cancels handlers but leaves their rows `running`,
+  so they resume the same way.
+* `current_job_id` is a ContextVar available inside handlers.
+* The pipeline handlers load the user's Serper key at run time (never stored in the payload), reset a stale `Failed`
+  status to `Pending` on a resumed attempt, and raise `PermanentJobError` when the run ended `Failed`.
+
+## 4. LLM calls and failure handling
+
+`_llm_json_completion(model, system_prompt, user_prompt, ..., raise_on_error=False, purpose="")`:
+
+1. JSON-mode completion with LiteLLM fallbacks; if it errors or returns nothing, retry once without JSON mode.
+2. Unwrap and parse; failures are classified as `provider_error`, `empty_response`, `parse_error`, `not_an_object`
+   and raised internally as `LLMCompletionError`.
+3. The public helper logs the failure (model, purpose, reason, detail). With `raise_on_error=True` it re-raises;
+   otherwise it returns `{}`.
+
+`extract_lead_from_page` uses `raise_on_error=True`. On failure it returns the deterministic scraped fields plus
+`enrichment_failed=True`, `enrichment_failure_reason` (user-facing text) and `enrichment_failure_code`. The lead is
+kept (named from the page title), saved with those fields, returned by `GET /api/leads`, and shown in the UI. The
+retry endpoint enqueues `lead.retry_enrichment`, which re-runs extraction and overwrites the lead in place.
+
+## 5. Authentication
+
+* `core/cookies.set_auth_cookies(response, access, refresh)` sets `quarry_access` (HttpOnly, path `/`),
+  `quarry_refresh` (HttpOnly, path `/api/auth`) and `quarry_csrf` (readable, path `/`).
+* `services/auth.get_current_user`: the `Authorization: Bearer` token wins; otherwise the `quarry_access` cookie is
+  used and, for non-GET/HEAD/OPTIONS methods, `check_csrf` requires `X-CSRF-Token` to equal the CSRF cookie
+  (`hmac.compare_digest`). Tokens must have `type` `access`, so a refresh token is not accepted as an access token.
+* `POST /api/auth/refresh` takes the refresh token from the body or the cookie (cookie use requires CSRF), rotates the
+  session row and sets fresh cookies. `POST /api/auth/logout` deletes the session and clears the cookies.
+* SSE (`/api/leads/status/{id}/stream`) accepts the Bearer header, a `?token=` query parameter, or the cookie.
+
+## 6. Scoring and filtering
+
+* Match score (0-100) comes from the LLM during extraction and is stored on the lead.
+* Intent score (`scoring.compute_intent_score`): firmographic (match score scaled to 25), technographic (20), intent
+  signals (35) and engagement (20), each pillar capped, weights multiplied by confidence (1.0/0.75/0.5), intent and
+  engagement decayed 15% per 30 days since the last signal; bands HOT/WARM/NURTURE/WATCH/COLD.
+* `filter_leads_by_icp(leads, icp_dimensions, threshold=None)` is applied before saving only when
+  `ICP_FILTER_ENABLED` is true: it drops leads under the threshold and employee sizes outside the ICP range, and never
+  drops `enrichment_failed` leads.
+
+## 7. Startup and shutdown order
+
+Startup: `connect_db` (create tables, purge expired sessions) -> register handlers -> `start_worker` (recover running
+jobs, begin polling) -> `fail_orphaned_requests(exclude_ids=pending pipeline request ids)`.
+Shutdown: `stop_worker` (cancel handlers, leave rows resumable) -> `close_db`.
+
+## 8. Testing
+
+`tests/conftest.py` seeds throwaway env vars; the `db` fixture gives each test a fresh SQLite file. Tests mock all
+external calls. Coverage includes the job queue, the pipeline end to end, LLM failure paths, scoring, exports, cookie
+auth and CSRF, SSRF guards, ownership checks and cascade deletion.

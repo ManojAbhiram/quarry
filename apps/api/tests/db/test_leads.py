@@ -89,7 +89,7 @@ async def test_get_normalized_leads_for_request_matches_shape(db):
     assert lead["decision_makers"][0]["name"] == "Ann" and lead["decision_makers"][0]["recent_posts"] == []
     assert lead["email_verified"] is True
     expected = {
-        "id", "_id", "user_id", "title", "url", "email", "phone", "email_verified", "email_confidence",
+        "id", "_id", "user_id", "title", "url", "email", "phone", "email_verified", "email_confidence", "enrichment_failed", "enrichment_failure_reason",
         "match_score", "snippet", "type", "company_name", "industry", "location", "employee_size_estimate",
         "funding_stage", "founded_year", "linkedin_url", "x_url", "facebook_url", "growth", "tech_stack",
         "infrastructure", "contact_name", "contact_title", "buying_signals", "match_explanation", "signals",
