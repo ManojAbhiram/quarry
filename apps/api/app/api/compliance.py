@@ -50,7 +50,7 @@ async def post_suppression(body: SuppressionIn, current_user: dict = Depends(get
     try:
         doc = await suppression.add_suppression(str(current_user["_id"]), body.value, body.reason, "manual")
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from None
     return _entry_out(doc)
 
 
@@ -69,7 +69,7 @@ async def make_opt_out_link(body: OptOutLinkIn, current_user: dict = Depends(get
     try:
         return {"url": optout.optout_url(str(current_user["_id"]), body.email)}
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 class EraseIn(BaseModel):
@@ -83,7 +83,7 @@ async def erase(body: EraseIn, current_user: dict = Depends(get_current_user)):
     try:
         return await erase_person_by_email(user_id, body.email, actor_id=user_id, add_to_suppression=body.add_to_suppression)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 @router.get("/audit-log")

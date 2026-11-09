@@ -223,7 +223,7 @@ async def test_purge_deletes_rejected_expired_and_unpromoted_but_keeps_the_rest(
 
     res = await retention.purge_stale_leads(days=30, now=NOW)
     assert res["leads_deleted"] == 3 and res["by_reason"] == {"rejected": 1, "expired": 1, "unpromoted": 1}
-    remaining = {l["_id"] for l in await TABLES["leads"].find()}
+    remaining = {lead["_id"] for lead in await TABLES["leads"].find()}
     assert remaining == {rejected_new, not_expired, fresh_basic, good}
     assert {rejected_old, expired, unpromoted}.isdisjoint(remaining)
     async with engine.read_session() as s, s.begin():
@@ -248,7 +248,7 @@ async def test_purge_dry_run_and_owner_scope(db):
     dry = await retention.purge_stale_leads(days=30, now=NOW, dry_run=True)
     assert dry["leads_deleted"] == 2 and dry["dry_run"] and await _lead_count() == 2
     await retention.purge_stale_leads(owner_id="o1", days=30, now=NOW)
-    assert [l["user_id"] for l in await TABLES["leads"].find()] == ["o2"]
+    assert [lead["user_id"] for lead in await TABLES["leads"].find()] == ["o2"]
 
 
 async def test_reject_restore_and_route_cycle(api, signup):
@@ -340,7 +340,7 @@ async def test_list_export_filters_suppressed_and_adds_columns(api, signup):
     h, uid, rid = await _export_fixture(api, signup)
     leads = await TABLES["leads"].find()
     lst = await ll.create_lead_list(uid, "L")
-    await ll.add_leads_to_list(lst["_id"], uid, [l["_id"] for l in leads])
+    await ll.add_leads_to_list(lst["_id"], uid, [lead["_id"] for lead in leads])
     await sup.add_suppression(uid, "keep.com", "", "manual")
     rows = _rows(await api.get(f"/api/lists/{lst['_id']}/export", headers=h, params={"format": "csv"}))
     header = rows[0]
