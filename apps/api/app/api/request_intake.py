@@ -25,6 +25,7 @@ from app.services.leads import run_pipeline_background, run_direct_companies_bac
 from app.services.serper import current_serper_key
 from app.db.requests import get_request_by_id
 from app.db.users import get_user_serper_key
+from app import usage
 
 SERPER_KEY_REQUIRED_MSG = "Add your Serper API key in Profile to launch lead generation."
 
@@ -42,11 +43,12 @@ async def run_parallel_pipelines(
     current_serper_key.set(serper_api_key)
     logger.info("Starting parallel pipelines for request_id=%s", request_id)
     try:
-        await asyncio.gather(
-            run_pipeline_background(request_id, pipeline_payload, user_id),
-            competitor_svc.run_competitor_pipeline(request_id, product_desc, user_id),
-            return_exceptions=True,
-        )
+        async with usage.tracked(user_id, request_id):
+            await asyncio.gather(
+                run_pipeline_background(request_id, pipeline_payload, user_id),
+                competitor_svc.run_competitor_pipeline(request_id, product_desc, user_id),
+                return_exceptions=True,
+            )
         logger.info("Parallel pipelines completed for request_id=%s", request_id)
     except Exception as exc:
         logger.error("Parallel pipelines failed for request_id=%s: %s", request_id, exc, exc_info=True)
@@ -140,7 +142,10 @@ async def create_request_endpoint(
     serper_api_key = await get_user_serper_key(user_id)
     if not serper_api_key:
         raise HTTPException(status_code=400, detail=SERPER_KEY_REQUIRED_MSG)
+    estimate = usage.estimate_run(body.num_leads or 10, body.icp_dimensions.model_dump())
+    await usage.check_quota(user_id, current_user, estimate)
     request_id = await svc.create_request(body, user_id, draft_id)
+    await usage.begin_run(user_id, request_id, estimate)
 
     # Build pipeline payload from the stored request doc so the pipeline has
     # ideal_lead_profile, business_type, target_location, and title.
@@ -262,7 +267,10 @@ async def launch_direct_companies_endpoint(
     serper_api_key = await get_user_serper_key(user_id)
     if not serper_api_key:
         raise HTTPException(status_code=400, detail=SERPER_KEY_REQUIRED_MSG)
+    estimate = usage.estimate_direct(len(body.companies))
+    await usage.check_quota(user_id, current_user, estimate)
     request_id = await svc.create_direct_companies_request(body, user_id, draft_id)
+    await usage.begin_run(user_id, request_id, estimate)
 
     await _launch_durable(
         background_tasks,

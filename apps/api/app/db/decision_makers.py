@@ -1,11 +1,12 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import func, select
 
 from app.core.logger import logger
 from app.db import engine as _engine
 from app.db.models import TABLES, DecisionMaker, Lead
+from app.provenance import build_contact_provenance
 
 _dms = TABLES["decision_makers"]
 _leads = TABLES["leads"]
@@ -38,8 +39,27 @@ async def get_decision_makers_for_request(request_id: str) -> List[dict]:
             "snippet": dm.get("snippet"),
             "recent_activity_summary": dm.get("recent_activity_summary"),
             "recent_posts": dm.get("recent_posts") or [],
+            "email_status": dm.get("email_status"),
+            "email_checked_at": dm.get("email_checked_at"),
+            "email_status_reason": dm.get("email_status_reason"),
+            "provenance": dm.get("provenance") or {},
         })
     return result
+
+
+async def get_decision_maker_for_user(dm_id: str, user_id: str) -> Optional[dict]:
+    """The decision maker `dm_id` if its lead belongs to `user_id`, else None."""
+    dm = await _dms.get(_id=str(dm_id))
+    if not dm or not dm.get("lead_id"):
+        return None
+    lead = await _leads.get(_id=dm["lead_id"])
+    if not lead or str(lead.get("user_id")) != str(user_id):
+        return None
+    return dm
+
+
+async def update_decision_maker(dm_id: str, fields: dict) -> None:
+    await _dms.update(str(dm_id), fields)
 
 
 async def count_decision_makers_by_lead(lead_ids: list[str]) -> dict[str, int]:
@@ -55,7 +75,7 @@ async def count_decision_makers_by_lead(lead_ids: list[str]) -> dict[str, int]:
         return {lead_id: count for lead_id, count in (await s.execute(stmt)).all()}
 
 
-async def insert_decision_maker_if_new(lead_id: str, dm_data: dict) -> None:
+async def insert_decision_maker_if_new(lead_id: str, dm_data: dict, fallback_source_url: str | None = None) -> None:
     linkedin_url = dm_data.get("linkedin_url") or dm_data.get("url") or ""
     for existing in await get_decision_makers_for_lead(lead_id):
         if existing.get("linkedin_url") == linkedin_url:
@@ -69,6 +89,7 @@ async def insert_decision_maker_if_new(lead_id: str, dm_data: dict) -> None:
         "snippet": dm_data.get("snippet") or None,
         "recent_activity_summary": dm_data.get("recent_activity_summary") or None,
         "recent_posts": dm_data.get("recent_posts") or [],
+        "provenance": build_contact_provenance(dm_data, fallback_source_url, datetime.utcnow().isoformat() + "Z"),
         "created_at": datetime.utcnow(),
     })
     logger.info("Inserted decision_maker for lead %s: %s", lead_id, dm_data.get("name"))

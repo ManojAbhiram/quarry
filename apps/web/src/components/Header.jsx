@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
-import { Bell, Check, ChevronDown, FolderDot, HelpCircle, LogOut, Moon, Plus, Search, Sun, UserCircle } from 'lucide-react'
+import { Bell, Check, ChevronDown, FolderDot, HelpCircle, LogOut, Moon, Plus, Search, ShieldCheck, Sun, UserCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useLeads } from '../context/LeadContext'
@@ -250,6 +250,10 @@ export default function Header() {
                   <Link to="/profile" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
                     <UserCircle aria-hidden="true" className="h-4 w-4 text-muted" />
                     Account settings
+                  </Link>
+                  <Link to="/compliance" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
+                    <ShieldCheck aria-hidden="true" className="h-4 w-4 text-muted" />
+                    Compliance
                   </Link>
                   <button type="button" onClick={handleLogout} className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm font-semibold text-bad hover:bg-head">
                     <LogOut aria-hidden="true" className="h-4 w-4" />

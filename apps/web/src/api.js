@@ -172,6 +172,18 @@ async function requestDownload(path, filename) {
   URL.revokeObjectURL(url)
 }
 
+/** A request that carries no credentials and never tries to refresh a session (for the public opt-out page). */
+async function publicRequest(method, path, body) {
+  const res = await send(`${BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw httpError(typeof data?.detail === 'string' ? data.detail : 'Something went wrong.', res.status)
+  return data
+}
+
 export const api = {
   get: (path) => request('GET', path),
   post: (path, body) => request('POST', path, body),
@@ -246,4 +258,29 @@ export const api = {
   removeLeadsFromList: (listId, leadIds) => request('DELETE', `/lists/${encodeURIComponent(listId)}/leads`, { lead_ids: leadIds }),
   getListsForLead: (leadId) => request('GET', `/lists/lead/${encodeURIComponent(leadId)}`),
   exportList: (listId, name = 'list', format = 'csv') => requestDownload(`/lists/${encodeURIComponent(listId)}/export?format=${format}`, `quarry_${name}.${format}`),
+
+  // Email verification settings and contact verification
+  getVerifierSettings: () => request('GET', '/verification/settings'),
+  setVerifierSettings: (data) => request('PUT', '/verification/settings', data),
+  deleteVerifierKey: () => request('DELETE', '/verification/settings/key'),
+  verifyDecisionMakerEmail: (dmId) => request('POST', `/verification/decision-makers/${encodeURIComponent(dmId)}/verify`),
+
+  // Cost controls
+  getUsageSummary: () => request('GET', '/usage/summary'),
+  getUsageEstimate: (numLeads, icpDimensions) => request('POST', '/usage/estimate', { num_leads: numLeads, icp_dimensions: icpDimensions }),
+  runSample: (data) => request('POST', '/usage/sample-run', data),
+
+  // Compliance
+  getSuppressions: () => request('GET', '/compliance/suppressions'),
+  addSuppression: (value, reason = '') => request('POST', '/compliance/suppressions', { value, reason }),
+  removeSuppression: (value) => request('DELETE', `/compliance/suppressions?value=${encodeURIComponent(value)}`),
+  makeOptOutLink: (email) => request('POST', '/compliance/opt-out-link', { email }),
+  erasePerson: (email, addToSuppression = true) => request('POST', '/compliance/erase', { email, add_to_suppression: addToSuppression }),
+  getAuditLog: () => request('GET', '/compliance/audit-log'),
+  rejectLead: (leadId) => request('POST', `/compliance/leads/${encodeURIComponent(leadId)}/reject`),
+  restoreLead: (leadId) => request('POST', `/compliance/leads/${encodeURIComponent(leadId)}/restore`),
+  runRetention: (dryRun = false) => request('POST', `/compliance/retention/run?dry_run=${dryRun}`),
+  // Public opt-out (no sign-in): the token comes from the link in the email footer.
+  getOptOut: (token) => publicRequest('GET', `/public/opt-out?token=${encodeURIComponent(token)}`),
+  confirmOptOut: (token) => publicRequest('POST', '/public/opt-out', { token }),
 }

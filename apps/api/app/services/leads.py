@@ -52,7 +52,10 @@ from app.services.llm import (
     summarize_linkedin_posts_from_serper,
 )
 from app.services.email_verification import verify_emails_batch
-from app.services.scraper import scrape_directory_links
+from app.verification import VerifierConfig
+from app import usage
+from app.verification.service import current_verifier
+from app.services.scraper import scrape_directory_links, scrape_url_with_discovery
 from app.services.serper import fetch_leads_from_serper, current_serper_key
 from app.services.tech_stack import detect_infrastructure_profile_parallel
 
@@ -566,7 +569,10 @@ async def _verify_lead_emails(enriched: list[dict]) -> None:
     emails = [str(e.get("contact_email")).strip() for e in to_verify]
     logger.info("Verifying deliverability of %d lead email(s)...", len(emails))
     try:
-        results = await verify_emails_batch(emails, concurrency=8, smtp_probe=False)
+        # The user's paid provider (if any) is used; the slow SMTP probe stays off in bulk runs.
+        user_cfg = current_verifier.get()
+        cfg = VerifierConfig(smtp_probe=False, provider=user_cfg.provider if user_cfg else None)
+        results = await verify_emails_batch(emails, concurrency=8, config=cfg)
     except Exception as exc:
         logger.warning("Email verification batch failed: %s", exc)
         return
@@ -576,6 +582,9 @@ async def _verify_lead_emails(enriched: list[dict]) -> None:
         lead["email_confidence"] = res.get("confidence")
         lead["email_verify_method"] = res.get("method")
         lead["email_verify_reason"] = res.get("reason")
+        lead["email_status"] = res.get("status")
+        lead["email_checked_at"] = res.get("checked_at")
+        lead["email_catch_all"] = res.get("catch_all")
 
 
 async def _enrich_leads_with_decision_makers(
@@ -1111,7 +1120,8 @@ async def run_direct_companies_background(
     try:
         if serper_api_key:
             current_serper_key.set(serper_api_key)
-        await run_direct_companies_pipeline(request_id, companies, target_roles, user_id)
+        async with usage.tracked(user_id, request_id):
+            await run_direct_companies_pipeline(request_id, companies, target_roles, user_id)
     except BaseException as exc:  # catches asyncio.CancelledError too
         logger.error("Direct-companies pipeline failed for request %s: %s", request_id, exc, exc_info=True)
         try:
@@ -1178,6 +1188,16 @@ def filter_leads_by_icp(
 
 # ── Background pipeline task ──────────────────────────────────────────────────
 
+async def _load_verifier(user_id: str) -> None:
+    """Make the user's email-verification settings (provider, key) available to this run."""
+    try:
+        from app.db.users import get_user_by_id
+
+        current_verifier.set(VerifierConfig.from_user(await get_user_by_id(user_id)))
+    except Exception as exc:  # verification settings are optional; never block a run on them
+        logger.warning("Could not load email verifier settings for user %s: %s", user_id, exc)
+
+
 async def run_pipeline_background(
     request_id: str, data_dict: dict, user_id: str, serper_api_key: str | None = None
 ) -> None:
@@ -1185,7 +1205,9 @@ async def run_pipeline_background(
         if serper_api_key:
             current_serper_key.set(serper_api_key)
         data_dict["user_id"] = user_id
-        await run_lead_pipeline(request_id, data_dict)
+        await _load_verifier(user_id)
+        async with usage.tracked(user_id, request_id):
+            await run_lead_pipeline(request_id, data_dict)
     except BaseException as exc:  # catches asyncio.CancelledError too
         logger.error("Pipeline failed for request %s: %s", request_id, exc, exc_info=True)
         try:

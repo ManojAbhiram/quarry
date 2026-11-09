@@ -12,7 +12,7 @@ from reportlab.lib import colors
 
 # ── CSV Generation ────────────────────────────────────────────────────────────
 
-def generate_csv(headers, rows) -> bytes:
+def generate_csv(headers, rows, notice: str | None = None) -> bytes:
     output = io.StringIO()
     # The BOM (for Excel UTF-8 compatibility) comes from the utf-8-sig encode below; writing it here too doubled it.
     writer = csv.writer(output)
@@ -25,12 +25,15 @@ def generate_csv(headers, rows) -> bytes:
             else:
                 formatted_row.append(val if val is not None else "")
         writer.writerow(formatted_row)
+    if notice:
+        writer.writerow([])
+        writer.writerow([notice])
     return output.getvalue().encode('utf-8-sig')
 
 
 # ── XLSX Generation ───────────────────────────────────────────────────────────
 
-def generate_xlsx(sheet_name, headers, rows) -> bytes:
+def generate_xlsx(sheet_name, headers, rows, notice: str | None = None) -> bytes:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = sheet_name
@@ -97,6 +100,13 @@ def generate_xlsx(sheet_name, headers, rows) -> bytes:
     for r in range(2, len(rows) + 2):
         ws.row_dimensions[r].height = 20
         
+    if notice:
+        note_ws = wb.create_sheet("Source notice")
+        note_ws["A1"] = notice
+        note_ws["A1"].alignment = Alignment(wrap_text=True, vertical="top")
+        note_ws.column_dimensions["A"].width = 100
+        note_ws.row_dimensions[1].height = 75
+
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()

@@ -1,8 +1,8 @@
 import { memo, useEffect, useId, useRef } from 'react'
 import clsx from 'clsx'
 import { motion, MotionConfig, useReducedMotion } from 'motion/react'
-import { Check, CircleHelp, Search, X, AlertTriangle, XCircle } from 'lucide-react'
-import { emailStatus } from './emailStatus'
+import { Check, CircleHelp, Info, Search, X, AlertTriangle, XCircle } from 'lucide-react'
+import { emailStatus, formatChecked, statusTitle } from './emailStatus'
 
 /**
  * A side panel over the page. Escape and a click on the backdrop close it; focus moves into the panel when it
@@ -88,20 +88,28 @@ export function Drawer({ open, onClose, title, subtitle, icon, children, footer,
 
 const TONES = {
   ok: 'bg-ok-soft text-ok',
+  info: 'bg-primary-50 text-primary-800 dark:bg-primary-950/60 dark:text-primary-300',
   warn: 'bg-warn-soft text-warn',
   bad: 'bg-bad-soft text-bad',
   muted: 'bg-head text-muted',
 }
-const ICONS = { ok: Check, warn: AlertTriangle, bad: XCircle, muted: CircleHelp }
+const ICONS = { ok: Check, info: Info, warn: AlertTriangle, bad: XCircle, muted: CircleHelp }
 
-/** The email status as a word plus an icon. */
-export function EmailStatusBadge({ lead, className }) {
+/**
+ * The email status as a word plus an icon, with the reason and check date in its tooltip. `showDate` also prints
+ * "Checked 3 Jan 2026" next to it. Pass `lead` (a lead or a contact: anything with an email and status fields).
+ */
+export function EmailStatusBadge({ lead, className, showDate = false }) {
   const status = emailStatus(lead)
   const Icon = ICONS[status.tone]
+  const when = formatChecked(status.checkedAt)
   return (
-    <span title={status.hint} data-email-status={status.key} className={clsx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ring-current/15', TONES[status.tone], className)}>
-      <Icon aria-hidden="true" className="h-3 w-3" />
-      {status.label}
+    <span className={clsx('inline-flex flex-wrap items-center gap-x-2 gap-y-0.5', className)}>
+      <span title={statusTitle(status)} data-email-status={status.key} className={clsx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ring-current/15', TONES[status.tone])}>
+        <Icon aria-hidden="true" className="h-3 w-3" />
+        {status.label}
+      </span>
+      {showDate && when && <span className="text-xs text-muted">Checked {when}</span>}
     </span>
   )
 }

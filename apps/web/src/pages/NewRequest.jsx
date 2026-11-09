@@ -10,6 +10,7 @@ import SourceTabs from '../components/request/SourceTabs'
 import AdditionalDetails from '../components/request/AdditionalDetails'
 import IcpCard from '../components/request/IcpCard'
 import StepTransition from '../components/request/StepTransition'
+import LaunchCostPanel from '../components/request/LaunchCostPanel'
 import Reveal from '../components/motion/Reveal'
 import SearchKeyNotice, { useSearchKey } from './requests/SearchKeyNotice'
 import CommandPalette from './requests/CommandPalette'
@@ -536,6 +537,12 @@ export default function NewRequest() {
                     </div>
                   </div>
                 )}
+
+                <LaunchCostPanel
+                  numLeads={leadsValid ? leadsCount : 10}
+                  icpDimensions={icpDimensions}
+                  buildPayload={() => ({ product_intake: buildIntake(), icp_dimensions: icpDimensions, num_leads: leadsValid ? leadsCount : 10 })}
+                />
 
                 <Reveal className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {DIMENSION_KEYS.map((key) => (

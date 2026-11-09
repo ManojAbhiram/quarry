@@ -11,6 +11,9 @@ from app.api import organizations
 from app.api import jobs as jobs_router
 from app import jobs
 from app.services import pipeline_jobs
+from app.api import verification as verification_router
+from app.api import compliance as compliance_router
+from app.api import usage as usage_router
 from app.api import lists as lead_lists_router
 from app.core.config import settings
 from app.core.logger import logger
@@ -67,6 +70,10 @@ app.include_router(organizations.router, prefix=settings.API_V1_STR)
 app.include_router(google_auth.router, prefix=settings.API_V1_STR)
 app.include_router(lead_lists_router.router, prefix=settings.API_V1_STR)
 app.include_router(jobs_router.router, prefix=settings.API_V1_STR)
+app.include_router(verification_router.router, prefix=settings.API_V1_STR)
+app.include_router(compliance_router.router, prefix=settings.API_V1_STR)
+app.include_router(compliance_router.public_router, prefix=settings.API_V1_STR)
+app.include_router(usage_router.router, prefix=settings.API_V1_STR)
 
 
 @app.get(f"{settings.API_V1_STR}/health")

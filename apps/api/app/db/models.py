@@ -162,3 +162,7 @@ TABLES: dict[str, DocTable] = {
     "serper_cache": DocTable(SerperCache),
     "jobs": DocTable(Job),
 }
+
+
+# Phase 2 (data trust and compliance) tables live in their own module; importing it registers them in TABLES.
+from app.db import models_trust  # noqa: E402,F401

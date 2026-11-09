@@ -1,27 +1,10 @@
 import { useState } from 'react'
 import clsx from 'clsx'
-import { BookmarkCheck, Check, ExternalLink, Loader2, Trash2, X } from 'lucide-react'
+import { BookmarkCheck, ExternalLink, Loader2, Trash2 } from 'lucide-react'
+import { EmailStatusBadge } from '../request-details/ui'
 import { api } from '../../api'
 import { useToast } from '../../components/kit'
 import CompanyLogo from '../../components/CompanyLogo'
-
-function EmailBadge({ verified, confidence }) {
-  if (verified === null || verified === undefined) return null
-  if (!verified) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-bad-soft px-2 py-0.5 text-xs font-semibold text-bad">
-        <X aria-hidden="true" className="h-3 w-3" /> Invalid
-      </span>
-    )
-  }
-  const high = confidence === 'high'
-  return (
-    <span className={clsx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold', high ? 'bg-ok-soft text-ok' : 'bg-warn-soft text-warn')}>
-      <Check aria-hidden="true" className="h-3 w-3" />
-      {high ? 'Verified' : 'Likely valid'}
-    </span>
-  )
-}
 
 const ICON_BTN = 'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-head hover:text-ink disabled:opacity-50'
 
@@ -29,7 +12,7 @@ const ICON_BTN = 'inline-flex h-10 w-10 shrink-0 items-center justify-center rou
 export default function LeadRow({ lead, selected, onToggleSelect, onRemove }) {
   const toast = useToast()
   const [verifying, setVerifying] = useState(false)
-  const [verif, setVerif] = useState({ verified: lead.email_verified ?? null, confidence: lead.email_confidence ?? null })
+  const [verif, setVerif] = useState({ email_verified: lead.email_verified ?? null, email_confidence: lead.email_confidence ?? null, email_status: lead.email_status, email_checked_at: lead.email_checked_at })
   const label = lead.title || lead.url || 'Untitled lead'
 
   const handleVerify = async () => {
@@ -37,7 +20,7 @@ export default function LeadRow({ lead, selected, onToggleSelect, onRemove }) {
     setVerifying(true)
     try {
       const res = await api.verifyAndSaveLeadEmail(lead.id)
-      setVerif({ verified: res.verified, confidence: res.confidence })
+      setVerif({ email_verified: res.verified, email_confidence: res.confidence, email_status: res.status, email_checked_at: res.checked_at })
     } catch (err) {
       toast.push({ type: 'error', message: err.message || 'Could not verify that email.' })
     } finally {
@@ -68,7 +51,7 @@ export default function LeadRow({ lead, selected, onToggleSelect, onRemove }) {
           {lead.email && (
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
               <span className="break-all text-xs text-muted">{lead.email}</span>
-              <EmailBadge verified={verif.verified} confidence={verif.confidence} />
+              <EmailStatusBadge lead={{ email: lead.email, ...verif }} showDate />
             </div>
           )}
         </div>
