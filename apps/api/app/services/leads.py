@@ -926,6 +926,11 @@ async def run_lead_pipeline(request_id: str, request_payload: dict) -> list[dict
         except Exception as exc:
             logger.warning("Signal enrichment failed for request %s: %s", request_id, exc)
 
+        if settings.ICP_FILTER_ENABLED:
+            before = len(enriched)
+            enriched = filter_leads_by_icp(enriched, request_payload.get("icp_dimensions"))
+            logger.info("ICP filter kept %d of %d leads for request %s", len(enriched), before, request_id)
+
         if not await request_exists(request_id):
             logger.info("Request %s was deleted while running; discarding its results", request_id)
             return []
@@ -1125,12 +1130,17 @@ async def run_direct_companies_background(
 ICP_SCORE_THRESHOLD = settings.ICP_SCORE_THRESHOLD
 
 
+def filter_leads_by_icp(
+    leads: list[dict], icp_dimensions: dict | None, threshold: int | None = None
+) -> list[dict]:
+    """Drop leads scoring below the threshold or whose employee size cannot fit the ICP range.
 
-
-
-def filter_leads_by_icp(leads: list[dict], icp_dimensions: dict | None) -> list[dict]:
+    Leads whose enrichment failed are always kept: they have no score because the AI step failed, not because
+    they are a poor fit. Only applied by the pipeline when settings.ICP_FILTER_ENABLED is true.
+    """
     if not leads:
         return leads
+    min_score = ICP_SCORE_THRESHOLD if threshold is None else threshold
 
     def _score(lead: dict) -> int:
         try:
@@ -1138,7 +1148,7 @@ def filter_leads_by_icp(leads: list[dict], icp_dimensions: dict | None) -> list[
         except (ValueError, TypeError):
             return 0
 
-    leads = [ld for ld in leads if _score(ld) >= ICP_SCORE_THRESHOLD]
+    leads = [ld for ld in leads if ld.get("enrichment_failed") or _score(ld) >= min_score]
 
     icp_employee_range: tuple[int, int] | None = None
     if isinstance(icp_dimensions, dict):
@@ -1187,6 +1197,40 @@ async def run_pipeline_background(
         # Re-raise CancelledError so the event loop can propagate cancellation correctly.
         if isinstance(exc, asyncio.CancelledError):
             raise
+
+
+# ── Retry a failed lead enrichment ────────────────────────────────────────────
+
+async def retry_lead_enrichment(lead_id: str, user_id: str) -> dict:
+    """Re-run the AI extraction for one lead whose enrichment failed. Raises LookupError if the lead is gone.
+
+    Returns {"lead_id", "enrichment_failed", "reason"}; a still-failing lead keeps its failure marker.
+    """
+    from app.db.leads import get_lead_for_user
+
+    lead = await get_lead_for_user(lead_id, user_id)
+    if not lead:
+        raise LookupError("Lead not found")
+    request_id = lead.get("request_id") or ""
+    req = await get_request_by_id(request_id, user_id) or {}
+    context = {
+        "business_type": req.get("business_type") or "",
+        "target_location": req.get("target_location") or "",
+        "ideal_lead_profile": req.get("ideal_lead_profile") or "",
+        "title": req.get("title") or "",
+    }
+    item = {"url": lead.get("url") or "", "title": lead.get("title") or "", "snippet": lead.get("snippet") or ""}
+    results = await _scrape_and_extract([item], context, request_id, user_id)
+    if not results:
+        raise RuntimeError("Nothing could be extracted for this lead")
+    result = results[0]
+    result["source_url"] = lead.get("url") or result.get("source_url")
+    await save_enriched_leads_to_db(request_id, user_id, [result])
+    return {
+        "lead_id": lead_id,
+        "enrichment_failed": bool(result.get("enrichment_failed")),
+        "reason": result.get("enrichment_failure_reason"),
+    }
 
 
 # ── Leads retrieval ───────────────────────────────────────────────────────────

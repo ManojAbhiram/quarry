@@ -133,6 +133,18 @@ class SerperCache(_Doc, Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class Job(_Doc, Base):
+    """Durable background job (see app/jobs.py). Payload, attempts, result and error live in `data`."""
+
+    __tablename__ = "jobs"
+    kind: Mapped[str | None] = _s(index=True)
+    owner_id: Mapped[str | None] = _s(index=True)
+    status: Mapped[str | None] = _s(index=True)
+    run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    __table_args__ = (Index("ix_jobs_status_run_at", "status", "run_at"),)
+
+
 TABLES: dict[str, DocTable] = {
     "organizations": DocTable(Organization),
     "users": DocTable(User),
@@ -148,4 +160,5 @@ TABLES: dict[str, DocTable] = {
     "companies": DocTable(Company),
     "lead_lists": DocTable(LeadList),
     "serper_cache": DocTable(SerperCache),
+    "jobs": DocTable(Job),
 }

@@ -70,6 +70,8 @@ def apply_score_decay(
         last_signal = datetime.fromisoformat(last_signal_date.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
         return pillar_scores
+    if last_signal.tzinfo is None:  # a date-only / naive ISO string is UTC; subtracting from an aware "now" would raise
+        last_signal = last_signal.replace(tzinfo=timezone.utc)
 
     now = datetime.now(timezone.utc)
     days_since = (now - last_signal).days

@@ -140,6 +140,32 @@ def _is_blank(value: Any) -> bool:
     return not value or not str(value).strip()
 
 
+class LLMCompletionError(Exception):
+    """An LLM JSON completion failed. `reason` is a short machine-readable code.
+
+    reason is one of: "provider_error" (the API call raised), "empty_response", "parse_error", "not_an_object".
+    """
+
+    def __init__(self, reason: str, detail: str = "", *, model: str = "", purpose: str = ""):
+        self.reason = reason
+        self.detail = detail
+        self.model = model
+        self.purpose = purpose
+        super().__init__(f"{reason}: {detail}" if detail else reason)
+
+
+def describe_llm_failure(exc: BaseException) -> str:
+    """A short, user-presentable explanation for a failed enrichment."""
+    if isinstance(exc, LLMCompletionError):
+        return {
+            "provider_error": "The AI provider was unreachable or rejected the request.",
+            "empty_response": "The AI provider returned an empty response.",
+            "parse_error": "The AI response could not be parsed.",
+            "not_an_object": "The AI response was not in the expected format.",
+        }.get(exc.reason, "The AI step failed.")
+    return "The AI step failed unexpectedly."
+
+
 async def _llm_json_completion(
     *,
     model: str,
@@ -148,87 +174,115 @@ async def _llm_json_completion(
     max_tokens: int = 800,
     timeout: int = 20,
     temperature: float = 0.0,
+    raise_on_error: bool = False,
+    purpose: str = "",
 ) -> dict:
     """
     Shared helper for deterministic JSON completions.
+
+    Failures are always logged with the model and `purpose`. By default they degrade to `{}` so best-effort callers
+    keep working; pass `raise_on_error=True` to get an `LLMCompletionError` instead (used where a blank result must
+    be explained to the user, e.g. lead extraction).
     """
-
     try:
-        active_fallbacks = [
-            m
-            for m in settings.LITELLM_FALLBACK_MODELS
-            if m != model
-        ]
+        return await _llm_json_completion_checked(
+            model=model,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            temperature=temperature,
+        )
+    except LLMCompletionError as exc:
+        exc.model = exc.model or model
+        exc.purpose = purpose
+        logger.error(
+            "LLM JSON completion failed (purpose=%s model=%s reason=%s): %s",
+            purpose or "-", model, exc.reason, exc.detail or "-",
+        )
+        if raise_on_error:
+            raise
+        return {}
 
-        response = None
-        content = ""
 
-        async with _LLM_SEM:
+async def _llm_json_completion_checked(
+    *,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int,
+    timeout: int,
+    temperature: float,
+) -> dict:
+    """Like `_llm_json_completion` but raises LLMCompletionError on every failure."""
+    active_fallbacks = [m for m in settings.LITELLM_FALLBACK_MODELS if m != model]
+    messages = [
+        {"role": "system", "content": _guarded_system_prompt(system_prompt)},
+        {"role": "user", "content": user_prompt},
+    ]
+    response = None
+    content = ""
+    last_error: Exception | None = None
+
+    async with _LLM_SEM:
+        try:
+            response = await acompletion(
+                model=model,
+                fallbacks=active_fallbacks,
+                messages=messages,
+                response_format={"type": "json_object"},
+                max_tokens=max_tokens,
+                temperature=temperature,
+                num_retries=1,
+                timeout=timeout,
+            )
+            content = response.choices[0].message.content or ""
+        except Exception as exc:
+            last_error = exc
+            logger.warning("JSON-mode acompletion failed: %s. Retrying without JSON-mode format...", exc)
+            content = ""
+
+        if not content.strip():
+            logger.warning("JSON-mode returned empty content. Retrying completion WITHOUT native json_object format...")
             try:
                 response = await acompletion(
                     model=model,
                     fallbacks=active_fallbacks,
-                    messages=[
-                        {"role": "system", "content": _guarded_system_prompt(system_prompt)},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    response_format={"type": "json_object"},
+                    messages=messages,
                     max_tokens=max_tokens,
                     temperature=temperature,
                     num_retries=1,
                     timeout=timeout,
                 )
                 content = response.choices[0].message.content or ""
-            except Exception as exc:
-                logger.warning("JSON-mode acompletion failed: %s. Retrying without JSON-mode format...", exc)
+                last_error = None
+            except Exception as exc2:
+                last_error = exc2
+                logger.error("Text-mode retry acompletion failed: %s", exc2)
                 content = ""
 
-            if not content.strip():
-                logger.warning("JSON-mode returned empty content. Retrying completion WITHOUT native json_object format...")
-                try:
-                    response = await acompletion(
-                        model=model,
-                        fallbacks=active_fallbacks,
-                        messages=[
-                            {"role": "system", "content": _guarded_system_prompt(system_prompt)},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        num_retries=1,
-                        timeout=timeout,
-                    )
-                    content = response.choices[0].message.content or ""
-                except Exception as exc2:
-                    logger.error("Text-mode retry acompletion failed: %s", exc2)
-                    content = ""
+    if response is not None:
+        actual_model = getattr(response, "model", None)
+        if actual_model and actual_model != model:
+            logger.warning(
+                "LLM fallback triggered during JSON completion: requested '%s', completed with '%s'",
+                model,
+                actual_model,
+            )
 
-        if response is not None:
-            actual_model = getattr(response, "model", None)
-            if actual_model and actual_model != model:
-                logger.warning(
-                    "LLM fallback triggered during JSON completion: requested '%s', completed with '%s'",
-                    model,
-                    actual_model,
-                )
+    if last_error is not None and not content.strip():
+        raise LLMCompletionError("provider_error", f"{type(last_error).__name__}: {last_error}")
 
-        raw = _unwrap_json(content)
+    raw = _unwrap_json(content)
+    if not raw:
+        raise LLMCompletionError("empty_response", "no content after fallback retry")
 
-        if not raw:
-            logger.error("LLM JSON completion returned empty raw content after fallback retry.")
-            return {}
-
-        parsed = _safe_json_loads(raw, {})
-
-        if not parsed or not isinstance(parsed, dict):
-            logger.error("LLM JSON completion failed to parse as valid dict. Raw content was: %s", raw)
-            return {}
-
-        return parsed
-
-    except Exception as exc:
-        logger.error("LLM completion failed: %s", exc)
-        return {}
+    parsed = _safe_json_loads(raw, {})
+    if not parsed:
+        raise LLMCompletionError("parse_error", f"raw content: {raw[:300]}")
+    if not isinstance(parsed, dict):
+        raise LLMCompletionError("not_an_object", f"got {type(parsed).__name__}")
+    return parsed
 
 
 async def _llm_text_completion(
@@ -799,13 +853,24 @@ async def extract_lead_from_page(
     user_msg = _build_missing_fields_prompt(structured_data, context, url, reduced_text)
 
     try:
-        llm_result = await _llm_json_completion(
-            model=settings.LITELLM_MODEL,
-            system_prompt=system_msg,
-            user_prompt=user_msg,
-            max_tokens=900,
-            timeout=20,
-        )
+        try:
+            llm_result = await _llm_json_completion(
+                model=settings.LITELLM_MODEL,
+                system_prompt=system_msg,
+                user_prompt=user_msg,
+                max_tokens=900,
+                timeout=20,
+                raise_on_error=True,
+                purpose=f"extract_lead:{url}",
+            )
+        except LLMCompletionError as llm_exc:
+            # Keep the lead and say why its fields are blank, instead of silently dropping it.
+            failed = {k: v for k, v in structured_data.items() if v}
+            failed["source_url"] = url
+            failed["enrichment_failed"] = True
+            failed["enrichment_failure_reason"] = describe_llm_failure(llm_exc)
+            failed["enrichment_failure_code"] = llm_exc.reason
+            return failed
 
         # Merge: structured_data wins over LLM for deterministic fields
         # LLM fills semantic gaps (description, buying_signals, match_score, missing fields)
@@ -844,6 +909,8 @@ async def extract_leads_from_pages(pages: list[dict], context: dict) -> list[dic
             data = await extract_lead_from_page(text, url, context, structured_data)
             if data:
                 data["source_url"] = url
+                if data.get("enrichment_failed") and not data.get("company_name"):
+                    data["company_name"] = page.get("title") or None
                 return data
         except Exception as e:
             logger.error(f"Failed to extract from {url}: {e}")

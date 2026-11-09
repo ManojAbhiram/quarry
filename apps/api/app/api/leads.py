@@ -534,6 +534,22 @@ async def verify_and_save_email(
     return result
 
 
+@router.post("/{lead_id}/retry-enrichment", status_code=202)
+async def retry_enrichment(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Queue a re-run of the AI enrichment for a lead. Poll GET /jobs/{job_id} for the outcome."""
+    from app import jobs
+    from app.services.pipeline_jobs import LEAD_RETRY_ENRICHMENT
+
+    user_id = str(current_user["_id"])
+    lead = await get_lead_for_user(lead_id, user_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    job_id = await jobs.enqueue(
+        LEAD_RETRY_ENRICHMENT, {"lead_id": lead_id, "user_id": user_id}, owner_id=user_id, max_attempts=2
+    )
+    return {"job_id": job_id, "status": "queued"}
+
+
 # ---------------------------------------------------------------------------
 # Lead-Lists membership endpoint
 # ---------------------------------------------------------------------------

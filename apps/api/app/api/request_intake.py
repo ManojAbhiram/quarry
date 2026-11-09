@@ -19,6 +19,8 @@ from app.schemas.request_intake import (
 from app.services.auth import get_current_user
 import app.services.request_intake_service as svc
 import app.services.competitor_service as competitor_svc
+import app.services.pipeline_jobs as pipeline_jobs
+from app import jobs
 from app.services.leads import run_pipeline_background, run_direct_companies_background
 from app.services.serper import current_serper_key
 from app.db.requests import get_request_by_id
@@ -48,6 +50,19 @@ async def run_parallel_pipelines(
         logger.info("Parallel pipelines completed for request_id=%s", request_id)
     except Exception as exc:
         logger.error("Parallel pipelines failed for request_id=%s: %s", request_id, exc, exc_info=True)
+
+async def _launch_durable(
+    background_tasks: BackgroundTasks, user_id: str, request_id: str, kind: str, payload: dict, fallback: tuple
+) -> None:
+    """Queue the run on the durable job queue; if the queue is unavailable, fall back to in-process BackgroundTasks
+    (the run then does not survive a restart). The Serper key is never stored in the job: the worker loads it."""
+    try:
+        await jobs.enqueue(kind, payload, owner_id=user_id, max_attempts=pipeline_jobs.PIPELINE_MAX_ATTEMPTS)
+    except Exception as exc:
+        logger.error("Could not enqueue %s for request %s (%s); falling back to BackgroundTasks", kind, request_id, exc)
+        fn, *args = fallback
+        background_tasks.add_task(fn, *args)
+
 
 router = APIRouter(prefix="/requests", tags=["request-intake"])
 
@@ -150,25 +165,23 @@ async def create_request_endpoint(
 
     product_desc = pipeline_payload.get("product_description") or ""
 
-    if product_desc:
-        logger.info("Launching parallel pipelines (lead + competitor) for request_id=%s", request_id)
-        background_tasks.add_task(
-            run_parallel_pipelines,
-            request_id,
-            pipeline_payload,
-            product_desc,
-            user_id,
-            serper_api_key,
-        )
-    else:
-        logger.info("No product description; running lead pipeline only for request_id=%s", request_id)
-        background_tasks.add_task(
-            run_pipeline_background,
-            request_id,
-            pipeline_payload,
-            user_id,
-            serper_api_key,
-        )
+    await _launch_durable(
+        background_tasks,
+        user_id,
+        request_id,
+        pipeline_jobs.PIPELINE_RUN,
+        {
+            "request_id": request_id,
+            "pipeline_payload": pipeline_payload,
+            "product_desc": product_desc,
+            "user_id": user_id,
+        },
+        fallback=(
+            (run_parallel_pipelines, request_id, pipeline_payload, product_desc, user_id, serper_api_key)
+            if product_desc
+            else (run_pipeline_background, request_id, pipeline_payload, user_id, serper_api_key)
+        ),
+    )
 
     return RequestIntakeResponse(
         message="Lead request created. Discovery pipeline started in background.",
@@ -251,13 +264,20 @@ async def launch_direct_companies_endpoint(
         raise HTTPException(status_code=400, detail=SERPER_KEY_REQUIRED_MSG)
     request_id = await svc.create_direct_companies_request(body, user_id, draft_id)
 
-    background_tasks.add_task(
-        run_direct_companies_background,
-        request_id,
-        body.companies,
-        body.target_roles,
+    await _launch_durable(
+        background_tasks,
         user_id,
-        serper_api_key,
+        request_id,
+        pipeline_jobs.PIPELINE_DIRECT,
+        {
+            "request_id": request_id,
+            "companies": body.companies,
+            "target_roles": body.target_roles,
+            "user_id": user_id,
+        },
+        fallback=(
+            run_direct_companies_background, request_id, body.companies, body.target_roles, user_id, serper_api_key
+        ),
     )
 
     return RequestIntakeResponse(

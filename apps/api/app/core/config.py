@@ -77,6 +77,9 @@ class Settings:
 
     # Lead scoring thresholds (defaults match prior in-code literals)
     ICP_SCORE_THRESHOLD: int = int(os.getenv("ICP_SCORE_THRESHOLD", "60"))
+    # Drop discovered leads scoring below ICP_SCORE_THRESHOLD (or outside the ICP employee range) before saving.
+    # Off by default: the UI shows every lead with its fit score and the user decides.
+    ICP_FILTER_ENABLED: bool = os.getenv("ICP_FILTER_ENABLED", "false").lower() in ("1", "true", "yes")
     INTENT_SCORE_DECAY_RATE: float = float(os.getenv("INTENT_SCORE_DECAY_RATE", "0.15"))
     INTENT_SCORE_DECAY_PERIOD_DAYS: int = int(
         os.getenv("INTENT_SCORE_DECAY_PERIOD_DAYS", "30")
