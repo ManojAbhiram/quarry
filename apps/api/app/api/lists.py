@@ -25,6 +25,8 @@ from pydantic import BaseModel, Field
 from app.db import lead_lists as db_lists
 from app.db.leads import get_leads_by_ids
 from app.services.auth import get_current_user
+from app.compliance.exports import lead_is_suppressed, matcher_for, source_notice
+from app.provenance import summarize
 from app.services.export_service import generate_csv, generate_xlsx
 
 router = APIRouter(prefix="/lists", tags=["lead-lists"])
@@ -130,6 +132,8 @@ async def get_list(
                     "match_score": lead_doc.get("match_score"),
                     "email_verified": lead_doc.get("email_verified"),
                     "email_confidence": lead_doc.get("email_confidence"),
+                    "email_status": lead_doc.get("email_status"),
+                    "email_checked_at": lead_doc.get("email_checked_at"),
                 })
 
     result = _serialize(doc)
@@ -216,12 +220,13 @@ async def export_list(
 
     headers = [
         "Company / Title", "Email", "Email Verified", "Email Confidence",
-        "Phone", "ICP Match Score", "Website URL",
+        "Phone", "ICP Match Score", "Website URL", "Email Status", "Email Checked At", "Region", "Field Sources",
     ]
+    matcher = await matcher_for(user_id)
     rows = []
     for lid in lead_ids:  # preserve the list's ordering
         lead = by_id.get(lid)
-        if not lead:
+        if not lead or lead_is_suppressed(matcher, lead):
             continue
         verified = lead.get("email_verified")
         verified_str = "" if verified is None else ("Yes" if verified else "No")
@@ -233,18 +238,22 @@ async def export_list(
             lead.get("phone") or "",
             lead.get("match_score", ""),
             lead.get("url", ""),
+            lead.get("email_status") or "",
+            lead.get("email_checked_at") or "",
+            lead.get("region") or "",
+            summarize(lead.get("provenance")),
         ])
 
     fname = _safe_filename(doc.get("name"))
     if format == "xlsx":
-        data = generate_xlsx("Leads", headers, rows)
+        data = generate_xlsx("Leads", headers, rows, notice=source_notice())
         return Response(
             content=data,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": f"attachment; filename=quarry_{fname}.xlsx"},
         )
 
-    data = generate_csv(headers, rows)
+    data = generate_csv(headers, rows, notice=source_notice())
     return Response(
         content=data,
         media_type="text/csv",

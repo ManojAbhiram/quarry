@@ -83,6 +83,9 @@ async def save_enriched_leads_to_db(
     if not enriched:
         return
     now = datetime.utcnow()
+    from app.suppression import load_matcher  # local import: suppression imports the models
+
+    suppressed = await load_matcher(user_id)
 
     for item in enriched:
         lead_url = item.get("source_url") or item.get("website") or item.get("url") or ""
@@ -146,6 +149,8 @@ async def save_enriched_leads_to_db(
                 logger.warning("Failed to upsert lead_enrichment for lead %s: %s", lead_id, exc)
 
             for dm in item.get("decision_makers") or []:
+                if suppressed.matches(dm.get("email")):
+                    continue  # never re-collect a person who was erased or opted out
                 try:
                     await insert_decision_maker_if_new(lead_id, dm, fallback_source_url=lead_url)
                 except Exception as exc:
