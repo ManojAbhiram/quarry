@@ -37,7 +37,14 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4 sm:items-end">
+      {/* Top-right, just under the sticky header: toasts used to sit bottom-right and covered the primary button of
+          the form above them. The region itself ignores pointer events so it never blocks clicks beside a toast. */}
+      <div
+        role="region"
+        aria-label="Notifications"
+        data-testid="toast-region"
+        className="pointer-events-none fixed inset-x-0 top-16 z-50 flex flex-col items-center gap-2 px-4 pt-2 sm:items-end"
+      >
         {toasts.map((t) => (
           <div
             key={t.id}

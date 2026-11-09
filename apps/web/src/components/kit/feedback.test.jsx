@@ -31,6 +31,19 @@ describe('Toast', () => {
     expect(screen.queryByText('Saved')).not.toBeInTheDocument()
   })
 
+  it('is placed at the top so it cannot cover the action buttons of a form', async () => {
+    render(
+      <ToastProvider>
+        <Pusher type="error" message="Could not save" />
+      </ToastProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'push' }))
+    const region = screen.getByRole('region', { name: 'Notifications' })
+    expect(region.className).toMatch(/top-16/)
+    expect(region.className).not.toMatch(/bottom-/)
+    expect(region.className).toMatch(/pointer-events-none/)
+  })
+
   it('announces an error assertively and keeps it until it is dismissed', async () => {
     render(
       <ToastProvider>
