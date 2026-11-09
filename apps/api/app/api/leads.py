@@ -548,10 +548,10 @@ async def verify_and_save_email(
         "email_confidence": result["confidence"],
         "email_verify_method": result["method"],
         "email_verify_reason": result["reason"],
-        "email_status": result["status"],
-        "email_checked_at": result["checked_at"],
-        "email_status_reason": result["reason"],
-        "email_catch_all": result["catch_all"],
+        "email_status": result.get("status"),
+        "email_checked_at": result.get("checked_at"),
+        "email_status_reason": result.get("reason"),
+        "email_catch_all": result.get("catch_all"),
     })
 
     return result
