@@ -50,6 +50,15 @@ async function getCsrfToken() {
   return csrfFallback
 }
 
+/** The organization workspace the user switched to ('' = personal). Sent as X-Org-Id; the server verifies it. */
+export function getActiveOrgId() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.ACTIVE_ORG) || ''
+  } catch {
+    return ''
+  }
+}
+
 /** An Error that carries the HTTP status, so callers can tell "the server said no" from "the server is down". */
 function httpError(message, status) {
   return Object.assign(new Error(message), { status })
@@ -103,6 +112,8 @@ function refreshSession() {
 async function authedFetch(path, { method = 'GET', headers = {}, body } = {}) {
   const attempt = async () => {
     const h = { ...headers }
+    const orgId = getActiveOrgId()
+    if (orgId) h['X-Org-Id'] = orgId
     if (!SAFE_METHODS.includes(method) && !NO_CSRF_PATHS.includes(path)) {
       const csrf = await getCsrfToken()
       if (csrf) h[CSRF_HEADER] = csrf
@@ -133,7 +144,8 @@ async function parseResponse(res) {
     if (Array.isArray(detail)) {
       throw httpError(detail[0]?.msg || 'Validation error', res.status)
     }
-    throw httpError(detail || 'Request failed', res.status)
+    // Plan-limit errors (402) carry { code, message }.
+    throw httpError((detail && typeof detail === 'object' ? detail.message : detail) || 'Request failed', res.status)
   }
   return data
 }

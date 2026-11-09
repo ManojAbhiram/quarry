@@ -22,6 +22,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
+from app.crm.hooks import schedule_event
 from app.db import lead_lists as db_lists
 from app.db.leads import get_leads_by_ids
 from app.services.auth import get_current_user
@@ -178,6 +179,7 @@ async def add_leads(
     doc = await db_lists.add_leads_to_list(list_id, user_id, body.lead_ids)
     if not doc:
         raise HTTPException(status_code=404, detail="List not found")
+    schedule_event(user_id, "list.updated", {"list": {"id": list_id, "name": doc.get("name"), "lead_count": len(doc.get("lead_ids") or [])}, "change": "leads_added"})
     return {"message": f"Added {len(body.lead_ids)} lead(s) to list", "list": _serialize(doc)}
 
 
@@ -191,6 +193,7 @@ async def remove_leads(
     doc = await db_lists.remove_leads_from_list(list_id, user_id, body.lead_ids)
     if not doc:
         raise HTTPException(status_code=404, detail="List not found")
+    schedule_event(user_id, "list.updated", {"list": {"id": list_id, "name": doc.get("name"), "lead_count": len(doc.get("lead_ids") or [])}, "change": "leads_removed"})
     return {"message": f"Removed {len(body.lead_ids)} lead(s) from list", "list": _serialize(doc)}
 
 

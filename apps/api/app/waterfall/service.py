@@ -8,7 +8,7 @@ from app.db.models import TABLES
 from app.p3.config import p3_settings
 from app.waterfall.providers import PROVIDER_ORDER, REGISTRY, Person
 
-_ledger = TABLES["credit_ledger"]
+_ledger = TABLES["enrichment_credit_ledger"]
 _keys = TABLES["provider_keys"]
 _dms = TABLES["decision_makers"]
 _leads = TABLES["leads"]

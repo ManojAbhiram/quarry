@@ -79,7 +79,7 @@ class WatchSnapshot(_Doc, Base):
 
 
 class CreditLedger(_Doc, Base):
-    __tablename__ = "credit_ledger"
+    __tablename__ = "enrichment_credit_ledger"
     user_id: Mapped[str | None] = _s(index=True)
     created_at: Mapped[datetime | None] = _dt()
 
@@ -109,7 +109,7 @@ TABLES.update({
     "saved_searches": DocTable(SavedSearch),
     "signal_events": DocTable(SignalEvent),
     "watch_snapshots": DocTable(WatchSnapshot),
-    "credit_ledger": DocTable(CreditLedger),
+    "enrichment_credit_ledger": DocTable(CreditLedger),
     "provider_keys": DocTable(ProviderKey),
     "fallback_suppressions": DocTable(FallbackSuppression),
 })

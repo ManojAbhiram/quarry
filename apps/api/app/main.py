@@ -15,6 +15,7 @@ from app.api import verification as verification_router
 from app.api import compliance as compliance_router
 from app.api import usage as usage_router
 from app.api import lists as lead_lists_router
+from app.api import teams as teams_router, billing as billing_router, integrations as integrations_router
 from app.core.config import settings
 from app.p3 import wiring as p3_wiring
 from app.core.logger import logger
@@ -78,6 +79,10 @@ app.include_router(compliance_router.router, prefix=settings.API_V1_STR)
 app.include_router(compliance_router.public_router, prefix=settings.API_V1_STR)
 app.include_router(usage_router.router, prefix=settings.API_V1_STR)
 p3_wiring.include_routers(app, settings.API_V1_STR)
+app.include_router(teams_router.router, prefix=settings.API_V1_STR)
+app.include_router(billing_router.router, prefix=settings.API_V1_STR)
+app.include_router(integrations_router.router, prefix=settings.API_V1_STR)
+app.include_router(integrations_router.hooks_router, prefix=settings.API_V1_STR)
 
 
 @app.get(f"{settings.API_V1_STR}/health")

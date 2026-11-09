@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
-import { Bell, Check, ChevronDown, FolderDot, HelpCircle, LogOut, Moon, Plus, Search, ShieldCheck, Sun, UserCircle } from 'lucide-react'
+import { Bell, Check, ChevronDown, CreditCard, FolderDot, HelpCircle, LogOut, Moon, Plug, Plus, Search, ShieldCheck, Sun, UserCircle, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useLeads } from '../context/LeadContext'
 import { Menu } from './kit'
 import BrandLogo from './BrandLogo'
 import PaletteSwitcher from './PaletteSwitcher'
+import OrgSwitcher from './OrgSwitcher'
 import HelpDrawer from './HelpDrawer'
 
 const ICON_BUTTON =
@@ -109,6 +110,8 @@ export default function Header() {
           <BrandLogo className="h-8 w-8 shrink-0 rounded-xl shadow-md shadow-primary-500/25" />
           <span className="hidden text-lg font-black tracking-tight text-ink sm:block">Quarry</span>
         </Link>
+
+        <OrgSwitcher />
 
         <nav aria-label="Main" className="order-last -mx-1 flex w-full items-center gap-1 overflow-x-auto md:order-none md:mx-0 md:w-auto">
           {NAV.map((item) => (
@@ -257,6 +260,18 @@ export default function Header() {
                   <Link to="/compliance" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
                     <ShieldCheck aria-hidden="true" className="h-4 w-4 text-muted" />
                     Compliance
+                  </Link>
+                  <Link to="/team" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
+                    <Users aria-hidden="true" className="h-4 w-4 text-muted" />
+                    Team settings
+                  </Link>
+                  <Link to="/billing" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
+                    <CreditCard aria-hidden="true" className="h-4 w-4 text-muted" />
+                    Billing and usage
+                  </Link>
+                  <Link to="/integrations/crm" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
+                    <Plug aria-hidden="true" className="h-4 w-4 text-muted" />
+                    CRM integrations
                   </Link>
                   <button type="button" onClick={handleLogout} className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm font-semibold text-bad hover:bg-head">
                     <LogOut aria-hidden="true" className="h-4 w-4" />

@@ -17,6 +17,8 @@ export const STORAGE_KEYS = {
   LEGACY_REFRESH_TOKEN: 'refresh_token',
   THEME: 'theme',
   PALETTE: 'palette',
+  ACTIVE_ORG: 'active_org',
+  PENDING_INVITE: 'pending_invite',
 }
 
 // UI timing in milliseconds (values match previous in-component literals).
