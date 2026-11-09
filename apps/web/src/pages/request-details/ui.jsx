@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef } from 'react'
+import { memo, useEffect, useId, useRef } from 'react'
 import clsx from 'clsx'
+import { motion, MotionConfig, useReducedMotion } from 'motion/react'
 import { Check, CircleHelp, Search, X, AlertTriangle, XCircle } from 'lucide-react'
 import { emailStatus } from './emailStatus'
 
@@ -12,6 +13,7 @@ export function Drawer({ open, onClose, title, subtitle, children, footer, width
   const panelRef = useRef(null)
   const closeRef = useRef(null)
   const titleId = useId()
+  const reduce = useReducedMotion()
 
   useEffect(() => {
     if (!open) return undefined
@@ -46,20 +48,37 @@ export function Drawer({ open, onClose, title, subtitle, children, footer, width
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={clsx('relative flex h-full w-full flex-col border-l border-line bg-surface', width)}>
-        <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-4 sm:px-6">
+      <motion.div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+        initial={reduce ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.25 }}
+      />
+      <motion.div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        initial={reduce ? false : { x: '100%' }}
+        animate={{ x: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+        className={clsx('relative flex h-full w-full flex-col border-l border-white/60 bg-surface/95 shadow-lift backdrop-blur-2xl dark:border-line', width)}
+      >
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-primary-500/10 to-transparent" />
+        <div className="relative flex items-start justify-between gap-3 border-b border-line px-4 py-4 sm:px-6">
           <div className="min-w-0">
-            <h2 id={titleId} className="text-base font-semibold text-ink break-words">{title}</h2>
+            <h2 id={titleId} className="text-lg font-black tracking-tight text-ink break-words">{title}</h2>
             {subtitle && <p className="mt-0.5 text-xs text-muted break-words">{subtitle}</p>}
           </div>
-          <button ref={closeRef} type="button" onClick={onClose} aria-label="Close" className="-mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted hover:bg-head hover:text-ink">
+          <button ref={closeRef} type="button" onClick={onClose} aria-label="Close" className="-mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-head hover:text-ink">
             <X aria-hidden="true" className="h-5 w-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">{children}</div>
-        {footer && <div className="border-t border-line px-4 py-3 sm:px-6">{footer}</div>}
-      </div>
+        <div className="relative flex-1 overflow-y-auto px-4 py-5 sm:px-6">{children}</div>
+        {footer && <div className="relative border-t border-line bg-surface/80 px-4 py-3 backdrop-blur-xl sm:px-6">{footer}</div>}
+      </motion.div>
     </div>
   )
 }
@@ -77,23 +96,61 @@ export function EmailStatusBadge({ lead, className }) {
   const status = emailStatus(lead)
   const Icon = ICONS[status.tone]
   return (
-    <span title={status.hint} data-email-status={status.key} className={clsx('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold', TONES[status.tone], className)}>
+    <span title={status.hint} data-email-status={status.key} className={clsx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ring-current/15', TONES[status.tone], className)}>
       <Icon aria-hidden="true" className="h-3 w-3" />
       {status.label}
     </span>
   )
 }
 
-/** A number with a small bar. `value` is 0 to 100. */
-export function ScoreBar({ value, label = 'Match score', className }) {
+/** A number with a gradient bar that grows in once when it appears. `value` is 0 to 100. */
+export const ScoreBar = memo(function ScoreBar({ value, label = 'Match score', className }) {
+  const reduce = useReducedMotion()
   const pct = Math.max(0, Math.min(100, value))
   return (
     <div className={clsx('flex items-center gap-2', className)} role="img" aria-label={`${label}: ${Math.round(pct)} out of 100`}>
-      <span className="w-7 text-right text-sm font-semibold tabular-nums text-ink">{Math.round(pct)}</span>
-      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-head" aria-hidden="true">
-        <div className="h-full rounded-full bg-primary-600 dark:bg-primary-400" style={{ width: `${pct}%` }} />
+      <span className="w-7 text-right text-sm font-bold tabular-nums text-ink">{Math.round(pct)}</span>
+      <div className="h-2 w-16 overflow-hidden rounded-full bg-head ring-1 ring-inset ring-line" aria-hidden="true">
+        <motion.div
+          className="h-full origin-left rounded-full bg-gradient-to-r from-primary-500 to-accent-500 shadow-[0_0_10px_rgb(var(--p-500)/0.5)]"
+          style={{ width: `${pct}%` }}
+          initial={reduce ? false : { scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
+        />
       </div>
     </div>
+  )
+})
+
+/**
+ * A row of tabs with a gradient underline that glides to the selected tab. `layoutId` must be unique per tab bar.
+ * Extra per-tab props (id, aria-controls) go in `tab.props`.
+ */
+export function TabBar({ label, tabs, active, onSelect, layoutId, size = 'md' }) {
+  return (
+    <MotionConfig reducedMotion="user">
+      <div role="tablist" aria-label={label} className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
+        {tabs.map((tab) => {
+          const selected = active === tab.id
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              type="button"
+              aria-selected={selected}
+              onClick={() => onSelect(tab.id)}
+              className={clsx('relative flex shrink-0 items-center gap-2 text-sm transition-colors', size === 'md' ? 'h-11 px-4 font-semibold' : 'h-10 px-3 font-medium', selected ? 'text-ink' : 'text-muted hover:text-ink')}
+              {...tab.props}
+            >
+              {tab.label}
+              {tab.count != null && <span className={clsx('rounded-full px-2 text-xs font-semibold tabular-nums ring-1 ring-inset', selected ? 'bg-primary-50 text-primary-800 ring-primary-200 dark:bg-primary-950/60 dark:text-primary-300 dark:ring-primary-900' : 'bg-head text-muted ring-line')}>{tab.count}</span>}
+              {selected && <motion.span layoutId={layoutId} aria-hidden="true" className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-primary-500 to-accent-500 shadow-[0_0_8px_rgb(var(--p-500)/0.6)]" transition={{ type: 'spring', stiffness: 400, damping: 34 }} />}
+            </button>
+          )
+        })}
+      </div>
+    </MotionConfig>
   )
 }
 
@@ -108,7 +165,7 @@ export function SearchInput({ value, onChange, placeholder, label, className }) 
 
 export function SelectFilter({ label, value, onChange, options, className }) {
   return (
-    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={clsx('h-10 rounded-md border border-line bg-surface px-3 text-sm text-ink focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20', className)}>
+    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={clsx('h-10 rounded-xl border border-line bg-surface/80 px-3 text-sm text-ink transition-all focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-500/10', className)}>
       {options.map((o) => {
         const opt = typeof o === 'string' ? { value: o, label: o } : o
         return <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -121,7 +178,7 @@ export function SelectFilter({ label, value, onChange, options, className }) {
 export const Dash = () => <span className="text-muted" aria-label="not available">—</span>
 
 export function Tag({ children, className }) {
-  return <span className={clsx('inline-block max-w-full truncate rounded-md border border-line bg-head px-1.5 py-0.5 text-xs text-ink', className)}>{children}</span>
+  return <span className={clsx('inline-block max-w-full truncate rounded-full border border-line bg-head px-2.5 py-0.5 text-xs font-medium text-ink', className)}>{children}</span>
 }
 
 export function ExtLink({ href, children, className }) {

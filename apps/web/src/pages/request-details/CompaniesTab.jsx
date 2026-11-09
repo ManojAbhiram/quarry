@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import clsx from 'clsx'
+import { useRef, useState } from 'react'
 import { Inbox, List, SlidersHorizontal, ThumbsDown, ThumbsUp, Users } from 'lucide-react'
 import { api } from '../../api'
+import Reveal from '../../components/motion/Reveal'
+import { useFlip } from '../../components/motion/useFlip'
 import { Button, EmptyState, Menu, Skeleton } from '../../components/kit'
 import { defaultFilters, filterLeads, leadKey, PAGE_SIZE, pageSlice } from './leadHelpers'
-import { SearchInput, SelectFilter } from './ui'
+import { SearchInput, SelectFilter, TabBar } from './ui'
 import ExportMenu from './ExportMenu'
 import LeadsTable from './LeadsTable'
 import ListPicker from './ListPicker'
@@ -37,13 +38,17 @@ export default function CompaniesTab({ leads, lists, manualAdds, onManualChange,
   const filtered = filterLeads(leads, effective, lists, subTab)
   const { visible, remaining } = pageSlice(filtered, page)
 
+  // Rows glide to their new place when the list changes. capture() runs before each state change below.
+  const listRef = useRef(null)
+  const capture = useFlip(listRef, [subTab, visible.map((l) => l._originalIndex).join(',')])
+
   const industries = ['All', ...new Set(leads.map((l) => l.industry).filter(Boolean))]
   const fundingStages = ['All', ...new Set(leads.map((l) => l.funding_stage).filter(Boolean))]
   const activeFilters = ['industry', 'funding', 'geo', 'headcount', 'signals', 'growth'].filter((k) => filters[k] !== 'All').length + (filters.techStack ? 1 : 0)
   const anyFilter = activeFilters > 0 || Boolean(effective.search)
 
-  const set = (patch) => { setFilters({ ...filters, ...patch }); setPage(1) }
-  const clearFilters = () => { setFilters(defaultFilters); setPage(1) }
+  const set = (patch) => { capture(); setFilters({ ...filters, ...patch }); setPage(1) }
+  const clearFilters = () => { capture(); setFilters(defaultFilters); setPage(1) }
   const flagsFor = (name) => ({ saved: lists.saved.includes(name), excluded: lists.excluded.includes(name), valid: lists.valid.includes(name), invalid: lists.invalid.includes(name) })
 
   const recommendedCount = leads.filter((l) => { const k = leadKey(l); return !lists.saved.includes(k) && !lists.excluded.includes(k) && !lists.valid.includes(k) && !lists.invalid.includes(k) }).length
@@ -52,7 +57,7 @@ export default function CompaniesTab({ leads, lists, manualAdds, onManualChange,
   const toggleSelect = (name) => setSelected((prev) => { const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next })
   const toggleAll = (on) => setSelected((prev) => { const next = new Set(prev); visible.forEach((l) => (on ? next.add(leadKey(l)) : next.delete(leadKey(l)))); return next })
   const selectedLeads = leads.filter((l) => selected.has(leadKey(l)))
-  const bulk = (kind) => { onBulkMark([...selected], kind); setSelected(new Set()) }
+  const bulk = (kind) => { capture(); onBulkMark([...selected], kind); setSelected(new Set()) }
 
   const empty = leads.length === 0
   const running = runState === 'running'
@@ -62,14 +67,14 @@ export default function CompaniesTab({ leads, lists, manualAdds, onManualChange,
     body = <ManualAdds items={manualAdds} onChange={onManualChange} />
   } else if (empty && running) {
     body = (
-      <div role="status" aria-label="Searching for companies" className="space-y-2 rounded-lg border border-line bg-surface p-4">
+      <div role="status" aria-label="Searching for companies" className="card space-y-2 p-4">
         {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-10" />)}
         <p className="pt-2 text-center text-sm text-muted">Searching and scoring companies. They appear here as they are found.</p>
       </div>
     )
   } else if (empty && runState === 'empty') {
     body = (
-      <div className="rounded-lg border border-line bg-surface">
+      <div className="card">
         <EmptyState
           title="No companies matched this profile"
           description="The run finished but nothing fit. Try a wider location, a broader industry or looser size limits, then run it again."
@@ -78,39 +83,37 @@ export default function CompaniesTab({ leads, lists, manualAdds, onManualChange,
       </div>
     )
   } else if (empty) {
-    body = <div className="rounded-lg border border-line bg-surface"><EmptyState icon={Inbox} title="No companies in this run" description="This run did not save any companies." /></div>
+    body = <div className="card"><EmptyState icon={Inbox} title="No companies in this run" description="This run did not save any companies." /></div>
   } else if (filtered.length === 0) {
     const [title, description] = anyFilter ? ['No companies match', 'Try a different search or clear the filters.'] : EMPTY_COPY[subTab]
     body = (
-      <div className="rounded-lg border border-line bg-surface">
+      <div className="card">
         <EmptyState title={title} description={description} action={anyFilter ? { label: 'Clear filters', onClick: clearFilters } : undefined} />
       </div>
     )
   } else {
     body = (
       <>
-        <LeadsTable leads={visible} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleAll} onOpen={onOpen} flagsFor={flagsFor} onToggleFlag={onToggleFlag} />
+        <LeadsTable leads={visible} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleAll} onOpen={onOpen} flagsFor={flagsFor} onToggleFlag={(name, kind) => { capture(); onToggleFlag(name, kind) }} />
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted" aria-live="polite">Showing <span className="tabular-nums font-semibold text-ink">{visible.length}</span> of <span className="tabular-nums font-semibold text-ink">{filtered.length}</span> companies</p>
-          {remaining > 0 && <Button variant="secondary" onClick={() => setPage(page + 1)}>Show {Math.min(PAGE_SIZE, remaining)} more</Button>}
+          {remaining > 0 && <Button variant="secondary" onClick={() => { capture(); setPage(page + 1) }}>Show {Math.min(PAGE_SIZE, remaining)} more</Button>}
         </div>
       </>
     )
   }
 
   return (
-    <div>
-      <div role="tablist" aria-label="Company lists" className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
-        {SUB_TABS.map((tab) => {
-          const active = subTab === tab
-          return (
-            <button key={tab} role="tab" type="button" aria-selected={active} onClick={() => { setSubTab(tab); setPage(1) }} className={clsx('-mb-px flex h-10 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm font-medium', active ? 'border-primary-600 text-ink dark:border-primary-400' : 'border-transparent text-muted hover:text-ink')}>
-              {SUB_LABEL[tab] || tab}
-              <span className="rounded-md bg-head px-1.5 text-xs tabular-nums text-muted">{counts[tab]}</span>
-            </button>
-          )
-        })}
-      </div>
+    <Reveal selector="[data-reveal-row]">
+    <div ref={listRef}>
+      <TabBar
+        label="Company lists"
+        layoutId="company-lists-underline"
+        size="sm"
+        active={subTab}
+        onSelect={(tab) => { capture(); setSubTab(tab); setPage(1) }}
+        tabs={SUB_TABS.map((tab) => ({ id: tab, label: SUB_LABEL[tab] || tab, count: counts[tab] }))}
+      />
 
       {subTab !== 'Manual Adds' && !empty && (
         <>
@@ -124,7 +127,7 @@ export default function CompaniesTab({ leads, lists, manualAdds, onManualChange,
             <div className="ml-auto"><ExportMenu exporter={(format) => api.exportCompanies(requestId, format)} disabled={empty} /></div>
           </div>
           {filtersOpen && (
-            <div className="mb-3 grid grid-cols-2 gap-2 rounded-lg border border-line bg-surface p-3 md:grid-cols-4">
+            <div className="mb-3 grid grid-cols-2 gap-2 card p-3 md:grid-cols-4 overflow-visible">
               <SelectFilter label="Industry" value={filters.industry} onChange={(industry) => set({ industry })} options={industries.map((i) => (i === 'All' ? { value: 'All', label: 'Any industry' } : i))} />
               <SelectFilter label="Headcount" value={filters.headcount} onChange={(headcount) => set({ headcount })} options={HEADCOUNT} />
               <SelectFilter label="Funding" value={filters.funding} onChange={(funding) => set({ funding })} options={fundingStages.map((f) => (f === 'All' ? { value: 'All', label: 'Any funding' } : f))} />
@@ -138,7 +141,7 @@ export default function CompaniesTab({ leads, lists, manualAdds, onManualChange,
       )}
 
       {selected.size > 0 && subTab !== 'Manual Adds' && (
-        <div role="region" aria-label="Bulk actions" className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary-500 bg-surface px-3 py-2">
+        <div role="region" aria-label="Bulk actions" className="mb-3 flex flex-wrap items-center gap-2 card !overflow-visible px-3 py-2 ring-1 ring-primary-500/40">
           <span className="mr-auto text-sm font-semibold text-ink tabular-nums">{selected.size} selected</span>
           <Button variant="secondary" size="sm" onClick={() => bulk('valid')}><ThumbsUp aria-hidden="true" className="h-3.5 w-3.5" />Mark valid</Button>
           <Button variant="secondary" size="sm" onClick={() => bulk('invalid')}><ThumbsDown aria-hidden="true" className="h-3.5 w-3.5" />Mark invalid</Button>
@@ -158,5 +161,6 @@ export default function CompaniesTab({ leads, lists, manualAdds, onManualChange,
       {body}
       {isDirect && subTab === 'Recommended' && !empty && <p className="mt-3 text-xs text-muted">These are the companies you provided, with their decision makers.</p>}
     </div>
+    </Reveal>
   )
 }

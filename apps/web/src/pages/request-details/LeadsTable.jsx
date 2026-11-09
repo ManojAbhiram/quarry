@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import clsx from 'clsx'
 import { ChevronRight } from 'lucide-react'
 import { IntentScoreBadge } from '../../components/intent/IntentPanel'
@@ -7,6 +7,21 @@ import { Dash, EmailStatusBadge, ExtLink, ScoreBar } from './ui'
 import LeadActionsMenu, { FlagTags } from './LeadActions'
 
 const LONG_EXPLANATION = 70
+const WIDE = '(min-width: 768px)'
+
+/** True from the md breakpoint up. Only the layout that is on screen gets flip ids, so row moves are measured once. */
+function useWide() {
+  const query = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(WIDE).matches
+  const [wide, setWide] = useState(query)
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined
+    const mq = window.matchMedia(WIDE)
+    const on = () => setWide(mq.matches)
+    mq.addEventListener?.('change', on)
+    return () => mq.removeEventListener?.('change', on)
+  }, [])
+  return wide
+}
 
 function Explanation({ text }) {
   const [open, setOpen] = useState(false)
@@ -51,6 +66,7 @@ function EmailCell({ lead }) {
 }
 
 export default function LeadsTable({ leads, selected, onToggleSelect, onToggleAll, onOpen, flagsFor, onToggleFlag }) {
+  const wide = useWide()
   const allSelected = leads.length > 0 && leads.every((l) => selected.has(leadKey(l)))
   const rowProps = (lead) => {
     const name = leadKey(lead)
@@ -61,10 +77,11 @@ export default function LeadsTable({ leads, selected, onToggleSelect, onToggleAl
     <>
       {/* Phones: stacked cards */}
       <ul className="space-y-3 md:hidden">
-        {leads.map((lead) => {
+        {leads.map((lead, i) => {
           const { name, contact, flags, isSelected } = rowProps(lead)
           return (
-            <li key={lead._originalIndex} className="rounded-lg border border-line bg-surface p-3">
+            <li key={lead._originalIndex} data-flip-id={wide ? undefined : `m-${lead._originalIndex}`} data-reveal-row={i < 8 ? '' : undefined}>
+             <div className="card card-hover !overflow-visible p-3">
               <div className="flex items-start gap-1">
                 <SelectBox checked={isSelected} onChange={() => onToggleSelect(name)} label={`Select ${name}`} />
                 <div className="min-w-0 flex-1">
@@ -94,18 +111,19 @@ export default function LeadsTable({ leads, selected, onToggleSelect, onToggleAl
               </dl>
               <div className="mt-1"><Explanation text={lead.match_explanation} /></div>
               <div className="mt-1"><FlagTags flags={flags} /></div>
+             </div>
             </li>
           )
         })}
       </ul>
 
       {/* Tablet and up: table */}
-      <div className="hidden rounded-lg border border-line bg-surface md:block">
+      <div className="card hidden !overflow-visible md:block">
         <table className="w-full table-fixed text-left text-sm">
           <caption className="sr-only">Companies found by this run, best match first</caption>
           <thead>
-            <tr className="bg-head text-xs font-semibold uppercase tracking-wide text-muted">
-              <th scope="col" className="w-12 rounded-tl-lg px-2 py-2.5">
+            <tr className="bg-gradient-to-r from-head to-head/40 text-xs font-bold uppercase tracking-wider text-muted">
+              <th scope="col" className="w-12 rounded-tl-2xl px-2 py-2.5">
                 <SelectBox checked={allSelected} onChange={() => onToggleAll(!allSelected)} label="Select all shown companies" />
               </th>
               <th scope="col" className="w-[31%] px-3 py-2.5">Company</th>
@@ -113,17 +131,17 @@ export default function LeadsTable({ leads, selected, onToggleSelect, onToggleAl
               <th scope="col" className="w-[26%] px-3 py-2.5">Email</th>
               <th scope="col" className="w-[12%] px-3 py-2.5">Match</th>
               <th scope="col" className="w-[9%] px-3 py-2.5">Intent</th>
-              <th scope="col" className="w-12 rounded-tr-lg px-2 py-2.5"><span className="sr-only">Actions</span></th>
+              <th scope="col" className="w-12 rounded-tr-2xl px-2 py-2.5"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
-            {leads.map((lead) => {
+            {leads.map((lead, i) => {
               const { name, contact, flags, isSelected } = rowProps(lead)
               return (
-                <tr key={lead._originalIndex} onClick={() => onOpen(lead)} className={clsx('cursor-pointer border-t border-line align-top hover:bg-head/60', isSelected && 'bg-primary-50/60 dark:bg-primary-950/30')}>
+                <tr key={lead._originalIndex} data-flip-id={wide ? `d-${lead._originalIndex}` : undefined} data-reveal-row={i < 8 ? '' : undefined} onClick={() => onOpen(lead)} className={clsx('cursor-pointer border-t border-line align-top bg-surface/0 hover:bg-primary-50/70 hover:shadow-[inset_3px_0_0_rgb(var(--p-500))] dark:hover:bg-primary-950/30', isSelected && 'bg-primary-50/60 dark:bg-primary-950/30')}>
                   <td className="px-2 py-2.5"><SelectBox checked={isSelected} onChange={() => onToggleSelect(name)} label={`Select ${name}`} /></td>
                   <td className="min-w-0 px-3 py-2.5">
-                    <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(lead) }} className="max-w-full text-left text-sm font-semibold text-ink break-words hover:underline">
+                    <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(lead) }} className="max-w-full text-left text-sm font-semibold text-ink break-words hover:text-primary-700 hover:underline dark:hover:text-primary-300">
                       {name}
                     </button>
                     <p className="text-xs text-muted break-words">{[lead.industry, lead.location].filter(Boolean).join(' · ')}</p>

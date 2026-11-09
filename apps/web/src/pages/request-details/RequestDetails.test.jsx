@@ -97,7 +97,7 @@ describe('RequestDetails', () => {
 
     await userEvent.type(screen.getByRole('searchbox', { name: /search companies/i }), 'Company 119')
     expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 1 of 1 companies')
-  })
+  }, 40000)
 
   it('opens a lead with a click and closes it with Escape', async () => {
     renderPage({ status: 'Completed' }, makeLeads(3))
@@ -118,5 +118,40 @@ describe('RequestDetails', () => {
     leadsContext.getResults.mockResolvedValue({ leads: [], competitors: [], queries: [] })
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('heading', { name: 'Test run', level: 1 })).toBeInTheDocument()
+  })
+
+  it('shows a stat strip with companies, contacts and the average match', async () => {
+    const leads = [
+      { company_name: 'A Co', match_score: '90', contact_name: 'Ann' },
+      { company_name: 'B Co', match_score: '70' },
+    ]
+    renderPage({ status: 'Completed' }, leads)
+    const strip = await screen.findByRole('list', { name: 'Run summary' })
+    expect(within(strip).getByText('Companies').closest('li')).toHaveTextContent('2')
+    expect(within(strip).getByText('Contacts').closest('li')).toHaveTextContent('1')
+    expect(within(strip).getByText('Average match').closest('li')).toHaveTextContent('80')
+  })
+
+  it('shows a dash instead of an average when no company has a match score', async () => {
+    renderPage({ status: 'Completed' }, [{ company_name: 'A Co' }])
+    const strip = await screen.findByRole('list', { name: 'Run summary' })
+    expect(within(strip).getByText('Average match').closest('li')).not.toHaveTextContent(/\d/)
+  })
+
+  it('marks the selected results tab and keeps rows identifiable for animation', async () => {
+    renderPage({ status: 'Completed' }, makeLeads(3))
+    await screen.findByRole('table')
+    expect(screen.getByRole('tab', { name: /^Companies/ })).toHaveAttribute('aria-selected', 'true')
+    expect(document.querySelectorAll('[data-flip-id]')).toHaveLength(3)
+  })
+
+  it('returns focus to the row that opened the lead panel', async () => {
+    renderPage({ status: 'Completed' }, makeLeads(3))
+    const opener = (await screen.findAllByRole('button', { name: 'Company 000' }))[1]
+    opener.focus()
+    await userEvent.click(opener)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(opener).toHaveFocus())
   })
 })

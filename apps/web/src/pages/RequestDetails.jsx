@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import clsx from 'clsx'
 import { SearchX } from 'lucide-react'
 import { useLeads } from '../context/LeadContext'
 import { api } from '../api'
@@ -8,6 +7,8 @@ import { extractPersonaOptions } from '../utils/decisionMakers'
 import { EmptyState, ErrorState, Skeleton, useToast } from '../components/kit'
 import { normalizeCompetitor } from './request-details/competitors'
 import { bulkMark, deriveRunState, leadKey, toggleMembership } from './request-details/leadHelpers'
+import Reveal from '../components/motion/Reveal'
+import { TabBar } from './request-details/ui'
 import RunHeader, { RunBanner } from './request-details/RunHeader'
 import RunDetailsPanel from './request-details/RunDetailsPanel'
 import CompaniesTab from './request-details/CompaniesTab'
@@ -30,7 +31,7 @@ function PageSkeleton() {
       <Skeleton className="mb-3 h-8 w-2/3 max-w-md" />
       <Skeleton className="mb-6 h-5 w-48" />
       <Skeleton className="mb-4 h-10 w-full max-w-lg" />
-      <div className="space-y-2 rounded-lg border border-line bg-surface p-3">
+      <div className="card space-y-2 p-3">
         {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-12" />)}
       </div>
     </div>
@@ -234,30 +235,20 @@ export default function RequestDetails() {
     const flagsFor = (name) => ({ saved: lists.saved.includes(name), excluded: lists.excluded.includes(name), valid: lists.valid.includes(name), invalid: lists.invalid.includes(name) })
 
     content = (
-      <>
-        <RunHeader request={currentRequest} runState={runState} leadCount={leads.length} isDirect={isDirect} onEdit={goEdit} detailsOpen={detailsOpen} onToggleDetails={() => setDetailsOpen(!detailsOpen)} />
+      <Reveal>
+        <RunHeader request={currentRequest} runState={runState} leads={leads} isDirect={isDirect} onEdit={goEdit} detailsOpen={detailsOpen} onToggleDetails={() => setDetailsOpen(!detailsOpen)} />
         <RunBanner runState={runState} request={currentRequest} leadCount={leads.length} onEdit={goEdit} />
         {detailsOpen && !isDirect && <RunDetailsPanel icpDimensions={currentRequest.icp_dimensions} queries={data?.queries || []} onClose={() => setDetailsOpen(false)} />}
 
         {runState !== 'failed' && (
         <>
-        <div role="tablist" aria-label="Results" className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              role="tab"
-              type="button"
-              id={`tab-${tab.id}`}
-              aria-selected={activeTab === tab.id}
-              aria-controls={`panel-${tab.id}`}
-              onClick={() => (tab.id === 'decision_makers' ? showDecisionMakers() : setActiveTab(tab.id))}
-              className={clsx('-mb-px flex h-11 shrink-0 items-center gap-2 border-b-2 px-4 text-sm font-semibold', activeTab === tab.id ? 'border-primary-600 text-ink dark:border-primary-400' : 'border-transparent text-muted hover:text-ink')}
-            >
-              {tab.label}
-              {tab.count != null && <span className="rounded-md bg-head px-1.5 text-xs font-medium tabular-nums text-muted">{tab.count}</span>}
-            </button>
-          ))}
-        </div>
+        <TabBar
+          label="Results"
+          layoutId="results-tab-underline"
+          active={activeTab}
+          onSelect={(tabId) => (tabId === 'decision_makers' ? showDecisionMakers() : setActiveTab(tabId))}
+          tabs={tabs.map((tab) => ({ ...tab, props: { id: `tab-${tab.id}`, 'aria-controls': `panel-${tab.id}` } }))}
+        />
 
         <div id="panel-companies" role="tabpanel" aria-labelledby="tab-companies" hidden={activeTab !== 'companies'}>
           <CompaniesTab
@@ -300,7 +291,7 @@ export default function RequestDetails() {
             onViewDecisionMakers={() => showDecisionMakers(leadKey(openLead))}
           />
         )}
-      </>
+      </Reveal>
     )
   }
 
