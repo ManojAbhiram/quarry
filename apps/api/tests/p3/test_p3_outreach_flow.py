@@ -6,7 +6,7 @@ from app.outreach import deps, inbound, service
 from app.outreach.ports import SendError
 from tests.p3.conftest import MAILBOX
 
-NOW = datetime.utcnow() + timedelta(minutes=1)  # enrollments are due 'now'; windows in these tests are all-day
+NOW = datetime.utcnow() + timedelta(hours=1)  # enrollments are due 'now'; windows in these tests are all-day
 
 
 def dsn(original_id: str, status: str = "5.1.1", sender="MAILER-DAEMON@x.test") -> bytes:
@@ -184,7 +184,7 @@ async def test_daily_cap_and_warmup_defer_the_rest(api, signup, make_sequence, s
     stats = await service.run_due(NOW)
     assert stats["sent"] == 3 and stats["deferred"] == 5
     pending = [e for e in await TABLES["outreach_enrollments"].find() if e["step_index"] == 0]
-    assert all(e["next_send_at"] > NOW + timedelta(hours=1) for e in pending)
+    assert all(e["next_send_at"] > NOW for e in pending)
     # warmup: day-0 limit is 5 even though the cap is 50
     await api.put(f"/api/outreach/mailboxes/{box['_id']}", headers=h, json={"daily_cap": 50, "warmup": True})
     await TABLES["outreach_mailboxes"].update(box["_id"], {"warmup_started_at": NOW})

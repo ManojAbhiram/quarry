@@ -17,9 +17,9 @@ _leads = TABLES["leads"]
 # ------------------------------------------------------------------ ledger
 async def balance(user_id: str) -> int:
     rows = await _ledger.find(_ledger.model.user_id == user_id)
-    if not rows and p3_settings.free_credits > 0:
-        await grant(user_id, p3_settings.free_credits, "welcome credits")
-        return p3_settings.free_credits
+    if not any(r.get("kind") == "grant" for r in rows) and p3_settings.free_credits > 0:
+        await grant(user_id, p3_settings.free_credits, "welcome credits")  # once per user, whatever happened first
+        return p3_settings.free_credits + sum(int(r["delta"]) for r in rows)
     return sum(int(r["delta"]) for r in rows)
 
 
