@@ -51,13 +51,35 @@ describe('Header', () => {
     }
   })
 
-  it('always shows where you are and the main sections (the trunk test)', () => {
+  it('no longer carries the section links (they live in the sidebar)', () => {
     renderHeader('/dashboard')
-    const nav = screen.getByRole('navigation', { name: 'Main' })
-    expect(within(nav).getByRole('link', { name: 'Requests' })).toHaveAttribute('href', '/lead-requests')
-    expect(within(nav).getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page')
-    expect(within(nav).getByRole('link', { name: 'Lead lists' })).toHaveAttribute('href', '/lead-lists')
-    expect(within(nav).getByRole('link', { name: 'Requests' })).not.toHaveAttribute('aria-current')
+    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
+  })
+
+  it('with a sidebar, shows a toggle that reflects and flips its state, and hands the brand and account to the sidebar', async () => {
+    const toggle = vi.fn()
+    const { rerender } = render(
+      <MemoryRouter>
+        <Header sidebar={{ visible: true, isMobile: false, toggle }} />
+      </MemoryRouter>,
+    )
+    const button = screen.getByRole('button', { name: 'Hide sidebar' })
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+    expect(button).toHaveAttribute('aria-controls', 'app-sidebar')
+    expect(screen.queryByRole('button', { name: 'Account menu' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'New request' })).not.toBeInTheDocument()
+    await userEvent.click(button)
+    expect(toggle).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <MemoryRouter>
+        <Header sidebar={{ visible: false, isMobile: false, toggle }} />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('button', { name: 'Show sidebar' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('button', { name: 'Account menu' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'New request' })).toHaveAttribute('href', '/new-request')
   })
 
   it('offers New request as a link from every page', () => {
