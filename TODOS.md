@@ -94,7 +94,7 @@ Not tested in a browser or against live services: the full pipeline run (needs a
 
 ## From /qa on 2026-11-09 (second pass: sidebar and next-tasks)
 
-### Dialog action buttons scroll out of view on short screens
+### Dialog action buttons scroll out of view on short screens (DONE: sticky footer in Outreach dialogs)
 
 **What:** In the Connect mailbox dialog at 1280x720 (especially after Test connection adds result rows), the dialog is capped at 648px and scrolls, so Cancel and Connect sit below the fold. Make the dialog footer sticky.
 
