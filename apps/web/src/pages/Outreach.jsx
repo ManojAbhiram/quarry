@@ -83,7 +83,7 @@ function MailboxDialog({ open, onClose, onSaved }) {
         <Field label="Daily send cap" type="number" min="1" value={form.daily_cap} onChange={set('daily_cap')} />
         <label className="flex items-center gap-2 text-sm text-ink sm:col-span-2"><input type="checkbox" className="h-4 w-4 accent-primary-600" checked={form.warmup} onChange={set('warmup')} />Ramp up gradually (warmup)</label>
         {(testing || result) && <TestResult testing={testing} result={result} />}
-        <div className="flex flex-wrap justify-end gap-2 sm:col-span-2">
+        <div className="sticky bottom-0 z-10 -mx-6 -mb-6 mt-1 border-t border-line bg-surface px-6 py-3 flex flex-wrap justify-end gap-2 sm:col-span-2">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button variant="secondary" onClick={runTest} loading={testing} disabled={!form.smtp_host || !form.smtp_password}>Test connection</Button>
           <Button type="submit" loading={saving}>Connect</Button>
@@ -188,7 +188,7 @@ function SequenceDialog({ open, onClose, boxes, onSaved }) {
           <Field label="Time zone" value={tz} onChange={(e) => setTz(e.target.value)} hint="Sends 09:00 to 17:00, weekdays." />
         </div>
         <StepEditor steps={steps} onChange={setSteps} />
-        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving} disabled={!boxes.length}>Create sequence</Button></div>
+        <div className="sticky bottom-0 z-10 -mx-6 -mb-6 mt-1 border-t border-line bg-surface px-6 py-3 flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving} disabled={!boxes.length}>Create sequence</Button></div>
       </form>
     </Dialog>
   )
