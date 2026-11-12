@@ -362,7 +362,7 @@ export default function Sidebar({ sidebar }) {
 
           <div className={clsx('relative flex shrink-0 gap-2 px-3 pt-4', rail ? 'flex-col items-center' : 'items-center justify-between')} data-nav-item>
             <Link to="/lead-requests" aria-label="Quarry home" className={clsx('flex items-center gap-2.5 rounded-xl', FOCUS_RING)}>
-              <BrandLogo className="h-9 w-9 shrink-0 rounded-xl shadow-md shadow-primary-500/25" />
+              <BrandLogo className="h-9 w-9" />
               {!rail && <span className="text-lg font-black tracking-tight text-ink">Quarry</span>}
             </Link>
             {isMobile ? (
