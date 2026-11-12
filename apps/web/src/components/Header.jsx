@@ -105,7 +105,7 @@ export default function Header({ sidebar }) {
 
         {(standalone || sidebar.isMobile) && (
           <Link to="/lead-requests" className="flex shrink-0 items-center gap-2" aria-label="Quarry home">
-            <BrandLogo className="h-8 w-8 shrink-0 rounded-xl shadow-md shadow-primary-500/25" />
+            <BrandLogo className="h-8 w-8" />
             <span className="hidden text-lg font-black tracking-tight text-ink sm:block">Quarry</span>
           </Link>
         )}

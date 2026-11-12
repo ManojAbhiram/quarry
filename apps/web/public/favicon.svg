@@ -1,23 +1,11 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0F172A"/>
-      <stop offset="100%" stop-color="#0E7490"/>
-    </linearGradient>
-  </defs>
-
-  <rect width="512" height="512" rx="110" fill="url(#bg)"/>
-
-  <!-- Gem: raw data in, qualified lead out -->
-  <g stroke="#0F172A" stroke-width="6" stroke-linejoin="round">
-    <polygon points="112,250 186,166 200,250" fill="#67E8F9"/>
-    <polygon points="186,166 326,166 312,250 200,250" fill="#FFFFFF"/>
-    <polygon points="326,166 400,250 312,250" fill="#A5F3FC"/>
-    <polygon points="112,250 200,250 256,410" fill="#22D3EE"/>
-    <polygon points="200,250 312,250 256,410" fill="#CFFAFE"/>
-    <polygon points="312,250 400,250 256,410" fill="#06B6D4"/>
-  </g>
-
-  <!-- Spark -->
-  <path d="M410 96 L420 124 L448 134 L420 144 L410 172 L400 144 L372 134 L400 124 Z" fill="#FDE68A"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="currentColor">
+  <title>Quarry</title>
+  <style>
+    svg { color: #0f1b2d; }
+    @media (prefers-color-scheme: dark) {
+      svg { color: #e6edf6; }
+    }
+  </style>
+  <path d="M20 4H36L52 20V38L40 26V24L32 16H24L16 24V32L24 40H26L38 52H20L4 36V20Z" />
+  <path d="M32 24L60 52V60H52L24 32Z" />
 </svg>

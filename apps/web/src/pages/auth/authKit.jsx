@@ -100,7 +100,7 @@ export function AuthLayout({ title, description, children, footer }) {
       <main className="relative z-10 flex min-w-0 flex-1 flex-col">
         <div className="flex items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2 md:invisible">
-            <BrandLogo title="" className="h-8 w-8 rounded-xl shadow-soft" />
+            <BrandLogo title="" className="h-8 w-8" />
             <span className="text-base font-black tracking-tight">Quarry</span>
           </div>
           <div className="flex items-center gap-2">
@@ -126,7 +126,7 @@ export function AuthLayout({ title, description, children, footer }) {
       <aside className="relative z-0 hidden w-[44%] max-w-[640px] shrink-0 flex-col justify-between overflow-hidden border-r border-line bg-head/60 p-10 backdrop-blur-sm md:order-first md:flex lg:p-14">
         <Backdrop />
         <div className="relative flex items-center gap-2.5">
-          <BrandLogo title="" className="h-10 w-10 rounded-xl shadow-lift ring-1 ring-primary-500/30" />
+          <BrandLogo title="" className="h-10 w-10" />
           <span className="text-xl font-black tracking-tight">Quarry</span>
         </div>
         <Reveal className="relative">

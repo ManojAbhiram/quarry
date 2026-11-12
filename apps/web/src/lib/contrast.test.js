@@ -30,6 +30,16 @@ describe('every shipped palette is readable (WCAG AA, 4.5:1)', () => {
     expect(contrastRatio(vars['--p-400'], DARK_SURFACE)).toBeGreaterThanOrEqual(AA)
   })
 
+  it.each(PALETTES.map((p) => [p.id]))('%s: logo shades are readable on all light and dark UI surfaces', (id) => {
+    const vars = paletteVars(id)
+    for (const surface of ['#f6f8fa', '#ffffff', '#f1f4f7']) {
+      expect(contrastRatio(vars['--p-700'], surface)).toBeGreaterThanOrEqual(AA)
+    }
+    for (const surface of ['#0d1626', DARK_SURFACE, '#101c31']) {
+      expect(contrastRatio(vars['--p-300'], surface)).toBeGreaterThanOrEqual(AA)
+    }
+  })
+
   it('has a hover shade that is at least as dark as the button shade', () => {
     for (const { id } of PALETTES) {
       const vars = paletteVars(id)

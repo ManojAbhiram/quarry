@@ -42,7 +42,7 @@ export default function AcceptInvite() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-app px-4 font-sans text-ink">
       <div className="card w-full max-w-md p-8 text-center">
-        <BrandLogo className="mx-auto mb-5 h-12 w-12 rounded-2xl shadow-md shadow-primary-500/25" />
+        <BrandLogo className="mx-auto mb-5 h-12 w-12" />
         {!token ? (
           <ErrorState title="Invite link incomplete" message="This link is missing its token. Ask for a new invite." className="py-4" />
         ) : (
