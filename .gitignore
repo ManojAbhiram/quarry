@@ -17,8 +17,15 @@ __pycache__/
 dist/
 build/
 
-# Local tooling
+# Local tooling & AI agents
 .claude/
+.agents/
+.agent/
+.kilo/
+.kilocode/
+.gstack/
+.gemini/
+.cursor/
 *.log
 .superpowers/
 research_notes/
