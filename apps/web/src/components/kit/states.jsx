@@ -5,7 +5,7 @@ import Button from './Button'
 /** Nothing here yet: say why and offer the next step. */
 export function EmptyState({ title, description, action, icon: Icon = Inbox, className }) {
   return (
-    <div className={clsx('flex flex-col items-center justify-center text-center px-6 py-14', className)}>
+    <div className={clsx('empty-state flex flex-col items-center justify-center text-center px-6 py-14', className)}>
       <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-100 to-accent-100 text-primary-700 shadow-inner ring-1 ring-primary-200/60 dark:from-primary-950 dark:to-accent-950 dark:text-primary-300 dark:ring-primary-900/60">
         <Icon aria-hidden="true" className="h-7 w-7" />
       </span>
@@ -23,7 +23,7 @@ export function EmptyState({ title, description, action, icon: Icon = Inbox, cla
 /** Something failed: say what, show the reason, offer a retry when there is one. */
 export function ErrorState({ title = 'Something went wrong', message, onRetry, className }) {
   return (
-    <div role="alert" className={clsx('flex flex-col items-center justify-center text-center px-6 py-14', className)}>
+    <div role="alert" className={clsx('error-state flex flex-col items-center justify-center text-center px-6 py-14', className)}>
       <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-bad-soft text-bad shadow-inner ring-1 ring-bad/20">
         <AlertCircle aria-hidden="true" className="h-7 w-7" />
       </span>

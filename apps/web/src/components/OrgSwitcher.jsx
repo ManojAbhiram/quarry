@@ -14,7 +14,7 @@ export default function OrgSwitcher({ block = false, compact = false }) {
       className={block ? 'w-full' : undefined}
       label={`Switch workspace, current: ${currentName}`}
       align="left"
-      buttonClassName={clsx("flex items-center gap-1.5 rounded-xl border border-line bg-surface/80 text-xs font-semibold text-ink shadow-sm transition-all hover:bg-surface hover:shadow-md", block ? "w-full px-3 py-2.5" : "max-w-[9rem] px-3 py-2 sm:max-w-[13rem]", compact && "mx-auto h-10 w-10 justify-center !px-0")}
+      buttonClassName={clsx("workspace-switcher flex items-center gap-1.5 rounded-xl border border-line bg-surface/80 text-xs font-semibold text-ink shadow-sm transition-all hover:bg-surface hover:shadow-md", block ? "w-full px-3 py-2.5" : "max-w-[9rem] px-3 py-2 sm:max-w-[13rem]", compact && "mx-auto h-10 w-10 justify-center !px-0")}
       panelClassName="w-72 py-1"
       button={
         <>

@@ -19,6 +19,7 @@ export default function Button({ variant = 'primary', size = 'md', loading = fal
   return (
     <button
       type={type}
+      data-button-variant={variant}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={clsx(

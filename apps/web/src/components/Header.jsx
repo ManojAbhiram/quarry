@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
-import { Bell, Check, ChevronDown, CreditCard, FolderDot, HelpCircle, LogOut, Moon, PanelLeft, Plug, Plus, Search, ShieldCheck, Sun, UserCircle, Users } from 'lucide-react'
+import { AlertTriangle, Bell, Check, ChevronDown, CreditCard, FolderDot, HelpCircle, Info, LogOut, Moon, PanelLeft, Plug, Plus, Search, ShieldCheck, Sun, UserCircle, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useLeads } from '../context/LeadContext'
@@ -13,7 +13,7 @@ import HelpDrawer from './HelpDrawer'
 import { SIDEBAR_ID } from './sidebar/Sidebar'
 
 const ICON_BUTTON =
-  'flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface/80 text-muted shadow-sm transition-all duration-200 hover:bg-surface hover:text-ink hover:shadow-md active:scale-95'
+  'header-control flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface/80 text-muted shadow-sm transition-all duration-200 hover:bg-surface hover:text-ink hover:shadow-md active:scale-95'
 
 function initialsOf(name) {
   if (!name) return 'U'
@@ -22,11 +22,12 @@ function initialsOf(name) {
   return parts[0].slice(0, 2).toUpperCase()
 }
 
-function NotificationIcon({ type }) {
-  const tone = type === 'success' ? 'bg-ok-soft text-ok' : type === 'warning' ? 'bg-warn-soft text-warn' : 'bg-primary-50 text-primary-800 dark:bg-primary-950/60 dark:text-primary-300'
+function NotificationIcon({ type, quiet }) {
+  const tone = quiet ? 'bg-head text-muted' : type === 'success' ? 'bg-ok-soft text-ok' : type === 'warning' ? 'bg-warn-soft text-warn' : 'bg-primary-50 text-primary-800 dark:bg-primary-950/60 dark:text-primary-300'
+  const Icon = type === 'success' ? Check : type === 'warning' ? AlertTriangle : Info
   return (
     <span aria-hidden="true" className={clsx('mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-bold', tone)}>
-      {type === 'success' ? <Check className="h-3.5 w-3.5" /> : type === 'warning' ? '!' : 'i'}
+      {quiet ? <Icon className="h-4 w-4" strokeWidth={1.5} /> : type === 'success' ? <Check className="h-3.5 w-3.5" /> : type === 'warning' ? '!' : 'i'}
     </span>
   )
 }
@@ -36,7 +37,7 @@ function NotificationIcon({ type }) {
  * useSidebar) is passed it also holds the sidebar toggle, and the brand, workspace switcher, New request button
  * and account menu appear here only while the sidebar is not showing them. Without `sidebar` it is standalone.
  */
-export default function Header({ sidebar }) {
+export default function Header({ sidebar, quiet = false }) {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const { requests, globalSearchQuery, setGlobalSearchQuery, notifications, markAllRead, toggleRead, clearNotification } = useLeads()
@@ -88,7 +89,7 @@ export default function Header({ sidebar }) {
 
   return (
     <>
-      <header className="relative z-20 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/70 bg-surface/80 px-4 py-3 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
+      <header className="app-header relative z-20 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/70 bg-surface/80 px-4 py-3 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
         {sidebar && (
           <button
             type="button"
@@ -106,7 +107,7 @@ export default function Header({ sidebar }) {
         {(standalone || sidebar.isMobile) && (
           <Link to="/lead-requests" className="flex shrink-0 items-center gap-2" aria-label="Quarry home">
             <BrandLogo className="h-8 w-8" />
-            <span className="hidden text-lg font-black tracking-tight text-ink sm:block">Quarry</span>
+            <span className="quarry-wordmark hidden text-lg font-black tracking-tight text-ink sm:block">Quarry</span>
           </Link>
         )}
 
@@ -153,7 +154,7 @@ export default function Header({ sidebar }) {
           </Menu>
         )}
 
-        <div className="ml-auto hidden min-w-[9rem] max-w-xs flex-1 items-center gap-2 rounded-xl border border-line bg-surface/80 px-3.5 shadow-sm transition-all focus-within:border-primary-400 focus-within:ring-4 focus-within:ring-primary-500/10 md:flex lg:max-w-sm">
+        <div className="header-search ml-auto hidden min-w-[9rem] max-w-xs flex-1 items-center gap-2 rounded-xl border border-line bg-surface/80 px-3.5 shadow-sm transition-all focus-within:border-primary-400 focus-within:ring-4 focus-within:ring-primary-500/10 md:flex lg:max-w-sm">
           <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" />
           <input
             ref={searchRef}
@@ -202,7 +203,7 @@ export default function Header({ sidebar }) {
               ) : (
                 notifications.map((n) => (
                   <li key={n.id} className={clsx('flex items-start gap-3 p-3.5', n.read && 'opacity-70')}>
-                    <NotificationIcon type={n.type} />
+                    <NotificationIcon type={n.type} quiet={quiet} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-2">
                         <p className="truncate text-sm font-semibold text-ink">{n.title}</p>
@@ -237,7 +238,7 @@ export default function Header({ sidebar }) {
           {standalone && (
             <Menu
               label="Account menu"
-              buttonClassName="flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-gradient-to-br from-primary-100 to-accent-200 text-xs font-bold text-primary-800 shadow-sm ring-1 ring-primary-200/60 transition-all hover:ring-4 hover:ring-primary-500/15 active:scale-95 dark:border-line dark:from-primary-950 dark:to-accent-900 dark:text-primary-300 dark:ring-primary-900/60"
+              buttonClassName="account-avatar flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-gradient-to-br from-primary-100 to-accent-200 text-xs font-bold text-primary-800 shadow-sm ring-1 ring-primary-200/60 transition-all hover:ring-4 hover:ring-primary-500/15 active:scale-95 dark:border-line dark:from-primary-950 dark:to-accent-900 dark:text-primary-300 dark:ring-primary-900/60"
               panelClassName="w-64 py-1"
               button={initialsOf(user?.name || user?.email)}
             >

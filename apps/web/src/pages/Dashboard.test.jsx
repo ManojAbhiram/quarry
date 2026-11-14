@@ -5,7 +5,6 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 const leads = {}
 vi.mock('../context/LeadContext', () => ({ useLeads: () => leads }))
-vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { name: 'Dana Demo' } }) }))
 
 import Dashboard from './Dashboard'
 
@@ -40,14 +39,34 @@ function setup(over = {}) {
 describe('Dashboard', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('shows the figures from the API stats and a link to each filter', async () => {
+  it.each([
+    ['summary-total', 'All', 3],
+    ['summary-pending', 'Active', 1],
+    ['summary-completed', 'Completed', 1],
+    ['summary-failed', 'Failed', 1],
+  ])('shows the API figure and opens its filter: %s', async (id, filter, value) => {
     const user = userEvent.setup()
     setup()
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Dana Demo')
-    const failed = document.getElementById('summary-failed')
-    expect(failed).toHaveTextContent('1')
-    await user.click(failed)
-    expect(screen.getByTestId('where')).toHaveTextContent('/lead-requests|Failed')
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Dashboard')
+    const tile = document.getElementById(id)
+    expect(tile.querySelector('.dashboard-stat-value')).toHaveTextContent(String(value))
+    await user.click(tile)
+    expect(screen.getByTestId('where')).toHaveTextContent(`/lead-requests|${filter}`)
+  })
+
+  it('starts a new request from the research action', async () => {
+    setup()
+    await userEvent.click(await screen.findByRole('button', { name: 'New request' }))
+    expect(screen.getByTestId('where')).toHaveTextContent('/new-request')
+  })
+
+  it.each([
+    ['icp', '/request/saved/intake'],
+    ['direct_companies', '/request/saved/companies'],
+  ])('opens a recent draft in its original workflow: %s', async (request_type, path) => {
+    setup({ requests: [{ id: 'saved', title: 'Saved company research', status: 'Draft', request_type }] })
+    await userEvent.click(await screen.findByRole('button', { name: /Saved company research/ }))
+    expect(screen.getByTestId('where')).toHaveTextContent(path)
   })
 
   it('shows the running request in the pipeline panel and opens it', async () => {
@@ -91,5 +110,19 @@ describe('Dashboard', () => {
     const panel = await screen.findByRole('region', { name: /active pipeline/i })
     expect(panel).toHaveTextContent(long)
     expect(panel).toHaveTextContent('Pending')
+  })
+
+  it('shows the real full reference and creation date without shortening the accessible ID', async () => {
+    const id = '4f93a1ce-2e54-4d76-82ce-dfb700508ac2'
+    const created_at = '2026-11-13T06:20:00Z'
+    setup({ requests: [{ id, title: 'Industrial suppliers', status: 'Active', created_at }] })
+    expect(await screen.findByLabelText(`Request reference ${id}`)).toHaveTextContent('QR / 4f93a1ce')
+    expect(screen.getByText(/^Created /)).toHaveAttribute('datetime', created_at.replace('Z', '.000Z'))
+  })
+
+  it('omits an invalid creation date instead of inventing one', async () => {
+    setup({ requests: [{ id: 'x', title: 'Industrial suppliers', status: 'Active', created_at: 'not a date' }] })
+    await screen.findByRole('region', { name: /active pipeline/i })
+    expect(screen.queryByText(/^Created /)).not.toBeInTheDocument()
   })
 })

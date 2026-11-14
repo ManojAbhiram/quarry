@@ -55,7 +55,7 @@ function NavLinkItem({ item, pathname, collapsed }) {
  * or hidden; below 768px it is an off-canvas drawer with a backdrop, a focus trap and Escape-to-close.
  * `sidebar` is the state object from `useSidebar()`.
  */
-export default function Sidebar({ sidebar }) {
+export default function Sidebar({ sidebar, quiet = false }) {
   const { isMobile, width, mode, collapsed, drawerOpen, visible, setWidth, setMode, toggleRail, closeDrawer } = sidebar
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -118,7 +118,7 @@ export default function Sidebar({ sidebar }) {
         el.style.willChange = ''
       }
       if (!hidden) el.style.visibility = ''
-      if (!widthInit.current || draggingRef.current || reducedRef.current) {
+      if (!widthInit.current || draggingRef.current || reducedRef.current || quiet) {
         widthInit.current = true
         gsap.killTweensOf(el)
         gsap.set(el, { width: target })
@@ -137,7 +137,7 @@ export default function Sidebar({ sidebar }) {
         onComplete: done,
       })
     },
-    { scope: rootRef, dependencies: [isMobile, hidden, target] },
+    { scope: rootRef, dependencies: [isMobile, hidden, target, quiet] },
   )
 
   // 3. Mobile: the drawer slides in over a fading backdrop.
@@ -149,7 +149,7 @@ export default function Sidebar({ sidebar }) {
         drawerInit.current = false
         return
       }
-      const instant = !drawerInit.current || reducedRef.current
+      const instant = !drawerInit.current || reducedRef.current || quiet
       drawerInit.current = true
       const to = drawerOpen ? { xPercent: 0 } : { xPercent: -100 }
       const backTo = { opacity: drawerOpen ? 1 : 0 }
@@ -157,6 +157,7 @@ export default function Sidebar({ sidebar }) {
         if (!drawerOpen) setDrawerShown(false)
       }
       if (instant) {
+        gsap.killTweensOf([drawer, back])
         gsap.set(drawer, to)
         gsap.set(back, backTo)
         finish()
@@ -165,12 +166,18 @@ export default function Sidebar({ sidebar }) {
       gsap.to(drawer, { ...to, duration: 0.38, ease: 'power3.out', overwrite: true, onComplete: finish })
       gsap.to(back, { ...backTo, duration: 0.3, ease: 'power1.out', overwrite: true })
     },
-    { scope: rootRef, dependencies: [isMobile, drawerOpen] },
+    { scope: rootRef, dependencies: [isMobile, drawerOpen, quiet] },
   )
 
   // 4. Staggered entrance of the nav items on first mount and whenever the sidebar is shown again.
   useGSAP(
     () => {
+      if (quiet) {
+        const items = '[data-nav-item], [data-nav-link], [data-nav-icon]'
+        gsap.killTweensOf(items)
+        gsap.set(items, { clearProps: 'transform,opacity,visibility' })
+        return
+      }
       if (!visible || reducedRef.current) return
       gsap.from('[data-nav-item]', {
         x: -14,
@@ -181,7 +188,7 @@ export default function Sidebar({ sidebar }) {
         clearProps: 'transform,opacity,visibility',
       })
     },
-    { scope: rootRef, dependencies: [visible, isMobile] },
+    { scope: rootRef, dependencies: [visible, isMobile, quiet] },
   )
 
   // 5. One highlight pill that glides to whichever item is current.
@@ -190,6 +197,11 @@ export default function Sidebar({ sidebar }) {
       const nav = navRef.current
       const pill = pillRef.current
       if (!nav || !pill) return
+      if (quiet) {
+        gsap.killTweensOf(pill)
+        gsap.set(pill, { autoAlpha: 0 })
+        return
+      }
       if (!visible) return
       const active = nav.querySelector('[aria-current="page"]')
       if (!active) {
@@ -206,30 +218,30 @@ export default function Sidebar({ sidebar }) {
         gsap.to(pill, { ...vars, duration: 0.5, ease: 'power3.out', overwrite: true })
       }
     },
-    { scope: rootRef, dependencies: [pathname, collapsed, visible, isMobile] },
+    { scope: rootRef, dependencies: [pathname, collapsed, visible, isMobile, quiet] },
   )
 
   // Hover and press micro-interactions, delegated from the nav (event handlers need contextSafe).
   const linkOf = (event) => event.target.closest?.('[data-nav-link]')
   const onNavOver = contextSafe((event) => {
     const link = linkOf(event)
-    if (!link || reducedRef.current || event.pointerType === 'touch' || link.contains(event.relatedTarget)) return
+    if (!link || quiet || reducedRef.current || event.pointerType === 'touch' || link.contains(event.relatedTarget)) return
     gsap.to(link.querySelector('[data-nav-icon]'), { scale: 1.16, duration: 0.25, ease: 'back.out(2.5)', overwrite: 'auto' })
   })
   const onNavOut = contextSafe((event) => {
     const link = linkOf(event)
-    if (!link || link.contains(event.relatedTarget)) return
+    if (!link || quiet || link.contains(event.relatedTarget)) return
     gsap.to(link.querySelector('[data-nav-icon]'), { scale: 1, duration: 0.2, ease: 'power2.out', overwrite: 'auto', clearProps: 'transform' })
     gsap.to(link, { scale: 1, duration: 0.2, ease: 'power2.out', overwrite: 'auto', clearProps: 'transform' })
   })
   const onNavDown = contextSafe((event) => {
     const link = linkOf(event)
-    if (!link || reducedRef.current) return
+    if (!link || quiet || reducedRef.current) return
     gsap.to(link, { scale: 0.97, duration: 0.1, ease: 'power2.out', overwrite: 'auto' })
   })
   const onNavUp = contextSafe((event) => {
     const link = linkOf(event)
-    if (!link) return
+    if (!link || quiet) return
     gsap.to(link, { scale: 1, duration: 0.3, ease: 'back.out(3)', overwrite: 'auto', clearProps: 'transform' })
   })
 
@@ -358,12 +370,12 @@ export default function Sidebar({ sidebar }) {
         )}
       >
         <div className="relative flex h-full flex-col" style={innerWidth ? { width: innerWidth } : undefined}>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary-500/10 to-transparent" />
+          <div aria-hidden="true" className="sidebar-wash pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary-500/10 to-transparent" />
 
-          <div className={clsx('relative flex shrink-0 gap-2 px-3 pt-4', rail ? 'flex-col items-center' : 'items-center justify-between')} data-nav-item>
+          <div className={clsx('sidebar-brand relative flex shrink-0 gap-2 px-3 pt-4', rail ? 'flex-col items-center' : 'items-center justify-between')} data-nav-item>
             <Link to="/lead-requests" aria-label="Quarry home" className={clsx('flex items-center gap-2.5 rounded-xl', FOCUS_RING)}>
               <BrandLogo className="h-9 w-9" />
-              {!rail && <span className="text-lg font-black tracking-tight text-ink">Quarry</span>}
+              {!rail && <span className="quarry-wordmark text-lg font-black tracking-tight text-ink">Quarry</span>}
             </Link>
             {isMobile ? (
               <button ref={closeRef} type="button" aria-label="Close menu" onClick={closeDrawer} className={clsx('flex h-9 w-9 items-center justify-center rounded-xl text-muted transition-colors hover:bg-head hover:text-ink', FOCUS_RING)}>
@@ -382,7 +394,7 @@ export default function Sidebar({ sidebar }) {
             )}
           </div>
 
-          <div className="relative shrink-0 space-y-3 px-3 pt-4" data-nav-item>
+          <div className="sidebar-controls relative shrink-0 space-y-3 px-3 pt-4" data-nav-item>
             <Link
               to="/new-request"
               title={rail ? 'New request' : undefined}
@@ -399,14 +411,14 @@ export default function Sidebar({ sidebar }) {
               ref={pillRef}
               aria-hidden="true"
               data-testid="nav-pill"
-              className="pointer-events-none absolute inset-x-2 top-0 z-0 rounded-xl bg-primary-50 opacity-0 shadow-sm ring-1 ring-primary-200/70 before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-primary-600 dark:bg-primary-950/60 dark:ring-primary-900/60 dark:before:bg-primary-400"
+              className="sidebar-selection pointer-events-none absolute inset-x-2 top-0 z-0 rounded-xl bg-primary-50 opacity-0 shadow-sm ring-1 ring-primary-200/70 before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-primary-600 dark:bg-primary-950/60 dark:ring-primary-900/60 dark:before:bg-primary-400"
             />
             {NAV_SECTIONS.map((section, index) => (
               <div key={section.id} className={clsx(index > 0 && 'mt-4')}>
                 {rail ? (
                   index > 0 && <div aria-hidden="true" className="mx-3 mb-2 border-t border-line/70" />
                 ) : null}
-                <h2 className={clsx(rail ? 'sr-only' : 'px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted')}>{section.label}</h2>
+                <h2 className={clsx('sidebar-heading', rail ? 'sr-only' : 'px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted')}>{section.label}</h2>
                 <ul className="space-y-0.5" onPointerOver={onNavOver} onPointerOut={onNavOut} onPointerDown={onNavDown} onPointerUp={onNavUp} onPointerCancel={onNavUp}>
                   {section.items.map((item) => (
                     <NavLinkItem key={item.to} item={item} pathname={pathname} collapsed={rail} />
@@ -416,12 +428,12 @@ export default function Sidebar({ sidebar }) {
             ))}
           </nav>
 
-          <div className="relative shrink-0 border-t border-line/70 p-3" data-nav-item>
+          <div className="sidebar-account relative shrink-0 border-t border-line/70 p-3" data-nav-item>
             <div className={clsx('flex items-center gap-3', rail && 'flex-col')}>
               <span
                 aria-hidden="true"
                 title={rail ? name : undefined}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/70 bg-gradient-to-br from-primary-100 to-accent-200 text-xs font-bold text-primary-800 shadow-sm ring-1 ring-primary-200/60 dark:border-line dark:from-primary-950 dark:to-accent-900 dark:text-primary-300 dark:ring-primary-900/60"
+                className="account-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/70 bg-gradient-to-br from-primary-100 to-accent-200 text-xs font-bold text-primary-800 shadow-sm ring-1 ring-primary-200/60 dark:border-line dark:from-primary-950 dark:to-accent-900 dark:text-primary-300 dark:ring-primary-900/60"
               >
                 {initialsOf(user?.name || user?.email)}
               </span>

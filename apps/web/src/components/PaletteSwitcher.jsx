@@ -39,7 +39,7 @@ export default function PaletteSwitcher({ align = 'right' }) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Colour palette"
-        className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface/80 text-muted shadow-sm transition-all duration-200 hover:bg-surface hover:text-ink hover:shadow-md active:scale-95"
+        className="header-control flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface/80 text-muted shadow-sm transition-all duration-200 hover:bg-surface hover:text-ink hover:shadow-md active:scale-95"
       >
         <Palette aria-hidden="true" className="w-4 h-4" />
       </button>
@@ -47,7 +47,7 @@ export default function PaletteSwitcher({ align = 'right' }) {
       {open && (
         <div
           role="menu"
-          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full z-50 mt-2 w-64 animate-pop-in ${align === 'right' ? 'origin-top-right' : 'origin-top-left'} rounded-2xl border border-white/60 bg-surface/95 p-2 shadow-2xl shadow-primary-900/10 ring-1 ring-line/50 backdrop-blur-xl dark:border-line`}
+          className={`palette-menu absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full z-50 mt-2 w-64 animate-pop-in ${align === 'right' ? 'origin-top-right' : 'origin-top-left'} rounded-2xl border border-white/60 bg-surface/95 p-2 shadow-2xl shadow-primary-900/10 ring-1 ring-line/50 backdrop-blur-xl dark:border-line`}
         >
           <p className="px-3 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">Colour palette</p>
           {PALETTES.map((p) => {

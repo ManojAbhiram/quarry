@@ -55,7 +55,7 @@ export default function Menu({ label, button, children, align = 'right', classNa
         {button}
       </button>
       {open && (
-        <div id={panelId} className={clsx('absolute top-full z-50 mt-2 animate-pop-in rounded-2xl border border-white/60 bg-surface/95 shadow-2xl shadow-primary-900/10 ring-1 ring-line/50 backdrop-blur-xl dark:border-line', align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left', panelClassName)}>
+        <div id={panelId} className={clsx('menu-panel absolute top-full z-50 mt-2 animate-pop-in rounded-2xl border border-white/60 bg-surface/95 shadow-2xl shadow-primary-900/10 ring-1 ring-line/50 backdrop-blur-xl dark:border-line', align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left', panelClassName)}>
           {typeof children === 'function' ? children({ close: () => setOpen(false) }) : children}
         </div>
       )}

@@ -32,6 +32,27 @@ describe('UsageCard', () => {
     expect(await screen.findByText('3 of 30')).toBeInTheDocument()
     expect(screen.getByRole('progressbar', { name: 'Runs' })).toHaveAttribute('aria-valuenow', '10')
     expect(screen.getByText('$0.50 of $20.00')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Runs' }).firstElementChild).toHaveStyle({ width: '10%' })
+  })
+
+  it('uses an accessible transform meter in the dashboard without animating layout', async () => {
+    api.getUsageSummary.mockResolvedValue(summary)
+    render(<UsageCard dashboard />)
+    await screen.findByText('3 of 30')
+    const meter = screen.getByRole('progressbar', { name: 'Runs' })
+    expect(meter).toHaveAttribute('aria-valuetext', '3 of 30')
+    expect(meter.firstElementChild).toHaveStyle({ transform: 'scaleX(0.1)' })
+    expect(meter.firstElementChild.style.width).toBe('')
+  })
+
+  it('caps an over-quota dashboard meter and retains its warning', async () => {
+    api.getUsageSummary.mockResolvedValue({ ...summary, runs: 31 })
+    render(<UsageCard dashboard />)
+    await screen.findByText('31 of 30')
+    const meter = screen.getByRole('progressbar', { name: 'Runs' })
+    expect(meter).toHaveAttribute('aria-valuenow', '100')
+    expect(meter.firstElementChild).toHaveStyle({ transform: 'scaleX(1)' })
+    expect(meter.firstElementChild).toHaveClass('bg-bad')
   })
 
   it('shows an error with retry', async () => {
