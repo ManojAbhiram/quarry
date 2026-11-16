@@ -16,7 +16,6 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from app.core.config import settings
 from app.services.signals.job_signals import detect_job_signals
 from app.services.signals.funding_signals import detect_funding_signals
 from app.services.signals.news_signals import detect_news_signals
@@ -69,7 +68,7 @@ Detected signals:
 Write a 2-3 sentence paragraph explaining why this company is classified as {band} and what the key signals mean for an SDR planning outreach.  Be specific and actionable."""
 
     summary = await _llm_text_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=200,

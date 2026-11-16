@@ -14,7 +14,6 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from app.core.config import settings
 from app.services.serper import fetch_leads_from_serper
 
 logger = logging.getLogger("app.services.signals.social_signals")
@@ -72,7 +71,7 @@ Rules:
 """
 
     parsed = await _llm_json_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=500,

@@ -68,13 +68,19 @@ async def scoring_submit(body: ScoreIn, user: dict = Depends(get_current_user)):
         raise HTTPException(404, "Request not found")
     leads = await _leads.find(_leads.model.request_id == body.request_id, _leads.model.user_id == uid, limit=500)
     try:
-        return {"batch_id": await claude_scoring.submit(leads, body.icp), "leads": len(leads)}
+        batch_id = await claude_scoring.submit(leads, body.icp)
+        await TABLES['users'].modify(uid, lambda doc: {'ai_scoring_batches': {
+            **doc.get('ai_scoring_batches', {}), batch_id: {'request_id': body.request_id},
+        }})
+        return {"batch_id": batch_id, "leads": len(leads)}
     except claude_scoring.Disabled as exc:
         raise HTTPException(409, str(exc)) from exc
 
 
 @router.get("/scoring/batch/{batch_id}")
 async def scoring_collect(batch_id: str, apply: Optional[bool] = False, user: dict = Depends(get_current_user)):
+    if batch_id not in user.get('ai_scoring_batches', {}):
+        raise HTTPException(404, 'Scoring batch not found')
     try:
         res = await claude_scoring.collect(batch_id)
     except claude_scoring.Disabled as exc:

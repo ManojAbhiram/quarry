@@ -5,12 +5,15 @@ from fastapi import HTTPException
 
 from app.db.competitors import insert_competitors_request
 from app.services.product_similarity import run_similarity_pipeline
+from app.services.connections import bind_owner, require_connection
 
 logger = logging.getLogger("app.services.competitor_service")
 
 
+@bind_owner
 async def run_competitor_pipeline(request_id: str, product_description: str, user_id: str) -> None:
     """Background task: run the full competitor similarity pipeline."""
+    require_connection()
     await run_similarity_pipeline(request_id, product_description, user_id)
 
 

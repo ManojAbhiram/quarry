@@ -6,7 +6,7 @@ Quarry ships as two containers: `api` (FastAPI, SQLite) and `web` (static React 
 ## Run locally, production-like
 
 ```bash
-cp .env.production.example .env.production   # set SECRET_KEY and SERPER_API_KEY at minimum
+cp .env.production.example .env.production   # set SECRET_KEY; users add service keys in Account settings
 docker compose up --build
 ```
 
@@ -27,3 +27,5 @@ docker compose up --build
   `--build-arg VITE_API_URL=https://api.example.com/api`.
 * Terminate TLS in front of the containers (load balancer or reverse proxy); nginx here listens on plain HTTP.
 * Out of scope for now: Postgres, mailbox OAuth for Gmail/Microsoft.
+
+* Keep SECRET_KEY stable: it encrypts users' stored provider keys. Existing operator provider keys must be re-entered by each user in Account; there is no automatic migration of shared credentials. See [the metadata rollout limitation](docs/user-api-connections.md) before deploying this change.

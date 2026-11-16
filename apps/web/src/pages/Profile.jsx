@@ -9,6 +9,7 @@ import ConfirmDialog from './requests/ConfirmDialog'
 import Section from './profile/Section'
 import VerifierSettings from './profile/VerifierSettings'
 import UsageCard from '../components/UsageCard'
+import AIConnectionSettings from './profile/AIConnectionSettings'
 
 const FIELD_MAX = 100
 const PHONE_RE = /^[+()\d][\d\s().+-]{4,29}$/
@@ -238,7 +239,7 @@ export default function Profile() {
                 )}
                 {serper.state === 'ready' && serper.has_key && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-ok-soft px-3 py-1 font-semibold text-ok ring-1 ring-inset ring-ok/20">
-                    <CheckCircle2 aria-hidden="true" className="h-4 w-4" /> Connected
+                    <CheckCircle2 aria-hidden="true" className="h-4 w-4" /> Key saved (unverified)
                     {serper.masked && <code className="ml-1 break-all rounded bg-surface/70 px-1.5 py-0.5 font-mono text-xs text-ink">{serper.masked}</code>}
                   </span>
                 )}
@@ -253,7 +254,7 @@ export default function Profile() {
                 value={keyInput}
                 disabled={keySaving}
                 placeholder={serper.has_key ? 'Enter a new key to replace' : 'Paste your Serper.dev API key'}
-                hint="Get a key at serper.dev. It is stored encrypted and never shown again."
+                hint="Get a key at serper.dev. Stored encrypted. Saving does not run a search or verify the key; your next requested search may use credits."
                 error={keyError}
                 onChange={(e) => {
                   setKeyInput(e.target.value)
@@ -275,6 +276,7 @@ export default function Profile() {
 
           <VerifierSettings />
 
+          <AIConnectionSettings />
           <div data-reveal><UsageCard /></div>
 
           <Section id="privacy-compliance" title="Privacy and compliance" description="Manage your suppression list, erase a person's data, and read how Quarry handles personal data." icon={ShieldAlert}>

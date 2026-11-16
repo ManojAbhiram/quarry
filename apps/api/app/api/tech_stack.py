@@ -1,12 +1,13 @@
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from app.services.auth import get_current_user
 
 from app.core.logger import logger
 from app.schemas.tech_stack import TechStackDetectionRequest, TechStackDetectionResponse
 from app.services.tech_stack import detect_full_tech_profile
 
-router = APIRouter(prefix="/tech-stack", tags=["tech-stack"])
+router = APIRouter(prefix="/tech-stack", tags=["tech-stack"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/detect", response_model=TechStackDetectionResponse)

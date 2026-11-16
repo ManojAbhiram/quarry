@@ -202,7 +202,10 @@ async def _execute(job: dict) -> None:
         return
     token = current_job_id.set(job_id)
     try:
-        result = await handler(job.get("payload") or {})
+        from app.services.connections import owner_scope
+
+        async with owner_scope(job.get('owner_id')):
+            result = await handler(job.get("payload") or {})
         await _finish(job_id, {"status": SUCCEEDED, "finished_at": now_fn(), "result": result, "error": None})
         logger.info("Job %s (%s) succeeded", job_id, kind)
     except asyncio.CancelledError:

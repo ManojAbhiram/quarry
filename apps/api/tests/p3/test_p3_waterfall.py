@@ -164,7 +164,7 @@ class FakeBatch:
 
 
 def test_batch_requests_share_a_cached_system_block():
-    reqs = claude_scoring.build_requests([{"_id": "a", "title": "A"}, {"_id": "b", "title": "B"}], "SaaS CTOs")
+    reqs = claude_scoring.build_requests([{"_id": "a", "title": "A"}, {"_id": "b", "title": "B"}], "SaaS CTOs", model='test-owner-model')
     assert [r["custom_id"] for r in reqs] == ["a", "b"]
     system = reqs[0]["params"]["system"]
     assert system[0]["cache_control"] == {"type": "ephemeral"} and system == reqs[1]["params"]["system"]
@@ -196,6 +196,8 @@ async def test_batch_scoring_submit_collect_apply_with_flag(api, signup, monkeyp
     fake = FakeBatch()
     monkeypatch.setattr(claude_scoring.ports, "client", fake)
     h, uid = await signup()
+    from app.core.security_crypto import encrypt_secret
+    await TABLES['users'].update(uid, {'ai_connection': {'provider': 'anthropic', 'key_encrypted': encrypt_secret('owner-key'), 'primary_model': 'owner-model'}})
     req = await TABLES["requests"].insert({"user_id": uid})
     lead_a = await TABLES["leads"].insert({"request_id": req, "user_id": uid, "url": "https://a.test", "title": "A", "match_score": 1.0})
     sub = (await api.post("/api/enrichment/scoring/batch", headers=h, json={"request_id": req, "icp": "icp"})).json()
@@ -220,4 +222,4 @@ async def test_enabled_without_credentials_reports_cleanly(api, signup, monkeypa
     h, uid = await signup()
     req = await TABLES["requests"].insert({"user_id": uid})
     r = await api.post("/api/enrichment/scoring/batch", headers=h, json={"request_id": req})
-    assert r.status_code == 409 and "ANTHROPIC_API_KEY" in r.text
+    assert r.status_code == 409 and "Account" in r.text

@@ -1,3 +1,4 @@
+from app.services.onboarding import new_tour
 from app.core.logger import logger
 from app.db.users import (
     find_user_by_google_or_email,
@@ -25,6 +26,7 @@ async def find_or_create_google_user(google_id: str, email: str, name: str) -> t
         return user_id, user
 
     doc = {
+        "onboarding": new_tour(),
         "email": email,
         "name": name,
         "google_id": google_id,

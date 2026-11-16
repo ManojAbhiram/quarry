@@ -150,6 +150,13 @@ async def user_domains(user_id: str) -> dict[str, dict]:
 
 
 async def scan_user(user_id: str, kinds: tuple[str, ...] = KINDS) -> dict:
+    from app.services.connections import owner_scope
+
+    async with owner_scope(user_id):
+        return await _scan_user(user_id, kinds)
+
+
+async def _scan_user(user_id: str, kinds: tuple[str, ...] = KINDS) -> dict:
     domains = await user_domains(user_id)
     found = {"hiring": 0, "funding": 0, "tech": 0, "news": 0, "domains": 0}
     for domain, info in list(domains.items())[:MAX_DOMAINS_PER_SCAN]:

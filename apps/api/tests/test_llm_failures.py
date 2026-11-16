@@ -1,7 +1,6 @@
 """LLM failures must be observable: logged, typed, and recorded on the lead (no silent blanks)."""
 import json
 import logging
-from types import SimpleNamespace
 
 import pytest
 
@@ -10,11 +9,13 @@ from app.services.llm import LLMCompletionError
 
 
 def _resp(content, model="m"):
-    return SimpleNamespace(model=model, choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+    return content
 
 
 def _patch(monkeypatch, fn):
-    monkeypatch.setattr(llm, "acompletion", fn)
+    async def completion(*args):
+        return await fn(model=args[0])
+    monkeypatch.setattr(llm, "complete", completion)
 
 
 async def _call(**kw):
@@ -67,18 +68,17 @@ async def test_raise_on_error_empty_and_unparseable(monkeypatch):
     assert ei.value.reason in ("parse_error", "empty_response")
 
 
-async def test_json_mode_failure_then_text_mode_success(monkeypatch):
+async def test_provider_failure_does_not_retry_inference(monkeypatch):
     calls = []
 
     async def flaky(**kw):
-        calls.append("response_format" in kw)
-        if "response_format" in kw:
-            raise RuntimeError("json mode unsupported")
-        return _resp('{"ok": true}')
+        calls.append(kw)
+        raise RuntimeError('upstream unavailable')
 
     _patch(monkeypatch, flaky)
-    assert await _call(raise_on_error=True) == {"ok": True}
-    assert calls == [True, False]
+    with pytest.raises(LLMCompletionError):
+        await _call(raise_on_error=True)
+    assert len(calls) == 1
 
 
 async def test_extract_lead_marks_failure_instead_of_dropping(monkeypatch):

@@ -17,7 +17,7 @@ No database server is needed: the API creates a SQLite file (`apps/api/quarry.db
 ```bash
 # API  (http://localhost:8000)
 cd apps/api
-cp .env.example .env        # then set SECRET_KEY, SERPER_API_KEY and an LLM key
+cp .env.example .env        # then set SECRET_KEY; configure your provider keys in Account
 uv sync
 uv run uvicorn app.main:app --reload
 
@@ -43,3 +43,11 @@ CI (`.github/workflows/ci.yml`) runs all of the above on pushes and pull request
 
 The web app ships seven palettes (Quarry, Midnight, Amethyst, Emerald, Sunset, Rosewood, Graphite). Pick one with the
 palette button in the header; it is saved in the browser. Palettes are defined in `apps/web/src/config/palettes.js`.
+
+## Personal API connections and introduction
+
+New password and Google accounts receive a six-stop introduction. Existing accounts are not enrolled. Skip or finish persists per account; an interrupted introduction offers Resume on a later session.
+
+Account settings stores each user's Serper and AI provider credentials encrypted. Saving a key never performs a test search or generation. AI providers are OpenAI, Anthropic, Gemini, Groq, OpenRouter and DeepSeek, called directly; primary and optional fast models replace global model settings. Background work reloads the owner's keys. Operator provider keys and LiteLLM fallbacks are no longer used.
+
+**Current rollout:** OpenRouter model discovery is enabled through its documented anonymous public catalogue. In Account, save an OpenRouter key, refresh models, choose a primary/optional fast model and save those choices. Discovery never sends the saved key or performs generation; credentials and model access stay unverified. The other five providers remain deferred under the strict metadata billing rule. See [connection rollout notes](docs/user-api-connections.md) and the [reviewed metadata policy](docs/provider-metadata-policy.md).

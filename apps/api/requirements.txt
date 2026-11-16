@@ -4,7 +4,6 @@ httpx
 requests
 beautifulsoup4
 pydantic[email]
-litellm
 sqlalchemy[asyncio]
 aiosqlite
 playwright

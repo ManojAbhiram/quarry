@@ -68,15 +68,8 @@ class Settings:
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     PASSWORD_RESET_EXPIRE_MINUTES: int = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "15"))
 
-    # LLM Settings
-    LITELLM_MODEL: str = os.getenv("LITELLM_MODEL", "openrouter/meta-llama/llama-3.3-70b-instruct")
-    LITELLM_MODEL_MINI: str = os.getenv("LITELLM_MODEL_MINI", "openrouter/meta-llama/llama-3.1-8b-instruct")
-    LITELLM_FALLBACK_MODELS: list[str] = [
-        m.strip() for m in os.getenv("LITELLM_FALLBACK_MODELS", "groq/llama-3.3-70b-versatile").split(",") if m.strip()
-    ]
-
     # Serper
-    SERPER_API_KEY: str = _require("SERPER_API_KEY")
+    # Search credentials belong to users; an operator key is never used.
     SERPER_URL: str = "https://google.serper.dev/search"
 
     # LLM call tuning (defaults match prior in-code literals)
