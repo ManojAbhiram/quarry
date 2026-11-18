@@ -1,8 +1,12 @@
+# Quarry Test Strategy and Quality Assurance
+
+[Documentation index](../README.md)
+
 | | |
 |---|---|
 | **Document** | What is tested, how, and what is still unverified |
-| **Version** | 1.0 |
-| **Date** | 2026-11-10 |
+| **Document revision** | 1.1 |
+| **Last reviewed** | 2026-11-18 |
 
 ---
 
@@ -15,12 +19,12 @@
 
 # 2. Test pyramid
 
-| Level | Tooling | Count | What it covers |
+| Level | Tooling | Execution | What it covers |
 |---|---|---|---|
-| Backend unit and integration | pytest | 478 collected | Pipeline, jobs, scoring, exports, LLM failure paths, auth and CSRF, ownership, SSRF, migrations, billing, outreach, watch, waterfall, compliance |
-| Frontend component and page | Vitest and Testing Library | 375 passing in 39 files | Pages, dialogs, forms, states, accessibility behaviors |
-| Static analysis | ruff, eslint | Every push | Style and common defects |
-| Build | `vite build` | Every push | The production bundle compiles |
+| Backend unit and integration | pytest | CI and local runs | Pipeline, jobs, scoring, exports, LLM failure paths, auth and CSRF, ownership, SSRF, migrations, billing, outreach, watch, waterfall, compliance |
+| Frontend component and page | Vitest and Testing Library | CI and local runs | Pages, dialogs, forms, states, accessibility behaviors |
+| Static analysis | ruff, eslint | CI and local runs | Style and common defects |
+| Build | `vite build` | CI and local runs | The production bundle compiles |
 | Browser QA | Manual and scripted passes | Two passes recorded | Real flows in a browser; findings logged in `TODOS.md` |
 | End-to-end against live services | None automated | n/a | **Gap**, see section 6 |
 
@@ -32,7 +36,7 @@
   providers. Each integration sits behind a port (an HTTP client protocol, a `PaymentProvider`, a `CrmConnector`), and
   tests inject a fake.
 * The frontend mocks the API module and asserts on roles, labels and visible states, not implementation details.
-* CI (`.github/workflows/ci.yml`) runs on pushes and pull requests: ruff, pytest, eslint, vitest and the web build.
+* CI (`.github/workflows/ci.yml`) runs on pull requests and configured push events: ruff, pytest, eslint, vitest and the web build.
 
 # 4. Coverage map
 
@@ -50,15 +54,22 @@
 | Outreach logic, footer, flow, mailbox connection, watch, waterfall, integrations | `tests/p3/*` |
 | Teams, billing, top-ups, CRM, invite email, background work | `tests/growth/*` |
 | Deployment environment | `test_deployment_env.py` |
+| Personal AI and Serper keys, encryption, revisions, disconnect | `test_user_connections.py` |
+| Six direct provider protocols, anonymous discovery, capability eligibility | `test_user_connections.py` |
+| Concurrent user scopes, background reload and cleanup, missing connections | `test_connection_entrypoints.py` |
+| New-account introduction, eligibility, terminal progress | `test_user_connections.py` |
+| Account connection and introduction UI | `AIConnectionSettings.test.jsx`, `Profile.test.jsx`, `WelcomeTour.test.jsx`, `AuthContext.test.jsx` |
 | Frontend pages and dialogs | `*.test.jsx` beside each page, including mailbox test connection and regression tests |
 
-# 5. Defect history and what it taught
+Test totals change as coverage grows. Use the current pytest and Vitest output or CI artifacts for counts and pass/fail status; historical totals in implementation records are not a current quality signal. Mocked transports establish application contracts, not live provider compatibility, account entitlement, or remaining credits.
+
+# 5. Defect history and lessons
 
 Browser QA passes found issues that mocked tests did not. Each was fixed and, where possible, covered by a test.
 
 | Finding | Lesson |
 |---|---|
-| A hot-reloading dev server created a table with another phase's columns mid-merge and Billing returned HTTP 500 | `create_all` never alters tables: added the versioned migration runner and a unique-table-name test |
+| A development database had a schema mismatch and Billing returned HTTP 500 | `create_all` never alters tables: added the versioned migration runner and a unique-table-name test |
 | A mailbox with an unreachable host saved without any check | Added "Test connection" before saving |
 | Team invite blocked the request about 4 seconds while SMTP was tried | Send in the background and return an `email_status` |
 | Error toasts covered the primary button of the form above | Toasts moved to the top |
@@ -93,7 +104,9 @@ A change may merge when:
 | Flow | Steps | Expected |
 |---|---|---|
 | Sign-up and login | Register, log out, log in, Google sign-in | Cookies set; protected pages load; logout clears them |
-| Launch a run | Wizard, estimate, launch | 202, live progress, results appear, status Completed |
+| Personal connections | Save Serper and OpenRouter keys; refresh catalogue; select/save models; replace/disconnect | No search or inference on save; catalogue is anonymous; key replacement clears selections; unsupported verification preserves them |
+| Introduction | New password/Google signup, skip/finish, refresh, later resume, legacy login, stale tab | Six stops; account-owned progress; no automatic search, generation, request creation, or re-enrollment |
+| Launch a run | Configure personal keys/models, then wizard, estimate, launch | 202, live progress, results appear, status Completed |
 | Failure visible | Use a bad Serper key | Request Failed with a reason; partial leads kept |
 | Enrichment retry | Force an LLM failure, press Retry | Lead updates in place |
 | Export | CSV, XLSX, PDF from a request and a list | Files open; source-notice line present; suppressed contacts absent |

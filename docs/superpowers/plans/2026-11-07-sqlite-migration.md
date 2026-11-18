@@ -1,6 +1,7 @@
 # MongoDB → SQLite Migration Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Historical record.** Retained for design context. Descriptions, proposed steps, and validation results below reflect the original work and may differ from the current implementation. Use the [documentation index](../../README.md) for current product behavior.
+
 
 **Goal:** Replace MongoDB (Motor) with SQLite via SQLAlchemy 2.0 async so Quarry's backend runs with no database server, with no change to API behavior or the frontend.
 
@@ -157,7 +158,7 @@ Failure modes the spec implies that most need a pinning test (each is added to t
 - [ ] **Step 2: Walk the UI** at `http://localhost:3000` (Chrome tools): sign up → log out → log in → create a lead request/campaign → open its details page → create a lead list → add a lead to it (use a request that has leads if API keys allow; otherwise insert a lead through the repository in a Python shell) → delete the request. Expected: no error toasts, no 500s in the backend log.
 - [ ] **Step 3: Fix** any failure with a failing test first (return to the owning task's test file), then re-run `pytest -q`.
 - [ ] **Step 4: Confirm the gate**: `git grep -inE "mongo|motor|pymongo|bson" -- . ":!docs"` prints nothing.
-- [ ] **Step 5: Commit any fixes and push** `git push origin main`; expected: remote `main` equals local `HEAD` (`git ls-remote origin`).
+- [ ] **Step 5: Commit any fixes and push** publish the verified changes through the repository review workflow.
 
 ---
 

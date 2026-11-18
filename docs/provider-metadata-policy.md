@@ -1,4 +1,6 @@
-# Provider metadata policy
+# Provider Metadata Policy
+
+[Documentation index](README.md)
 
 Reviewed on 2026-11-16. This document records exactly which setup calls Quarry enables and why. It is not a blanket assertion that a provider's GET endpoints are free.
 

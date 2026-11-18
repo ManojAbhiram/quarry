@@ -1,4 +1,6 @@
-# Personal API connections rollout
+# Personal API Connections
+
+Last reviewed: 18 November 2026. Audience: users, administrators, and integration developers.
 
 ## Account flow
 
@@ -15,7 +17,7 @@ Keys are encrypted using the existing application SECRET_KEY. No plaintext keys 
 
 `app/services/ai_providers.py` keeps authenticated `METADATA_POLICIES` empty. OpenRouter has a separate `PUBLIC_CATALOGUE_POLICIES` entry for its documented headerless model-list endpoint. That request cannot use the saved connection key's credits because the transport never sends the key, authentication or cookies. This is a technical account-credit isolation conclusion, not an explicit vendor guarantee that all metadata calls are free.
 
-**OpenRouter setup can now finish and explicit AI work can use its selected models.** No test generation is required; the key may still be rejected during an explicitly requested AI task. Verify credentials is disabled with an explanation, and the verification API performs no call or catalogue reset. New connections default to the provider with enabled discovery. Other providers clearly explain that model setup is deferred.
+OpenRouter supports model selection for explicitly requested AI work. No test generation is required; the key may still be rejected during an explicitly requested AI task. Verify credentials is disabled with an explanation, and the verification API performs no call or catalogue reset. New connections default to the provider with enabled discovery. Other providers explain that model setup is deferred.
 
 Enable protected metadata only after reviewing its specific endpoint's billing documentation and recording the evidence, or after explicit product-owner approval to relax the restriction. See [provider metadata policy](provider-metadata-policy.md) for sources, exact enabled/disabled routes and the distinction between public discovery and credential verification. Tests injecting protected policies are isolated fixtures, not production approval.
 

@@ -1,6 +1,7 @@
 # User API Connections Implementation Plan
 
-> **For agentic workers:** Use superpowers:executing-plans to implement task-by-task. User requested implementation in the current workspace; preserve the untracked source spec.
+> **Historical record.** Retained for design context. Descriptions, proposed steps, and validation results below reflect the original work and may differ from the current implementation. Use the [documentation index](../../README.md) for current product behavior.
+
 
 **Goal:** Implement encrypted per-user direct AI connections and a first-signup application tour.
 
@@ -8,7 +9,7 @@
 
 **Tech Stack:** FastAPI, httpx, SQLAlchemy document storage, React, Vitest, pytest.
 
-**Spec:** ../specs/2026-11-14-user-api-connections-design.md
+**Spec:** [Personal connections design](../specs/2026-11-14-user-api-connections-design.md)
 
 ## Reference and decisions
 
@@ -42,11 +43,11 @@ Offline regression tests cover anonymous discovery, failure-without-auth-fallbac
 
 Follow-up verification: 38 focused backend tests passed; the complete backend suite finished with 514 passed, 1 skipped and the same existing missing-timezone-data failure in `test_next_window_slot_waits_for_weekday_and_open_hours`. The complete frontend suite passed all 409 tests. Production build and Ruff passed; frontend lint passed with the same 12 existing warnings. The focused independent review found no important bugs. Authenticated metadata remains deferred because the optional question about relaxing its billing restriction has no answer; no paid inference or user credential was used.
 
-Commit/push verification: added the missing Windows `tzdata` dependency to pyproject, consistent with the existing requirements.txt entry, and refreshed uv.lock. The previously failing timezone regression passes. Full backend suite: 515 passed, 1 skipped; full frontend suite: 409 passed. Four additional tests pass for concurrent authenticated AI/Serper scopes, worker cleanup after failure, refresh failure preserving selections, and the real batch HTTP transport using owner credentials and encoded identifiers. Ruff, frontend lint (12 existing warnings), build and whitespace checks pass. Source/security and plan/docs reviews found no blockers. Changes are published on a feature branch only; no deployment or merge is part of this request.
+Commit/push verification: added the missing Windows `tzdata` dependency to pyproject, consistent with the existing requirements.txt entry, and refreshed uv.lock. The previously failing timezone regression passes. Full backend suite: 515 passed, 1 skipped; full frontend suite: 409 passed. Four additional tests pass for concurrent authenticated AI/Serper scopes, worker cleanup after failure, refresh failure preserving selections, and the real batch HTTP transport using owner credentials and encoded identifiers. Ruff, frontend lint (12 existing warnings), build and whitespace checks pass. Source/security and plan/docs reviews found no blockers. This record does not establish a production deployment.
 
 ### Initial implementation record
 
-Implemented in the existing develop workspace at the user's request; no commits, push, migration of operator secrets, live provider calls or deployments. The original untracked spec is preserved unchanged.
+Implemented in the existing workspace at the user's request; no commits, push, migration of operator secrets, live provider calls or deployments. The original untracked spec is preserved unchanged.
 
 Ruling: keep metadata policies disabled while billing guarantees remain undocumented. The asynchronous question about permitting metadata-only calls has not been answered. This blocks model discovery/selection for new connections and is explicitly shown in Account and documented in README and docs/user-api-connections.md. The code implementation is reviewable; a fully usable AI-provider rollout remains incomplete until this restriction is resolved.
 

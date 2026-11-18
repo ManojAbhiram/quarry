@@ -1,16 +1,18 @@
+# Quarry Product Requirements
+
+[Documentation index](../README.md)
+
 | | |
 |---|---|
 | **Product** | Quarry, AI-assisted B2B lead generation |
 | **Document** | Product Requirements Document (PRD) |
-| **Version** | 1.0 |
-| **Date** | 2026-11-10 |
-| **Status** | Feature-complete for roadmap phases 1 to 4, pre-hosting |
+| **Document revision** | 1.1 |
+| **Last reviewed** | 2026-11-18 |
+| **Status** | Core capabilities implemented; provider setup limitations and launch requirements remain |
 | **Owner** | Manoj Abhiram |
 
-> **How to read this document.** Statements about what the product does come from the current code and are marked
-> *Built*. Statements about users, market and pricing are *hypotheses*: the concierge-pilot design doc records that no
-> customer conversations have happened yet, so nothing here claims demand has been proven. Competitor facts come from
-> `reports/Quarry next feature roadmap.md`, which draws on vendor-authored sources and is directional only.
+> **How to read this document.** Statements about implemented capabilities come from the repository. *Built* identifies code coverage, not a production-readiness certification. Statements about users, market and pricing are *hypotheses*: the concierge-pilot design doc records that no
+> customer conversations had been recorded at that stage, so nothing here claims demand has been proven. Market comparisons are planning assumptions, not verified purchasing advice. See the [historical pilot proposal](../designs/quarry-concierge-pilot.md) for the original context.
 
 ---
 
@@ -109,7 +111,7 @@ Role order is `owner > admin > member > viewer`; API dependencies enforce a mini
 
 # 5. Product scope and requirements
 
-Priority key: **P0** launch-critical, **P1** important, **P2** later. Status: **Built** is implemented and tested; **Partial** means implemented with a known limit; **Open** is not done.
+Priority key: **P0** launch-critical, **P1** important, **P2** later. Status: **Built** is implemented with automated test coverage; **Partial** means implemented with a known limit; **Open** is not done.
 
 ## 5.1 Accounts and access (FR-A)
 
@@ -121,7 +123,9 @@ Priority key: **P0** launch-critical, **P1** important, **P2** later. Status: **
 | FR‑A4 | HttpOnly cookie sessions with rotating refresh tokens and CSRF protection on writes | P0 | Built |
 | FR‑A5 | Bearer-token access for API clients | P1 | Built |
 | FR‑A6 | Rate limiting on login, register and reset; uniform error messages | P0 | Built |
-| FR‑A7 | Delete account and cascade-delete the user's personal data | P0 | Built |
+| FR‑A7 | Delete account, requests, research data, lists, and sessions; automation and external copies require separate cleanup | P0 | Partial |
+| FR‑A8 | Encrypted personal Serper and direct AI connections with primary and optional fast models | P0 | Partial: OpenRouter model setup enabled; five providers deferred |
+| FR‑A9 | Six-stop introduction for new password and Google accounts, with persisted resume, completion, and dismissal | P1 | Built |
 
 **Acceptance (FR-A4).** A cookie-authenticated POST without a matching `X-CSRF-Token` returns 403. A refresh token
 presented as an access token is rejected. Logout deletes the server-side session and clears cookies.
@@ -158,7 +162,7 @@ presented as an access token is rejected. Logout deletes the server-side session
 | FR‑L6 | Per-field provenance: source URL and collection date, shown in the UI | P0 | Built |
 | FR‑L7 | Region flag per lead (EU, UK, CA, IN) with a compliance note | P1 | Built |
 | FR‑L8 | Waterfall email enrichment across scrape, Hunter, Snov and People Data Labs, charged per success | P1 | Built |
-| FR‑L9 | Batch AI scoring job | P2 | Built |
+| FR‑L9 | Optional Anthropic batch scoring using the account owner's connection and selected model | P2 | Partial: feature flag and configured Anthropic connection required; new model setup deferred |
 | FR‑L10 | Competitor discovery and comparison for the user's own product | P2 | Built |
 
 ## 5.4 Lists, export and sharing (FR-X)
@@ -169,7 +173,7 @@ presented as an access token is rejected. Logout deletes the server-side session
 | FR‑X2 | Export companies, competitors, decision makers and lists as CSV, XLSX or PDF | P0 | Built |
 | FR‑X3 | CSV carries a source-notice line and opt-out instruction | P1 | Built |
 | FR‑X4 | Share requests and lists with a workspace (read access for teammates) | P1 | Built |
-| FR‑X5 | Suppressed contacts never appear in an export | P0 | Built |
+| FR‑X5 | Standard server company, contact, and list exports apply owner suppression checks; local CSV and integration handoffs require separate review | P0 | Partial |
 
 ## 5.5 Outreach (FR-O)
 
@@ -232,9 +236,9 @@ placeholders set in code and **have not been validated with customers**.
 
 | ID | Requirement | Pri | Status |
 |---|---|---|---|
-| FR‑C1 | Workspace-wide suppression ledger checked before enrichment, export and send | P0 | Built |
+| FR‑C1 | Owner-scoped suppression ledger checked before supported enrichment, standard server exports, and send operations | P0 | Built |
 | FR‑C2 | Public opt-out page and signed opt-out links | P0 | Built |
-| FR‑C3 | Person-level erasure tool | P0 | Built |
+| FR‑C3 | Owner-scoped erasure of matching decision makers and company contact fields; external copies and outreach history require separate handling | P0 | Partial |
 | FR‑C4 | Audit log of compliance-relevant actions | P0 | Built |
 | FR‑C5 | 30-day retention purge for rejected and unpromoted leads | P1 | Built |
 | FR‑C6 | Reject and restore a lead | P1 | Built |
@@ -245,14 +249,15 @@ placeholders set in code and **have not been validated with customers**.
 
 ## 6.1 Journey A: first list in one session
 
-1. Sign up (email or Google).
-2. Create a request: describe the product and buyer. Optionally paste a URL or document to seed the ICP.
-3. Review and edit the generated ICP in the wizard.
-4. See a cost and time estimate. Optionally run a small sample first.
-5. Launch. The request page shows live progress; the user can leave and return.
-6. Review leads: match score, tech stack, signals, decision makers, email status with source and date.
-7. Star, exclude or reject leads; add keepers to a list.
-8. Export a CSV, or continue to journey B.
+1. Sign up (email or Google); new accounts receive a skippable six-stop introduction.
+2. In Account settings, save a personal Serper key and configure an AI connection. For OpenRouter, refresh the public catalogue, select a primary model and optional fast model, and save the model choices. Saving credentials does not test them or start research.
+3. Create a request: describe the product and buyer. Optionally paste a URL or document to seed the ICP.
+4. Review and edit the generated ICP in the wizard.
+5. See a cost and time estimate. Optionally run a small sample first.
+6. Launch. The request page shows live progress; the user can leave and return.
+7. Review leads: match score, tech stack, signals, decision makers, email status with source and date.
+8. Star, exclude or reject leads; add keepers to a list.
+9. Export a CSV, or continue to journey B.
 
 ## 6.2 Journey B: from list to conversation
 
@@ -266,8 +271,8 @@ placeholders set in code and **have not been validated with customers**.
 ## 6.3 Journey C: a recipient opts out
 
 1. The recipient clicks Unsubscribe in the footer or the one-click header.
-2. A signed token adds them to the workspace suppression ledger and records an audit entry.
-3. Future enrichment, export and sends skip them. They can be erased entirely by an admin.
+2. A signed token adds them to the sender's suppression ledger and records an audit entry.
+3. Supported enrichment, standard server exports, and future sends check that sender's suppressions. The account owner can erase matching research contact data; other accounts and external copies need separate handling.
 
 # 7. Non-functional requirements
 
@@ -314,7 +319,7 @@ LLM-extracted contacts is unmeasured. The roadmap proposes a labelled set of 100
 
 1. A niche exists where live-web data beats stale databases.
 2. Buyers will pay per request or per month for transparent, reviewed lists.
-3. Users accept bringing their own Serper key, or an operator-paid key at a marked-up credit price.
+3. Users accept configuring their own Serper and AI provider credentials; no operator credential fallback is available.
 
 ## 9.3 Risk register
 
@@ -331,13 +336,13 @@ LLM-extracted contacts is unmeasured. The roadmap proposes a labelled set of 100
 
 # 10. Release plan and open items
 
-All four roadmap phases (foundation, data trust and compliance, features, growth) are implemented.
-What remains before a hosted launch:
+The foundation, data trust, outreach, and growth modules are implemented with the limits recorded above. Personal API connections and the account introduction are also implemented. OpenRouter model setup is available; model setup for the other five AI providers remains deferred. Requirements before a hosted launch include:
 
 | Item | Type | Priority |
 |---|---|---|
 | Legal review: data-broker status, legitimate-interest assessment, DPA, subprocessors | Compliance | P0 |
-| Exercise real services end to end (full pipeline with a live Serper key, email verification providers, SMTP and IMAP, Stripe, Razorpay, HubSpot) | Verification | P0 |
+| Exercise real services end to end (personal Serper and AI connections, email verification, SMTP and IMAP, payments, HubSpot) | Verification | P0 |
+| Review protected metadata billing evidence before enabling model setup for additional AI providers | Integration policy | P1 |
 | Re-check shared work with two accounts in one organization | QA | P3 |
 | Response-size cap in the scraper | Hardening | P3 |
 | Customer interviews and a concierge pilot to validate persona, niche and price | Discovery | P0 |
@@ -353,7 +358,7 @@ What remains before a hosted launch:
 | **Lead** | A matched company with its enrichment |
 | **Decision maker** | A person at a lead who is likely to buy |
 | **Provenance** | Where a fact came from (URL) and when it was collected |
-| **Suppression** | A do-not-contact entry that blocks enrichment, export and sending |
+| **Suppression** | An owner-scoped do-not-contact entry checked by supported enrichment, standard server exports, and sending |
 | **Waterfall** | Trying several data sources in order and paying only for a hit |
 | **Warmup** | A gradual increase in daily send volume for a new mailbox |
 | **DSN** | Delivery Status Notification: the bounce message mail servers return |

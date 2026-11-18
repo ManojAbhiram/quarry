@@ -1,6 +1,8 @@
 # Quarry: move the database from MongoDB to SQLite (design)
 
-Date: 2026-11-07 · Status: draft, awaiting owner approval
+> **Historical record.** Retained for design context. Descriptions, proposed steps, and validation results below reflect the original work and may differ from the current implementation. Use the [documentation index](../../README.md) for current product behavior.
+
+Date: 2026-11-07 · Status: historical migration proposal; SQLite is implemented
 
 ## Intent and why
 

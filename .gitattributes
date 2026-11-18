@@ -1,0 +1,2 @@
+# Preserve PDF bytes and avoid treating generated documents as source text.
+*.pdf binary

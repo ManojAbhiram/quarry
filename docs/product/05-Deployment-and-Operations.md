@@ -1,9 +1,13 @@
+# Quarry Deployment and Operations
+
+[Documentation index](../README.md)
+
 | | |
 |---|---|
 | **Document** | How to build, configure, deploy, run, back up, upgrade and troubleshoot Quarry |
-| **Version** | 1.0 |
-| **Date** | 2026-11-10 |
-| **Audience** | Whoever runs the service (today, the founder) |
+| **Document revision** | 1.1 |
+| **Last reviewed** | 2026-11-18 |
+| **Audience** | Service operators and maintainers |
 
 ---
 
@@ -28,18 +32,17 @@ duplicate runs and write contention. The Dockerfile starts uvicorn with a single
 | Need | Why |
 |---|---|
 | Docker and docker compose | Production-like run |
-| A Serper API key | Search (users may bring their own) |
-| At least one LLM provider key (OpenRouter, Groq, or Anthropic) | Extraction and scoring |
+| Each user's personal Serper API key | Search; configured in Account settings after sign-in |
+| Each user's AI connection and selected primary model | AI work; OpenRouter model setup is available, while setup for five other providers is deferred |
 | A domain and a TLS-terminating reverse proxy or load balancer | Cookies are `Secure` over https; nginx here listens on plain HTTP |
 | An SMTP account for system email | Password reset and team invites |
 | Optional: Stripe or Razorpay, Google OAuth client, HubSpot app, Hunter/Snov/PDL keys | Billing, Google sign-in, CRM, waterfall enrichment |
 
 # 3. Configuration
 
-1. Copy `.env.production.example` to `.env.production`. It documents every variable the app reads. Real values go
+1. Copy `.env.production.example` to `.env.production`. It documents deployment settings. Real values go
    only in `.env.production`, which is git-ignored.
-2. Set at minimum `SECRET_KEY` (generate with `openssl rand -hex 32`) and `SERPER_API_KEY`. The API refuses to start
-   without them.
+2. Set `SECRET_KEY` (generate with `openssl rand -hex 32`). The API refuses to start without it. Search and AI keys are saved per user in Account settings; no operator search/AI key is required or used as a fallback.
 3. For a public deployment set:
 
 | Variable | Value |
@@ -62,14 +65,16 @@ or rotating it makes stored credentials (mailbox passwords, provider keys) unrea
 # 4. First deployment
 
 ```bash
-cp .env.production.example .env.production      # fill it in
+cp .env.production.example .env.production      # configure SECRET_KEY and service URLs
 docker compose up --build -d
 curl http://localhost:8000/api/health            # expect 200
-open http://localhost:8080                       # web app, proxies /api
+# Open http://localhost:8080 in your browser; the web app proxies /api
 ```
 
 On first start the API creates the database, applies schema migrations, registers job handlers, starts the worker and
 scheduler, and marks orphaned `Pending` requests as failed (except those with a queued job).
+
+After signing in, configure the account's personal Serper key and AI connection before research. For OpenRouter, save the key, explicitly refresh models, select primary/optional fast models, and save the choices. Saving keys makes no provider call. Catalogue success does not verify the key or model access. See [Personal API Connections](../user-api-connections.md).
 
 Put TLS in front: point your proxy at port 8080 and forward `X-Forwarded-Proto`. Do not expose 8080 or 8000 directly
 to the internet.
@@ -163,7 +168,7 @@ spend. A free uptime monitor on `/api/health` is the minimum.
 
 | Symptom in logs | Cause | Fix |
 |---|---|---|
-| Missing `SECRET_KEY` or `SERPER_API_KEY` | Env not loaded | Check `.env.production` and the compose `env_file` |
+| Missing `SECRET_KEY` | Environment not loaded | Check `.env.production` and the compose `env_file` |
 | Migration error | A migration failed and rolled back | Restore the backup, fix the migration, redeploy |
 | `Schema drift` warning | Model column missing in DB | Add the migration |
 | Database is locked | A second process is using the file | Ensure one API container; stop any stray process |
@@ -172,13 +177,12 @@ spend. A free uptime monitor on `/api/health` is the minimum.
 
 1. `GET /api/jobs?kind=pipeline.run`: is the job `queued`, `running` or `failed`?
 2. `queued` for a long time: worker not running or concurrency saturated; check logs for handler errors.
-3. `failed`: read the job `error`; common causes are an invalid or exhausted Serper key (401, 403, 429) or no LLM key.
+3. `failed`: read the job `error`; common causes are invalid or exhausted personal Serper credentials (401, 403, 429), or a missing/disconnected AI connection or model. Have the job owner review Account settings; changing operator environment keys will not repair a personal connection.
 4. After a restart, `running` jobs are re-queued automatically; a resumed run repeats work from the start.
 
 ## 11.3 Leads show "Enrichment failed"
 
-The LLM call failed or returned unparsable output. The lead is kept with a reason. Check provider keys and rate
-limits, then use Retry on the lead (queues `lead.retry_enrichment`).
+The LLM call failed or returned unparsable output. The lead is kept with a reason. Check the owner's saved AI connection, selected model, provider access, and rate limits, then use Retry on the lead (queues `lead.retry_enrichment`).
 
 ## 11.4 A mailbox stopped sending
 
@@ -218,6 +222,7 @@ is idempotent per event.
 * [ ] Backups scheduled and a restore tested
 * [ ] Retention purge scheduled
 * [ ] Monitoring and uptime checks in place
+* [ ] Account setup tested: encrypted personal keys, OpenRouter discovery/model selection, new-account introduction, and deferred-provider notices
 * [ ] End-to-end run with real keys: pipeline, verification providers, SMTP and IMAP, Stripe or Razorpay, HubSpot
 * [ ] Two-account check of shared lists and requests in one workspace
 * [ ] Dependency and secret scanning enabled in CI

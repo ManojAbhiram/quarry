@@ -1,6 +1,8 @@
 # User API connections and first-signup onboarding
 
-Status: design draft. The six direct providers are selected; a short full-application tour is selected; detailed tour behavior below remains a design proposal. No product implementation is included in this document update.
+> **Historical record.** Retained for design context. Descriptions, proposed steps, and validation results below reflect the original work and may differ from the current implementation. Use the [documentation index](../../README.md) for current product behavior.
+
+Status: historical design proposal; see Personal API Connections for implemented behavior. The six direct providers are selected; a short full-application tour is selected; detailed tour behavior below remains a design proposal. No product implementation is included in this document update.
 
 ## Intent
 Users supply their own LLM and Serper credentials through Profile. Application calls must never silently use operator credentials from .env. Newly registered users receive a first-time introduction that explains connections, model selection and the lead-generation workflow.

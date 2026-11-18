@@ -1,8 +1,12 @@
+# Quarry System Design
+
+[Documentation index](../README.md)
+
 | | |
 |---|---|
 | **Document** | High-level system design (architecture, data flow, runtime, decisions) |
-| **Version** | 1.0 |
-| **Date** | 2026-11-10 |
+| **Document revision** | 1.1 |
+| **Last reviewed** | 2026-11-18 |
 | **Applies to** | Current code: API in `apps/api`, web app in `apps/web` |
 | **Companion docs** | PRD (01), Data Model and API Reference (03), Security and Compliance (04), Operations (05) |
 
@@ -21,7 +25,7 @@ pull against each other:
 | Runs must survive restarts | Jobs are rows in the database, recovered at startup |
 | Handle other people's personal data responsibly | Suppression, erasure, retention and provenance are in the data model, not bolted on |
 | Fetch untrusted URLs safely | A single outbound-fetch guard in front of every network call that a user or a web page can influence |
-| Cheap to run | Bring-your-own keys, free-tier LLMs through LiteLLM, SQLite |
+| Cheap to run | Personal search and AI credentials, direct provider adapters, SQLite |
 | Easy to grow later | Ports and adapters around every external service; a documented path to Postgres |
 
 # 2. System context
@@ -32,7 +36,7 @@ flowchart LR
   W -->|api, cookies + CSRF| A[Quarry API: FastAPI + job worker]
   R[Email recipient] -->|unsubscribe link| A
   A --> DB[(SQLite, WAL mode)]
-  A --> S[Search and AI: Serper, LLM providers via LiteLLM, target websites]
+  A --> S[Search and AI: Serper, direct AI providers, target websites]
   A --> V[Contact data: Hunter, Snov, PDL, verifier providers]
   A --> M[User mailbox: SMTP send, IMAP poll]
   A --> H[HubSpot: OAuth and push]
@@ -89,9 +93,9 @@ flowchart TB
 
 | Layer | Responsibility | Rule |
 |---|---|---|
-| Routers | Validate input, authenticate, authorize, call a service, shape the response | No business logic, no direct SQL |
+| Routers | Validate input, authenticate, authorize, and shape responses | Delegate orchestration to services; some account endpoints use DocTable directly |
 | Services / domain | Business rules, orchestration, the pipeline | Talk to the database only through repositories |
-| Repositories | One module per table; JSON-document storage with a few real key columns | The only code that builds queries |
+| Repositories | JSON-document storage with indexed key columns | Encapsulate shared queries; domain storage modules also issue SQL |
 | Ports and adapters | Interfaces around every external system | Swappable in tests (a fake HTTP client, mock payment provider) |
 | Core | Cross-cutting: config, auth cookies, SSRF guard, rate limit, crypto | No imports from domain modules |
 
@@ -105,7 +109,7 @@ flowchart TB
 | API access | `src/api.js` and `src/api.p3.js`; cookie session plus CSRF header; refresh on 401 |
 | State | Component state and context (`context/`); no global store |
 | Routes | Public: login, register, forgot/reset password, privacy, opt-out, invite, OAuth callbacks. Protected inside `Layout`: lead requests, dashboard, new request wizard, request intake, direct companies, request details, lead lists, outreach, watch, integrations, CRM integrations, team, billing, compliance, profile |
-| Tests | Vitest and Testing Library; 375 passing across 39 files |
+| Tests | Vitest and Testing Library; component, page, API-session, connection, and onboarding coverage |
 
 # 4. Core flows
 
@@ -134,7 +138,7 @@ sequenceDiagram
 Steps inside `pipeline.run`:
 
 1. **Queries.** The LLM turns the ICP into search queries, stored on the request.
-2. **Search.** Serper returns Google results using the user's own key, else the server key. Results are cached in
+2. **Search.** Serper returns Google results using the owner's personal key; a missing key stops search without an operator fallback. Results are cached in
    `serper_cache`.
 3. **Triage.** URLs are de-duplicated by canonical host, then classified as a company site or a directory. Directories
    are expanded into nested company URLs.
@@ -252,6 +256,14 @@ The `mock` provider credits instantly and exists only for local demos.
 through the `CrmConnector` interface and records per-lead sync status (`queued`, `syncing`, `synced`, `failed`) in
 `crm_sync`. The UI polls the job and the sync endpoint. A new CRM needs a new connector class, not a pipeline change.
 
+## 4.8 Personal API connections and account introduction
+
+Account settings stores encrypted Serper credentials and one AI connection per user. `services/ai_providers.py` owns the fixed provider origins, protocol adapters, capability evidence, and metadata policies. `services/connections.py` binds the authenticated account's connection to the current task and reloads the owner configuration for background work; context is cleared when the task finishes.
+
+Saving a key makes no provider call. OpenRouter model refresh reads the anonymous public catalogue without the saved key, cookies, redirects, or authenticated retry. Users select discovered eligible primary and optional fast models. Authenticated discovery and credential verification remain disabled for all six providers; model setup for the other five is deferred. Public discovery establishes neither valid credentials nor model entitlement. Explicit AI work uses one inference attempt; durable jobs can separately retry failed work.
+
+New password and Google accounts receive a six-stop introduction hosted in `Layout`. Account-owned progress and revision checks preserve resume, completion, and dismissal across sessions. Existing accounts remain ineligible. The introduction makes no provider calls and creates no requests. See [Personal API Connections](../user-api-connections.md) and [Provider Metadata Policy](../provider-metadata-policy.md).
+
 # 5. Data architecture
 
 ## 5.1 Storage model
@@ -337,7 +349,7 @@ flowchart LR
 | Authorization | Roles `owner > admin > member > viewer`; per-endpoint minimum role; every resource lookup is scoped to the owner or workspace |
 | Rate limiting | In-memory sliding window on auth routes; uniform login errors |
 | SSRF | All outbound fetches of influenced URLs pass `core/url_guard.py`: public addresses only, DNS resolved once and the connection pinned to the checked IP, redirects re-checked at each hop, TLS verified against the real hostname |
-| Secrets | User Serper keys, mailbox credentials and provider keys encrypted with Fernet (AES-128-CBC plus HMAC) using a key derived from `SECRET_KEY`; secrets never placed in job payloads; public API keys stored only as SHA-256 hashes (shown once, prefix `qk_`) |
+| Secrets | Personal AI and Serper keys, mailbox credentials and enrichment provider keys encrypted with Fernet (AES-128-CBC plus HMAC) using a key derived from `SECRET_KEY`; secrets never placed in job payloads; public API keys stored only as SHA-256 hashes (shown once, prefix `qk_`) |
 | Webhooks out | HMAC-SHA256 over `timestamp.body`, with a 5-minute tolerance on verify; exponential-backoff retries at 1, 5, 30, 120, 720 minutes, then give up |
 | Webhooks in | Payment webhooks verified by signature; handlers idempotent per event id |
 | Data protection | Cascade deletion, suppression ledger, retention purge, audit log, region flags |
@@ -358,7 +370,7 @@ HTTP client ignores environment proxy settings; the scraper has no response-size
 | Webhook endpoint down | Backoff retries over about 14 hours, delivery log visible |
 | Payment webhook replayed | Idempotent per event; no double credit |
 | Queue write failure on launch | Falls back to in-process background task (does not survive restart) |
-| Deleting a request or account | Its leads, decision makers and enrichments are deleted too (third-party personal data); shared company facts are kept |
+| Deleting a request or account | Research leads, decision makers, and enrichments are deleted; account deletion also removes lists and sessions. Shared company facts are kept; automation resources and external copies need separate cleanup |
 
 # 8. Observability
 
@@ -394,7 +406,7 @@ then the single-process job worker.
 | D3 | HttpOnly cookies plus CSRF | Tokens in localStorage | Resistant to token theft by script injection | Third-party embedding |
 | D4 | SMTP and IMAP for mailboxes | Gmail and Microsoft OAuth | Avoids restricted-scope security assessments | Demand for one-click connect justifies the review cost |
 | D5 | Bring-your-own provider keys | Resell vendor data | Apollo-style plans restrict resale; cost lands on the user | A negotiated data license |
-| D6 | LiteLLM with fallback models | One provider SDK | Free-tier models and automatic failover | A single provider gives clear accuracy wins |
+| D6 | Direct provider adapters with account-owned primary and fast models | Gateway or shared operator credentials | Explicit credential ownership and provider routing; no automatic inference retry or cross-provider fallback | Additional providers require reviewed protocols and metadata policies |
 | D7 | Four-state email status with timestamps | Boolean "verified" | The top competitor complaint is inaccurate data | Never; add providers instead |
 | D8 | Ports and adapters for externals | Direct SDK calls | Testable, swappable (payments, CRM, verifier) | n/a |
 | D9 | Compliance in the data model | A later add-on | Erasure and suppression are hard to retrofit | n/a |
@@ -405,7 +417,7 @@ then the single-process job worker.
 | Area | Technology |
 |---|---|
 | Backend | Python 3.12+ (CI uses 3.13), FastAPI, uvicorn, Pydantic, async SQLAlchemy, aiosqlite |
-| LLM | LiteLLM with OpenRouter and Groq models; optional Claude batch scoring (`claude-haiku-4-5` by default) |
+| AI | Direct HTTP adapters for OpenAI, Anthropic, Gemini, Groq, OpenRouter, and DeepSeek. OpenRouter model setup is enabled; other providers are deferred. Optional Anthropic batch scoring uses the owner's selected model and connection |
 | Scraping | httpx, BeautifulSoup, optional Playwright |
 | Search | Serper |
 | Crypto | `cryptography` Fernet, JWT, SHA-256 |
