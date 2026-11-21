@@ -6,7 +6,7 @@ import AIConnectionSettings from './AIConnectionSettings'
 vi.mock('../../api', () => ({ api: { get: vi.fn(), put: vi.fn(), post: vi.fn(), delete: vi.fn() } }))
 import { api } from '../../api'
 const empty = { has_key: false, models: [], providers: [{ id: 'openai', name: 'OpenAI' }] }
-beforeEach(() => { vi.clearAllMocks(); api.get.mockResolvedValue(empty) })
+beforeEach(() => { vi.resetAllMocks(); api.get.mockResolvedValue(empty) })
 
 it('saves a password field without browser persistence or automatic discovery', async () => {
   const user = userEvent.setup()
@@ -49,6 +49,22 @@ const rolloutProviders = [
   { id: 'openai', name: 'OpenAI', metadata_available: false, verification_available: false },
   { id: 'openrouter', name: 'OpenRouter', metadata_available: true, verification_available: false, public_catalogue: true },
 ]
+
+it('reloads a stale connection without discarding a key drafted by the user', async () => {
+  api.get.mockResolvedValueOnce(empty).mockResolvedValueOnce({ ...empty, has_key: true, provider: 'openai', revision: 'r2' })
+  api.put.mockRejectedValueOnce(Object.assign(new Error('Connection changed.'), { status: 409 }))
+  api.put.mockResolvedValueOnce({ ...empty, has_key: true, provider: 'openai', revision: 'r3' })
+  const user = userEvent.setup()
+  render(<AIConnectionSettings />)
+  const key = await screen.findByLabelText('AI provider API key')
+  await user.type(key, 'replacement-key')
+  await user.click(screen.getByRole('button', { name: 'Save connection' }))
+  await user.click(await screen.findByRole('button', { name: 'Reload connection' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save connection' })).toBeEnabled())
+  expect(key).toHaveValue('replacement-key')
+  await user.click(screen.getByRole('button', { name: 'Save connection' }))
+  expect(api.put).toHaveBeenLastCalledWith('/users/me/ai-connection', expect.objectContaining({ revision: 'r2', api_key: 'replacement-key' }))
+})
 
 it('defaults a new connection to a provider with discovery and explains deferred providers', async () => {
   api.get.mockResolvedValue({ ...empty, providers: rolloutProviders })

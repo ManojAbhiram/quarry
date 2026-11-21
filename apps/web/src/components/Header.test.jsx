@@ -93,7 +93,7 @@ describe('Header', () => {
     expect(mocks.setGlobalSearchQuery).toHaveBeenLastCalledWith('c')
   })
 
-  it('focuses the search with Ctrl+K and with "/" (the badge is not decoration)', async () => {
+  it('focuses the search with Ctrl+K and with "/"', async () => {
     renderHeader()
     const search = screen.getByRole('searchbox', { name: 'Search requests' })
     await userEvent.keyboard('{Control>}k{/Control}')

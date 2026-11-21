@@ -1,20 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../api'
 import { Button } from '../kit'
+import WelcomeTourDialog, { steps } from './WelcomeTourDialog'
 
 const endpoint = '/users/me/onboarding'
 const terminal = (tour) => !tour || ['ineligible', 'completed', 'dismissed'].includes(tour.state)
-const steps = [
-  ['Your workspace', 'Requests tracks your discovery runs. Dashboard brings together workspace activity and results.', ['/lead-requests', '/dashboard']],
-  ['Find companies and people', 'Create a request from your ideal customer profile or a company list. Open a request to follow progress and review companies, decision makers and enrichment.', ['/lead-requests']],
-  ['Organize your leads', 'Review your results, save leads into Lead lists and export them when you are ready.', ['/lead-lists']],
-  ['Follow up and monitor', 'Outreach holds your follow-up work. Watch monitors saved targets and signals.', ['/outreach', '/watch']],
-  ['Connect your tools', 'Integrations and CRM integrations connect external tools. In Account, add your Serper and AI provider keys and choose models before work that needs them.', ['/integrations', '/integrations/crm', '/profile']],
-  ['Manage your workspace', 'Team manages membership, Billing shows plan and usage, and Compliance provides privacy controls.', ['/team', '/billing', '/compliance']],
-]
 
 export default function WelcomeTour() {
   const { user, updateUser } = useAuth()
@@ -43,8 +36,9 @@ export default function WelcomeTour() {
     if (terminal(next)) setOpen(false)
     return true
   }, [])
-  const persist = useCallback(async (state, step, close = false) => {
+  const persist = async ({ state, step, destination }) => {
     if (busy) return false
+    const close = state !== 'in_progress'
     if (close) { setOpen(false); sessionStorage.setItem(sessionKey, 'closed') }
     setBusy(true); setFailure(null)
     try {
@@ -53,12 +47,13 @@ export default function WelcomeTour() {
       if (close && !terminal(next)) throw new Error('Terminal state was not saved')
       accept(next)
       channel.current?.postMessage({ changed: true })
+      if (destination) navigate(destination)
       return true
     } catch {
-      if (account.current === userId && active.current) setFailure({ state, step, close })
+      if (account.current === userId && active.current) setFailure({ state, step, destination })
       return false
     } finally { if (account.current === userId && active.current) setBusy(false) }
-  }, [accept, busy, sessionKey, userId])
+  }
   useEffect(() => {
     let live = true
     active.current = true
@@ -98,60 +93,64 @@ export default function WelcomeTour() {
     return () => { live = false; window.removeEventListener('focus', sync); channel.current?.close(); channel.current = null }
   }, [userId, accept])
   const dismiss = useRef(null)
-  dismiss.current = () => persist('dismissed', tourRef.current?.step || 0, true)
+  dismiss.current = () => persist({ state: 'dismissed', step: tourRef.current?.step || 0 })
   useEffect(() => {
     if (!open) return undefined
     const previous = document.activeElement
+    const app = document.getElementById('root')
+    const wasInert = app?.inert
+    if (app) app.inert = true
     dialog.current?.focus()
     const handleKey = (event) => {
       if (event.key === 'Escape') { event.preventDefault(); dismiss.current?.(); return }
       if (event.key !== 'Tab') return
       const items = [...(dialog.current?.querySelectorAll('button:not([disabled]), a[href]') || [])]
       const first = items[0], last = items[items.length - 1]
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.current)) { event.preventDefault(); last?.focus() }
-      else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog.current)) { event.preventDefault(); first?.focus() }
+      const outside = !items.includes(document.activeElement)
+      if (event.shiftKey && (document.activeElement === first || outside)) { event.preventDefault(); (last || dialog.current)?.focus() }
+      else if (!event.shiftKey && (document.activeElement === last || outside)) { event.preventDefault(); (first || dialog.current)?.focus() }
     }
     document.addEventListener('keydown', handleKey)
-    return () => { document.removeEventListener('keydown', handleKey); if (previous?.isConnected) previous.focus() }
+    return () => {
+      document.removeEventListener('keydown', handleKey)
+      if (app) app.inert = wasInert
+      if (previous?.isConnected) previous.focus()
+    }
   }, [open])
-  const step = Math.max(0, Math.min(5, tour?.step || 0))
-  useEffect(() => {
-    if (!open) return undefined
-    const targets = steps[step][2].flatMap((path) => [...document.querySelectorAll(`a[data-nav-link][href="${path}"]`)])
-    targets.forEach((element) => element.classList.add('ring-2', 'ring-primary-500'))
-    return () => targets.forEach((element) => element.classList.remove('ring-2', 'ring-primary-500'))
-  }, [open, step])
-  const finish = async (path) => { if (await persist('completed', step, true)) { if (path) navigate(path) } }
+  const step = Math.max(0, Math.min(steps.length - 1, tour?.step || 0))
+  const resume = async () => {
+    if (busy) return
+    setBusy(true); setFailure(null)
+    try {
+      const next = await api.get(endpoint)
+      if (account.current !== userId || !active.current || !accept(next) || terminal(next)) return
+      sessionStorage.setItem(sessionKey, 'active')
+      const started = next.state === 'eligible'
+        ? await api.put(endpoint, { state: 'in_progress', step: 0, revision: next.revision })
+        : next
+      if (account.current === userId && active.current && accept(started) && !terminal(started)) setOpen(true)
+    } catch {
+      if (account.current === userId && active.current) setFailure({ resume: true })
+    } finally {
+      if (account.current === userId && active.current) setBusy(false)
+    }
+  }
+  const retry = () => failure.resume ? resume() : persist(failure)
+
   return <>
-    {failure && <div role="alert" className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-line bg-surface p-4 text-sm text-ink shadow-lg">
-      Your tour progress was not saved. {failure.close && 'The tour is closed for this session.'}
-      <Button variant="ghost" disabled={busy} onClick={() => persist(failure.state, failure.step, failure.close)}>Retry saving progress</Button>
+    {!open && failure && <div className="fixed bottom-4 right-4 z-50 ml-4 max-w-sm rounded-lg border border-line bg-surface p-4 text-sm text-ink shadow-lg">
+      <p role="alert">{failure.resume ? 'The introduction could not be loaded.' : 'Your tour progress was not saved. The tour is closed for this session.'}</p>
+      <Button variant="ghost" size="sm" className="mt-2" disabled={busy} onClick={retry}>{failure.resume ? 'Try again' : 'Retry saving progress'}</Button>
     </div>}
-    {!open && !terminal(tour) && !failure && sessionStorage.getItem(sessionKey) !== 'closed' && <button type="button" className="fixed bottom-4 right-4 z-40 rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink shadow" onClick={async () => {
-      try {
-        const next = await api.get(endpoint)
-        if (account.current !== userId || !active.current || !accept(next)) return
-        if (!terminal(next)) { sessionStorage.setItem(sessionKey, 'active'); setOpen(true) }
-      } catch { if (account.current === userId && active.current) setFailure({ state: 'in_progress', step, close: false }) }
-    }}>Resume introduction</button>}
-    {open && createPortal(<div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
-      <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="quarry-tour-title" aria-describedby="quarry-tour-copy" className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl border border-line bg-surface p-6 text-ink shadow-xl outline-none">
-        <p className="text-sm text-muted" aria-live="polite">Welcome to Quarry · {step + 1} of 6</p>
-        <h2 id="quarry-tour-title" className="mt-3 text-xl font-semibold">{steps[step][0]}</h2>
-        <p id="quarry-tour-copy" className="mt-3 text-sm leading-relaxed text-muted">{steps[step][1]}</p>
-        <p className="mt-4 text-xs text-muted">You can explore without connecting services. Nothing runs during this introduction.</p>
-        {step === 4 && <Button className="mt-4" variant="secondary" disabled={busy} onClick={() => finish('/profile')}>Open settings</Button>}
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-          <Button variant="ghost" disabled={busy} onClick={() => persist('dismissed', step, true)}>Skip tour</Button>
-          <div className="flex flex-wrap gap-2">
-            {step > 0 && <Button variant="secondary" disabled={busy} onClick={() => persist('in_progress', step - 1)}>Back</Button>}
-            {step < 5 ? <Button disabled={busy} onClick={() => persist('in_progress', step + 1)}>Next</Button> : <>
-              <Button variant="secondary" disabled={busy} onClick={() => finish()}>Explore Quarry</Button>
-              <Button disabled={busy} onClick={() => finish('/new-request')}>Create a request</Button>
-            </>}
-          </div>
-        </div>
-      </div>
-    </div>, document.body)}
+    {!open && !terminal(tour) && !failure && sessionStorage.getItem(sessionKey) !== 'closed' && (
+      <Button variant="secondary" className="fixed bottom-4 right-4 z-40" disabled={busy} onClick={resume}>
+        Resume introduction <ArrowRight aria-hidden="true" className="h-4 w-4" />
+      </Button>
+    )}
+    {open && <WelcomeTourDialog dialog={dialog} step={step} busy={busy} failure={failure} onRetry={retry}
+      onMove={(step) => persist({ state: 'in_progress', step })}
+      onDismiss={() => dismiss.current()}
+      onFinish={(destination) => persist({ state: 'completed', step, destination })}
+    />}
   </>
 }

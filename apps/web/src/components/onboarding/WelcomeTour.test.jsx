@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import WelcomeTour from './WelcomeTour'
 
 const auth = { user: null, updateUser: vi.fn() }
@@ -59,6 +59,20 @@ it('keeps a failed dismissal closed and offers a persistence retry', async () =>
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
+it('opens the selected destination after retrying a failed completion', async () => {
+  auth.user.onboarding = { state: 'in_progress', step: 5, revision: 6, version: 1 }
+  sessionStorage.setItem('quarry:tour:new-user', 'active')
+  api.put.mockRejectedValueOnce(new Error('offline'))
+  const user = userEvent.setup()
+  render(<MemoryRouter><WelcomeTour /><Routes>
+    <Route path="/" element={null} />
+    <Route path="/new-request" element={<h1>New request form</h1>} />
+  </Routes></MemoryRouter>)
+  await user.click(await screen.findByRole('button', { name: 'Create a request' }))
+  await user.click(await screen.findByRole('button', { name: 'Retry saving progress' }))
+  expect(await screen.findByRole('heading', { name: 'New request form' })).toBeInTheDocument()
+})
+
 it('does not reopen after a stale automatic-start response arrives after terminal progress', async () => {
   let resolveStart
   api.put.mockImplementation(() => new Promise((resolve) => { resolveStart = resolve }))
@@ -82,6 +96,8 @@ it('contains keyboard focus and restores it after closing', async () => {
   expect(dialog).toHaveFocus()
   await user.tab({ shift: true })
   expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus()
+  await user.tab()
+  expect(screen.getByRole('button', { name: 'Close introduction' })).toHaveFocus()
   await user.tab()
   expect(screen.getByRole('button', { name: 'Skip tour' })).toHaveFocus()
   await user.keyboard('{Escape}')
