@@ -1,5 +1,7 @@
 # Quarry Customer Guide
 
+[Documentation index](../README.md) · Document revision 1.1 · Last reviewed: 18 November 2026
+
 From your first search to confident outreach. A practical guide to finding, reviewing, organizing, and engaging the right companies.
 
 ## 01. Welcome to Quarry
@@ -21,7 +23,7 @@ This guide follows the tasks you will perform in the application. Start with acc
 
 ### Get a Useful First Result
 
-1. Sign in and connect your search key in **Account settings**.
+1. Sign in and configure your personal search key and AI provider/model in **Account settings**.
 2. Prepare a short description of your product and target customer.
 3. Create a request and choose the research route that matches your starting point.
 4. Start with 10-25 companies and review the result pattern before expanding.
@@ -47,7 +49,7 @@ flowchart LR
 
 | Stage | Your action | What to check |
 |---|---|---|
-| Prepare | Sign in, choose your workspace, and connect your search key | You are working in the right account and have available usage |
+| Prepare | Sign in, choose your workspace, and configure search and AI connections | You are working in the right account and have available usage |
 | Define | Describe your product and ICP, or supply companies and roles | Geography, customer type, and buyer roles match your brief |
 | Research | Launch the saved request | The request progresses or gives a clear recovery action |
 | Review | Inspect companies, sources, people, and email status | Each approved record is suitable for its intended next use |
@@ -78,12 +80,13 @@ Both routes create a request you can reopen and review. A request is research; i
 
 ### Before You Start
 
-You need your Quarry web address, an account, and access to the intended workspace. Your administrator manages the shared service configuration. Your personal search key is entered in **Account settings**.
+You need your Quarry web address, an account, and access to the intended workspace. Your administrator manages the shared service configuration. Your personal Serper key, AI provider key, and model choices are entered in **Account settings**. These connections belong to your account, including when you work in a team.
 
 | Requirement | Needed for |
 |---|---|
 | Quarry account and web address | Signing in and accessing your work |
 | Personal Serper API key | Live search and lead research |
+| Personal AI provider key and selected primary model | ICP generation, extraction, and AI-assisted research; OpenRouter model setup is available |
 | Available request allowance and credits | Creating requests and using research tools |
 | Mailbox credentials | Outreach, when you choose to enable it |
 | Authorized CRM or provider credentials | Optional integrations |
@@ -103,11 +106,32 @@ For an existing account, enter **Email** and **Password** and select **Sign in**
 
 1. Open **Account > Account settings > Integrations**.
 2. Enter your **Serper API key**. Use a key from your authorized Serper account and do not include spaces.
-3. Select **Save key** and wait for validation.
-4. Confirm the Connected state. The saved key is masked and should not be shared in screenshots or support messages.
-5. If validation fails, check the key, provider account, and available quota before trying again.
+3. Select **Save key**. Saving checks the key format and stores it encrypted; it does not run a test search or verify provider access.
+4. Confirm that the key is saved. It is masked and should not be shared in screenshots or support messages.
+5. A search you explicitly request may still fail if the key is invalid or its provider quota is exhausted.
 
 > **Before creating requests:** Set up your key first. Creating a saved request, including a draft, uses a request credit and counts toward your request allowance. Deleting the draft does not return that credit.
+
+### Connect Your AI Provider
+
+1. In **Account settings**, open **AI provider**.
+2. Choose **OpenRouter**, enter your **AI provider API key**, and select **Save connection**. Saving encrypts the key without verifying credentials or running generation.
+3. Select **Refresh models** to retrieve OpenRouter's public catalogue. Your saved key is not sent with this request.
+4. Use **Search models** to find an eligible **Primary model**. Models with unknown compatibility are disabled.
+5. Optionally choose a **Fast model**, or leave **Use primary model** selected.
+6. Select **Save models**. AI-assisted tasks use these choices when you explicitly request work and may consume provider credits.
+
+Public model discovery does not confirm that your key is valid, funded, or entitled to use a model. **Verify credentials** is unavailable and does not run a test generation. An AI task may therefore report an access or quota error even after setup.
+
+OpenAI, Anthropic, Gemini, Groq, and DeepSeek appear as direct provider adapters, but their model setup is deferred under Quarry's metadata policy. You may save a key for later; it will not enable AI work without model selection. Choose OpenRouter to complete setup with the currently enabled discovery flow.
+
+Replacing a provider or key clears the old catalogue and model choices; repeat refresh and selection. **Disconnect provider** removes the stored connection. Work already sent to a provider may finish; queued work reloads your current settings. See [Personal API Connections](../user-api-connections.md).
+
+### Your Account Introduction
+
+New email/password and Google accounts receive a short six-stop introduction covering the workspace, requests, lead lists, outreach and Watch, connections, and workspace management. Use Back and Next, or skip it. Completing or dismissing the introduction is saved to your account; existing accounts are not enrolled on login.
+
+Refreshing can restore an active introduction, and a later session offers Resume after an interruption. The introduction does not configure services, fetch models, search, create requests, or send email. Its final Create a request action opens the normal form. If saving progress fails, use the offered retry before relying on that choice across devices.
 
 ### Reset Your Password
 
@@ -133,7 +157,7 @@ The sidebar groups research, outreach, and settings. On smaller screens, open th
 | Team | Organization membership, invitations, and sharing |
 | Billing | Plans, balances, credit packs, and invoices |
 | Compliance | Suppression, erasure, retention, and action history |
-| Account | Profile, search key, and email-verification settings |
+| Account | Profile, personal search/AI connections and models, email-verification settings |
 
 ### Use Requests and Dashboard
 
@@ -247,7 +271,7 @@ Use **Run a sample first** to inspect a small candidate preview. Review its titl
 ### Launch the Request
 
 1. Confirm the product, geography, exclusions, roles, and 1-200 target count.
-2. Check your saved search key, request allowance, and usage estimate.
+2. Check your saved Serper key, configured AI connection and primary model, request allowance, and usage estimate.
 3. Select **Find matching companies** once.
 4. Wait for **Request launched**, then select **View requests** or return through Dashboard.
 5. Use **Dashboard > Follow progress** to review the running request.
@@ -318,7 +342,7 @@ flowchart LR
 ### Recover Safely
 
 1. Read the displayed reason and note the request name or ID.
-2. Check your search-key validation and provider quota if search is mentioned.
+2. Check your saved Serper key and provider quota if search is mentioned; check the AI connection and model access for AI errors.
 3. Keep useful partial results instead of deleting the whole request.
 4. For a company-specific issue, open its drawer and select **Retry enrichment**. Give the retry time to finish.
 5. If progress remains stalled, contact your administrator with the request ID and approximate time.
@@ -620,11 +644,12 @@ For other CRMs, use an approved CSV handoff or authorized integration. Zapier/Ma
 
 ## 18. Manage Integrations and API Access
 
-Use **Integrations** for public API keys, webhooks, and optional email-lookup providers. These are distinct from the personal search and verification keys in Account settings.
+Use **Integrations** for public API keys, webhooks, and optional email-lookup providers. These are distinct from the personal search, AI, and verification settings in Account settings.
 
 | Setting | Purpose |
 |---|---|
 | Serper key | Search and company research |
+| AI provider connection and models | ICP generation, extraction, scoring, and AI-assisted research |
 | Verification-provider key | Technical email checks |
 | Enrichment-provider key | Additional missing-email lookup sources |
 | Quarry API key | External read access to requests and lists |
@@ -711,7 +736,7 @@ Shared requests provide a compact read-only summary; shared lists provide read-o
 | Monthly request allowance | How many requests your plan permits |
 | Research usage | Available launches and estimated provider usage |
 | Email-lookup credits | Eligible missing-email lookups; a separate personal balance |
-| Provider quota | Limits or charges on your own search/verification/enrichment account |
+| Provider quota | Limits or charges on your own search, AI, verification, or enrichment account |
 
 A credit balance does not override every other limit. A top-up does not necessarily increase your monthly request allowance. Creating a request uses one request credit; deleting it does not refund the credit. Samples, repeats, and additional analysis can use external-provider quota.
 
@@ -785,7 +810,7 @@ Before account closure, pause outreach, revoke integrations/keys as appropriate,
 
 Imagine you sell **Northstar Cloud Cost Review** to UK and Irish B2B SaaS companies with 50-200 employees. Your buyer is a platform or engineering leader, and your first research target is 25 companies.
 
-1. Sign in, choose the workspace, and connect your personal search key.
+1. Sign in, choose the workspace, and configure your personal search key and AI provider/model.
 2. Create `UK SaaS platform teams` and choose **Generate from ICP**.
 3. Describe your offer and set geography, size, roles, and exclusions explicitly.
 4. Review all six ICP cards and correct the suggestions.
@@ -809,7 +834,7 @@ This is an illustrative process, not a promise of a particular result count, cos
 - Correct workspace, product, geography, buyer roles, and exclusions.
 - Target count between 1 and 200.
 - Reviewed ICP and useful sample direction.
-- Valid search key and available request/usage allowance.
+- Personal Serper key saved, AI provider and primary model configured, and request/usage allowance available.
 - Original brief and source material retained for future edits.
 
 ### Before Exporting or Sending
@@ -832,7 +857,10 @@ Start with replies, bounces, opt-outs, and failed work. Refresh stale contact ch
 |---|---|
 | Sign-in fails repeatedly | Check credentials, use password reset if needed, and respect any retry delay |
 | Reset/invitation email does not arrive | Check spam and address spelling, then ask your administrator about email delivery |
-| Search-key warning remains | Save and validate the personal key in Account settings; check provider quota |
+| Search-key warning remains | Save your personal key in Account settings; saving does not verify it. Check key accuracy and provider quota if an explicit search fails |
+| AI work requires a connection | Save an OpenRouter key, refresh models, select a primary model, and save models in Account settings |
+| Model discovery is unavailable | Model setup for five providers is deferred; choose OpenRouter for enabled public discovery |
+| Catalogue loaded but AI work fails | Public discovery does not validate credentials or access; check your provider account, key, model permissions, and credits |
 | PDF yields little product text | Use a text-based document, OCR a scan, or paste a concise description |
 | Website/documents do not appear combined | Review structured product fields after each source action and add missing facts |
 | ICP is off-target | Edit the cards and explicit geography/roles before launching |

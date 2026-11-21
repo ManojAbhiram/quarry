@@ -10,6 +10,7 @@ class UserOut(BaseModel):
     company: Optional[str] = None
     job_title: Optional[str] = None
     phone: Optional[str] = None
+    onboarding: dict | None = None
 
 
 class AuthResponse(BaseModel):
@@ -34,6 +35,7 @@ class SerperKeyUpdate(BaseModel):
 class SerperKeyStatus(BaseModel):
     has_key: bool
     masked: Optional[str] = None
+    verification: str = 'unverified'
 
 
 
@@ -47,4 +49,5 @@ def user_to_out(doc: dict) -> UserOut:
         company=doc.get("company"),
         job_title=doc.get("job_title"),
         phone=doc.get("phone"),
+        onboarding=doc.get('onboarding'),
     )

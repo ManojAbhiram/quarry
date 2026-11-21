@@ -4,7 +4,6 @@ from app.core.security_crypto import encrypt_secret, decrypt_secret, mask_secret
 from app.db.erasure import erase_user_data
 from app.db.users import check_email_conflict, get_user_by_id, update_user
 from app.services.auth import get_current_user
-from app.services.serper import validate_serper_key
 from app.schemas import (
     UserOut,
     ProfileUpdate,
@@ -59,11 +58,8 @@ async def set_serper_key(
     current_user: dict = Depends(get_current_user),
 ):
     key = body.serper_api_key.strip()
-    if not await validate_serper_key(key):
-        raise HTTPException(
-            status_code=400,
-            detail="That Serper API key was rejected. Check the key and try again.",
-        )
+    if len(key) < 8 or any(c.isspace() for c in key):
+        raise HTTPException(status_code=422, detail='Enter a Serper API key without spaces.')
     user_id = str(current_user["_id"])
     await update_user(user_id, {"serper_api_key_encrypted": encrypt_secret(key)})
     return SerperKeyStatus(has_key=True, masked=mask_secret(key))

@@ -1,3 +1,4 @@
+from app.services.onboarding import new_tour
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 
@@ -57,6 +58,7 @@ async def register(body: RegisterRequest, request: Request, response: Response):
     org_id = str(org_doc["_id"])
 
     doc = {
+        "onboarding": new_tour(),
         "email": body.email,
         "name": body.name,
         "password_hash": hash_password(body.password),

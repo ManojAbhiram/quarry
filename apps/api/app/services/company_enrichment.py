@@ -248,7 +248,7 @@ Rules:
 """
 
     parsed = await _llm_json_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=200,

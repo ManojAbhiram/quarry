@@ -116,6 +116,8 @@ async def test_icp_filter_applied_only_when_enabled(request_row, monkeypatch):
 
 
 async def test_background_wrapper_marks_request_failed_on_crash(request_row, monkeypatch):
+    from app.core.security_crypto import encrypt_secret
+    await TABLES['users'].insert({'_id': 'u1', 'ai_connection': {'provider': 'groq', 'key_encrypted': encrypt_secret('test-owner-key'), 'primary_model': 'test-chat'}})
     async def explode(rid, payload):
         raise RuntimeError("kaboom")
 

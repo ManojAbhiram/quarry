@@ -2,6 +2,7 @@ import { Outlet, useMatch } from 'react-router-dom'
 import Header from './Header'
 import Sidebar from './sidebar/Sidebar'
 import { useSidebar } from './sidebar/useSidebar'
+import WelcomeTour from './onboarding/WelcomeTour'
 
 export default function Layout() {
   const sidebar = useSidebar()
@@ -12,6 +13,7 @@ export default function Layout() {
         Skip to content
       </a>
       <Sidebar sidebar={sidebar} quiet={isDashboard} />
+      <WelcomeTour />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header sidebar={sidebar} quiet={isDashboard} />
         <main id="main-content" className="relative min-w-0 flex-1 overflow-hidden">

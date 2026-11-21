@@ -103,15 +103,15 @@ async def test_serper_and_llm_helpers_feed_the_meter(db, monkeypatch):
 
     monkeypatch.setattr(httpx, "AsyncClient", Client)
 
-    async def fake_completion(**kw):
-        from types import SimpleNamespace as NS
+    async def fake_completion(*args):
+        return '{}'
 
-        return NS(choices=[NS(message=NS(content="{}"))])
-
-    monkeypatch.setattr(llm, "acompletion", fake_completion)
+    monkeypatch.setattr(llm, "complete", fake_completion)
+    token = serper.current_serper_key.set('explicit-test-owner-key')
     async with usage.tracked("u1", "rq"):
         await serper.fetch_leads_from_serper("q")
         await llm._llm_json_completion(model="m", system_prompt="s", user_prompt="u")
+    serper.current_serper_key.reset(token)
     ev = await TABLES["usage_events"].get(request_id="rq")
     assert ev["serper_calls"] == 1 and ev["llm_calls"] >= 1
 

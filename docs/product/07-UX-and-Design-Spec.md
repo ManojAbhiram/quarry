@@ -1,8 +1,12 @@
+# Quarry UX and Design Specification
+
+[Documentation index](../README.md)
+
 | | |
 |---|---|
 | **Document** | Information architecture, screens, interaction rules, visual system and accessibility |
-| **Version** | 1.0 |
-| **Date** | 2026-11-10 |
+| **Document revision** | 1.1 |
+| **Last reviewed** | 2026-11-18 |
 
 ---
 
@@ -56,7 +60,7 @@ flowchart LR
 | Team | `/team` | Members, roles, invites |
 | Billing | `/billing` | Plan, balances, top-ups, invoices |
 | Compliance | `/compliance` | Suppressions, erasure, audit log, retention |
-| Profile | `/profile` | Account, Serper key, verifier settings |
+| Account settings | `/profile` | Profile, personal Serper key, AI provider connection and model selection, verifier settings |
 
 The sidebar is resizable and collapsible, hides its scrollbar while staying scrollable, and includes the workspace
 switcher. A help drawer gives in-context guidance.
@@ -68,7 +72,7 @@ switcher. A help drawer gives in-context guidance.
 * Steps: describe the product (or paste text, URLs, files) then review the generated ICP, then choose the number of
   leads, then see the **estimate** (calls, cost, time) and optionally run a **sample**, then launch.
 * Blank fields are never silently filled with hidden defaults; the wizard asks.
-* The Serper key requirement is surfaced early rather than at the last step.
+* Search-key notices are surfaced in request creation. AI actions also require an account-owned connection and selected primary model; missing setup returns an Account-settings message.
 
 ## 3.2 Request details (results)
 
@@ -91,6 +95,18 @@ switcher. A help drawer gives in-context guidance.
 
 Suppression list management, erasure, audit log and retention, written in plain language, with the public privacy and
 opt-out pages linked.
+
+## 3.5 Personal API connections
+
+Account settings separates search, AI, and email-verification credentials. Serper key saving checks format and stores an encrypted key without a test search. AI settings provides provider selection, password-style key entry, a masked saved key, explicit model refresh, searchable primary/optional fast model selection, save, and disconnect.
+
+OpenRouter is the default for new connections because its anonymous catalogue enables model setup. Credential verification is unavailable; the explanation remains visible. Other providers permit saving a key but explain that discovery and model selection are deferred. Unknown-capability models are disabled. Replacing a provider/key clears previous model choices. Public discovery never labels a key or model as tested.
+
+## 3.6 New-account introduction
+
+New password and Google accounts receive six grouped stops: workspace activity; research requests; lead lists; outreach and Watch; connections; workspace management. Existing accounts are not enrolled. Back, Next, Skip, completion, and quiet Resume support a short, skippable introduction with account-owned progress.
+
+Refresh restores an active tour; interrupted later sessions offer Resume. Closing or skipping dismisses automatic display. Completion does not configure services or create research. The final Create a request action opens the normal form. Failed persistence offers retry and does not claim cross-device success. Focus handling, Escape, reduced motion, and narrow layouts are covered by frontend tests.
 
 # 4. Visual system
 
@@ -124,7 +140,7 @@ Every data view defines these states:
 
 # 6. Content and tone
 
-* Plain, specific, short. Name the thing and the next step ("Add your Serper API key in Profile to run a sample").
+* Plain, specific, short. Name the thing and the next step ("Add your Serper API key in Account settings to run a sample").
 * No claim the product cannot back: the earlier "automated sequencing" copy was removed until sequences were real.
 * Compliance language is factual and links to the privacy page; it is not legal advice.
 

@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -7,6 +9,7 @@ from app.db.engine import connect_db, close_db
 from app.db.requests import fail_orphaned_requests
 from app.api import auth, users, requests, leads, request_intake, competitors, tech_stack
 from app.api import google_auth
+from app.api import connections
 from app.api import organizations
 from app.api import jobs as jobs_router
 from app import jobs
@@ -48,6 +51,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from app.services.connections import ConnectionRequired  # noqa: E402
+
+
+@app.exception_handler(ConnectionRequired)
+async def missing_ai_connection(request: Request, exc: ConnectionRequired):
+    return JSONResponse(status_code=409, content={'detail': str(exc)})
+
+
+@app.exception_handler(RequestValidationError)
+async def safe_connection_validation(request: Request, exc: RequestValidationError):
+    if '/users/me/ai-connection' in request.url.path:
+        return JSONResponse(status_code=422, content={'detail': [
+            {'loc': list(error['loc']), 'msg': error['msg'], 'type': error['type']}
+            for error in exc.errors()
+        ]})
+    return await request_validation_exception_handler(request, exc)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -67,6 +87,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(users.router, prefix=settings.API_V1_STR)
+app.include_router(connections.router, prefix=settings.API_V1_STR)
 app.include_router(requests.router, prefix=settings.API_V1_STR)
 app.include_router(leads.router, prefix=settings.API_V1_STR)
 app.include_router(request_intake.router, prefix=settings.API_V1_STR)

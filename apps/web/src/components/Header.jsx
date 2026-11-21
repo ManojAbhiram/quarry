@@ -165,9 +165,6 @@ export default function Header({ sidebar, quiet = false }) {
             onChange={(e) => setGlobalSearchQuery(e.target.value)}
             className="h-9 w-full bg-transparent text-sm text-ink placeholder:text-muted/80 focus:outline-none"
           />
-          <kbd aria-hidden="true" className="whitespace-nowrap rounded border border-line px-1.5 py-0.5 text-[10px] font-semibold text-muted">
-            Ctrl K
-          </kbd>
         </div>
 
         <div className="ml-auto flex items-center gap-2">

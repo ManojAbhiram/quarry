@@ -1,9 +1,13 @@
+# Quarry Security and Compliance
+
+[Documentation index](../README.md)
+
 | | |
 |---|---|
 | **Document** | Threat model, security controls, privacy design and compliance posture |
-| **Version** | 1.0 |
-| **Date** | 2026-11-10 |
-| **Status** | Controls described here are implemented. The legal analysis is **not legal advice**; it summarizes research notes and must be reviewed by counsel before a hosted launch |
+| **Document revision** | 1.1 |
+| **Last reviewed** | 2026-11-18 |
+| **Status** | Describes implemented controls and known limits; live-service and external security validation remain outstanding. The legal analysis is **not legal advice**; it summarizes research notes and must be reviewed by counsel before a hosted launch |
 
 ---
 
@@ -29,7 +33,7 @@ Security and compliance are therefore part of the product, not a launch checklis
 | Lead and decision-maker data (third-party PII) | High | `leads`, `decision_makers`, `lead_enrichments` |
 | Suppression ledger | High (legal effect) | `suppressions` |
 | Billing state | High | `credit_ledger`, `subscriptions`, `billing_events` |
-| Operator server keys (Serper, LLM, payments) | High | Environment only |
+| Operator service credentials (payments, system SMTP, OAuth clients) | High | Environment or deployment secret store; personal Serper and AI keys are account-owned encrypted fields |
 
 ## 2.2 Actors
 
@@ -107,12 +111,15 @@ Hosting it makes that a server-side request forgery risk. `core/url_guard.py` is
 
 | Secret | Protection |
 |---|---|
-| User Serper key, verifier key, provider keys (Hunter, Snov, PDL), mailbox SMTP and IMAP passwords, CRM tokens | Fernet (AES-128-CBC plus HMAC) with a key derived from `SECRET_KEY`; masked on read; validated with a live call when saved where possible |
+| Personal AI and Serper keys, verifier and enrichment provider keys, mailbox passwords, CRM tokens | Fernet with a key derived from `SECRET_KEY`; masked where exposed. Saving AI or Serper keys makes no upstream call and does not verify credentials |
 | Public API keys | SHA-256 hash only |
-| Invite and reset tokens | Stored hashed |
+| Invite tokens | Stored hashed |
+| Password-reset tokens | Stateless signed JWTs; reusable until expiry (known limitation) |
 | Unsubscribe and tracking tokens | HMAC-signed, purpose-bound, so a token minted for one purpose is rejected for another |
 | Outbound webhook signing secret | Stored encrypted; HMAC-SHA256 over `timestamp.body` |
-| Job payloads | Never contain secrets; handlers load the key at run time |
+| Job payloads | Never contain secrets; handlers reload and bind the owner's current keys at run time, then clear task context |
+| AI provider destinations | Fixed official origins; no custom endpoints or arbitrary headers. OpenRouter catalogue discovery is anonymous, redirects are disabled, and no credential fallback occurs |
+| Setup and introduction | No generation or search on credential save, metadata verification, or tour advancement. Public model discovery does not establish key validity or model entitlement |
 
 **Limitation.** The encryption key is derived from `SECRET_KEY`, so rotating `SECRET_KEY` makes stored credentials
 unreadable. Before hosting, move to a versioned data key held in a secret manager.
@@ -127,7 +134,7 @@ unreadable. Before hosting, move to a versioned data key held in a secret manage
 * nginx proxies `/api` so cookies are same-origin; long timeouts and no buffering support server-sent events.
 * TLS terminates in front of the containers. nginx here speaks plain HTTP, so **do not expose port 8080 directly to
   the internet**.
-* Dependencies are pinned by `uv.lock` and `requirements.txt`; CI runs the full test suite on every push.
+* Dependencies are recorded in `uv.lock` and requirements files; CI runs automated checks on pull requests and configured push events.
 
 **Recommended before hosting:** HSTS and security headers (CSP, `X-Content-Type-Options`, `Referrer-Policy`) at the
 proxy; dependency vulnerability scanning in CI; secret scanning; backups of the data volume with a restore test.
@@ -150,13 +157,13 @@ proxy; dependency vulnerability scanning in CI; secret scanning; backups of the 
 | Right or duty | Control |
 |---|---|
 | **Transparency / source notice** | Per-field provenance (source URL and collection date) in the UI; exports carry a source-notice line and opt-out instruction; a public `/privacy` page |
-| **Objection / opt-out** | Public opt-out page and signed links; one-click unsubscribe headers; opt-outs write to the suppression ledger |
-| **Suppression is enforced** | The ledger is checked **before enrichment, export and send**, by email and by whole domain |
-| **Erasure** | `/compliance/erase` removes a person across the workspace; account deletion cascades; an audit entry records the action without the raw value |
+| **Objection / opt-out** | Public opt-out page and signed links; one-click unsubscribe headers; opt-outs write to the relevant sender's suppression ledger |
+| **Suppression is enforced** | Owner-scoped checks apply before supported enrichment, standard server company/contact/list exports, and send. Local company CSV, public API, integration exports, and CRM pushes require separate review |
+| **Erasure** | `/compliance/erase` removes matching decision makers and clears matching lead contact fields for the caller. Account deletion removes research data, lists, and sessions; automation resources and external copies require separate cleanup |
 | **Storage limitation** | Rejecting a lead starts a 30-day clock; `compliance.retention` purges rejected leads and un-promoted search results (and the people in them) after 30 days, runnable on a schedule or on demand with `--dry-run` |
 | **Regional handling** | Region flag per lead (EU, UK, CA, IN) with a note, inferred from country, location text or domain suffix |
 | **Accountability** | Append-only audit log, visible in the Compliance page |
-| **Data minimization** | Search results are not promoted to leads until reviewed; sensitive provider keys never leave the server |
+| **Data minimization** | Research results are saved for user review; provider keys are returned only in masked form and sent only to their designated provider for requested operations |
 
 # 9. Legal and regulatory map
 
@@ -202,6 +209,8 @@ proxy; dependency vulnerability scanning in CI; secret scanning; backups of the 
 | Area | Test evidence |
 |---|---|
 | Cookie auth and CSRF | `test_auth_cookies.py` |
+| Personal credentials, provider transport, and owner isolation | `test_user_connections.py`, `test_connection_entrypoints.py` |
+| Account introduction state and stale updates | `test_user_connections.py`; frontend `WelcomeTour.test.jsx` and `AuthContext.test.jsx` |
 | Ownership and flow hardening | `test_flow_hardening.py`, `tests/db/test_hardening.py`, `test_dependencies.py` |
 | SSRF guard and pinning | `test_url_guard*.py` (six modules) |
 | Compliance | `tests/phase2/test_compliance.py`, `test_provenance_region.py` |

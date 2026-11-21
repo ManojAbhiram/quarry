@@ -12,6 +12,7 @@ from typing import Protocol
 import httpx
 
 from app.p3.config import p3_settings
+from app.services.connections import current_connection
 
 API = "https://api.anthropic.com/v1/messages/batches"
 
@@ -41,12 +42,16 @@ class RealBatchClient:
             return r.json()["id"]
 
     async def status(self, batch_id: str) -> dict:
+        from urllib.parse import quote
+        batch_id = quote(batch_id, safe='')
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.get(f"{API}/{batch_id}", headers=self._h)
             r.raise_for_status()
             return r.json()
 
     async def results(self, batch_id: str) -> list[dict]:
+        from urllib.parse import quote
+        batch_id = quote(batch_id, safe='')
         async with httpx.AsyncClient(timeout=120) as c:
             r = await c.get(f"{API}/{batch_id}/results", headers=self._h)
             r.raise_for_status()
@@ -67,15 +72,20 @@ class Disabled(RuntimeError):
 def _client() -> BatchClient:
     if not p3_settings.claude_batch_scoring:
         raise Disabled("Claude batch scoring is disabled (set CLAUDE_BATCH_SCORING=true)")
+    connection = current_connection.get()
+    if not connection or connection.get('provider') != 'anthropic' or not connection.get('primary_model'):
+        raise Disabled('Configure your own Anthropic connection and model in Account to use Claude batch scoring.')
     if ports.client:
         return ports.client
-    if not p3_settings.anthropic_api_key:
-        raise Disabled("ANTHROPIC_API_KEY is not configured")
-    return RealBatchClient(p3_settings.anthropic_api_key)
+    return RealBatchClient(connection['api_key'])
 
 
 def build_requests(leads: list[dict], icp: str, rubric: str = DEFAULT_RUBRIC, model: str | None = None) -> list[dict]:
     """One batch request per lead. The rubric is a cache_control'd system block shared by all of them."""
+    connection = current_connection.get() or {}
+    model = model or connection.get('fast_model') or connection.get('primary_model')
+    if not model:
+        raise Disabled('Select an Anthropic model in Account settings before scoring.')
     system = [{"type": "text", "text": rubric, "cache_control": {"type": "ephemeral"}}]
     out = []
     for lead in leads:
@@ -83,7 +93,7 @@ def build_requests(leads: list[dict], icp: str, rubric: str = DEFAULT_RUBRIC, mo
         out.append({
             "custom_id": str(lead["_id"]),
             "params": {
-                "model": model or p3_settings.claude_scoring_model, "max_tokens": 200, "system": system,
+                "model": model, "max_tokens": 200, "system": system,
                 "messages": [{"role": "user", "content": f"ICP:\n{icp}\n\nLead:\n{json.dumps(facts)}"}],
             },
         })
