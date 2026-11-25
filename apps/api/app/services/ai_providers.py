@@ -238,6 +238,9 @@ async def generate(provider, key, model, system, prompt, max_tokens, temperature
                 'max_completion_tokens' if provider == 'openai' else 'max_tokens': max_tokens, 'temperature': temperature}
         if provider == 'openrouter':
             body.update(modalities=['text'], provider={'allow_fallbacks': False})
+            if model == 'anthropic/claude-haiku-5.5':
+                # Optional reasoning can exhaust this model's completion budget before it finishes the response.
+                body['reasoning'] = {'effort': 'none'}
     data = await _request(client, 'POST', base + path, headers=headers(provider, key), json=body)
     try:
         if provider == 'anthropic':

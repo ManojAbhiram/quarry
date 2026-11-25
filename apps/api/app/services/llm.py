@@ -1431,7 +1431,7 @@ You must return a JSON object with exactly these 6 keys:
 - deployment_pref: Cloud infrastructure preferences, on-premises needs, or hosting restrictions.
 
 Each key maps to an object with exactly 3 fields:
-- "value": bullet-pointed text (lines starting with '•')
+- "value": up to three short bullet points (lines starting with '•')
 - "confidence": exactly one of "High Confidence", "Medium Confidence", "Low Confidence"
 - "warning": brief alert text if Medium/Low confidence, null if High
 
@@ -1453,7 +1453,7 @@ Return ONLY a JSON object with these 6 keys.
         model="primary",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
-        max_tokens=1500,
+        max_tokens=2400,
         timeout=45,
     )
     
