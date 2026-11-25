@@ -107,11 +107,13 @@ async def generate_icp_endpoint(
 ):
     if not request_id:
         raise HTTPException(status_code=422, detail="request_id query parameter is required")
+    user_id = str(current_user["_id"])
+    if not await get_request_by_id(request_id, user_id):
+        raise HTTPException(status_code=404, detail="Lead request not found")
     logger.info(
         "ICP generation for user=%s product=%s request_id=%s",
         current_user.get("email"), body.product_name, request_id,
     )
-    user_id = str(current_user["_id"])
     icp_data = await svc.generate_icp(body.model_dump(), request_id, user_id)
     # NOTE: Competitor pipeline is intentionally NOT triggered here.
     # It runs exactly once from the /launch endpoint to avoid duplicate executions.
