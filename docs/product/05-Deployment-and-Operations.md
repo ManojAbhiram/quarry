@@ -36,7 +36,7 @@ duplicate runs and write contention. The Dockerfile starts uvicorn with a single
 | Each user's AI connection and selected primary model | AI work; OpenRouter model setup is available, while setup for five other providers is deferred |
 | A domain and a TLS-terminating reverse proxy or load balancer | Cookies are `Secure` over https; nginx here listens on plain HTTP |
 | An SMTP account for system email | Password reset and team invites |
-| Optional: Stripe or Razorpay, Google OAuth client, HubSpot app, Hunter/Snov/PDL keys | Billing, Google sign-in, CRM, waterfall enrichment |
+| Optional: Google OAuth client, HubSpot app, Hunter/Snov/PDL keys | Google sign-in, CRM, waterfall enrichment |
 
 # 3. Configuration
 
@@ -53,7 +53,6 @@ duplicate runs and write contention. The Dockerfile starts uvicorn with a single
 | `COOKIE_SECURE` | `true` |
 | `COOKIE_SAMESITE` | `lax` when web and API share a site; `none` (forces Secure) when they are on different sites |
 | `OUTREACH_POSTAL_ADDRESS` | Real sender postal address (required for compliant sending) |
-| `PAYMENT_PROVIDER` | `stripe` or `razorpay`; leave `mock` only for local demos |
 | `GOOGLE_REDIRECT_URI` | Registered with Google if Google sign-in is on |
 
 4. If web and API are on different sites, build the web image with
@@ -148,7 +147,7 @@ Set `P3_SCHEDULER=false` to stop the periodic loop (for example during maintenan
 
 **Gap:** there is no metrics, tracing or paging system. Before hosting for others, add: request latency and error
 rate, queue depth and oldest queued job age, job failure rate, disk usage of the volume, and daily LLM and Serper
-spend. A free uptime monitor on `/api/health` is the minimum.
+spend. Monitor uptime using `/api/health`.
 
 # 10. Capacity and limits
 
@@ -157,8 +156,6 @@ spend. A free uptime monitor on `/api/health` is the minimum.
 | API processes | 1 | Move to Postgres before adding more |
 | Concurrent jobs | `JOB_WORKER_CONCURRENCY` (4) | Raise cautiously; writes still serialize |
 | `num_leads` per request | 200 | Hard validation |
-| Plan quotas | Free 3, Pro 50, Team 250 requests per month | Upgrade or top up credits |
-| Per-user cost quota | $20 estimated per month | Override per user |
 | Mailbox daily cap | 40 default | Per mailbox setting |
 | Disk | The volume | Monitor; SQLite grows with leads and the search cache |
 
@@ -192,13 +189,7 @@ The LLM call failed or returned unparsable output. The lead is kept with a reaso
    suppressed.
 4. Use "Test connection" to confirm SMTP and IMAP credentials.
 
-## 11.5 Payments did not credit
-
-Credits are added only when the provider's signed webhook arrives. Check the provider dashboard for delivery
-failures, confirm `PUBLIC_API_URL` and the webhook secret, and look at `billing_events`. Replays are safe: processing
-is idempotent per event.
-
-## 11.6 Handle an opt-out or erasure request
+## 11.5 Handle an opt-out or erasure request
 
 1. Add the address or domain under Compliance, Suppressions (or the recipient uses the public opt-out link).
 2. For erasure, use the Compliance erase tool with the person's email; confirm the audit entry.
@@ -223,6 +214,6 @@ is idempotent per event.
 * [ ] Retention purge scheduled
 * [ ] Monitoring and uptime checks in place
 * [ ] Account setup tested: encrypted personal keys, OpenRouter discovery/model selection, new-account introduction, and deferred-provider notices
-* [ ] End-to-end run with real keys: pipeline, verification providers, SMTP and IMAP, Stripe or Razorpay, HubSpot
+* [ ] End-to-end run with real keys: pipeline, verification providers, SMTP and IMAP, HubSpot
 * [ ] Two-account check of shared lists and requests in one workspace
 * [ ] Dependency and secret scanning enabled in CI

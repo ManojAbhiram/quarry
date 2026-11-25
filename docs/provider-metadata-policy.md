@@ -2,7 +2,7 @@
 
 [Documentation index](README.md)
 
-Reviewed on 2026-11-16. This document records exactly which setup calls Quarry enables and why. It is not a blanket assertion that a provider's GET endpoints are free.
+Reviewed on 2026-11-16. This document records exactly which setup calls Quarry enables and why. The findings apply to the specific routes and authentication methods reviewed.
 
 ## Enabled: OpenRouter anonymous model discovery
 
@@ -31,7 +31,7 @@ The [current-key reference](https://openrouter.ai/docs/api/api-reference/api-key
 | Groq | [Authenticated model list](https://console.groq.com/docs/models) | Deferred under the same restriction |
 | DeepSeek | [GET `/models`](https://api-docs.deepseek.com/api/list-models/) | Deferred under the same restriction |
 
-Provider pricing pages, free inference tiers and success with a model-list request do not independently prove an authenticated metadata billing guarantee. Keys for deferred providers may be saved securely, but model selection remains unavailable. No setup call uses Serper search credits.
+Provider pricing pages, inference allowances and success with a model-list request do not independently prove an authenticated metadata billing guarantee. Keys for deferred providers may be saved securely, but model selection remains unavailable. No setup call uses Serper search credits.
 
 To enable protected metadata later, record its endpoint-specific billing evidence in `METADATA_POLICIES`, or obtain explicit product-owner approval to relax this requirement and change the notice accordingly. `PUBLIC_CATALOGUE_POLICIES` is a separate allowlist for documented anonymous discovery. Tests injecting a protected policy are fixtures, not production approval.
 

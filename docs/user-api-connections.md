@@ -15,7 +15,7 @@ Keys are encrypted using the existing application SECRET_KEY. No plaintext keys 
 
 ## Reviewed metadata boundary
 
-`app/services/ai_providers.py` keeps authenticated `METADATA_POLICIES` empty. OpenRouter has a separate `PUBLIC_CATALOGUE_POLICIES` entry for its documented headerless model-list endpoint. That request cannot use the saved connection key's credits because the transport never sends the key, authentication or cookies. This is a technical account-credit isolation conclusion, not an explicit vendor guarantee that all metadata calls are free.
+`app/services/ai_providers.py` keeps authenticated `METADATA_POLICIES` empty. OpenRouter has a separate `PUBLIC_CATALOGUE_POLICIES` entry for its documented headerless model-list endpoint. That request cannot use the saved connection key's credits because the transport never sends the key, authentication or cookies. This conclusion applies to the credentials omitted from this request.
 
 OpenRouter supports model selection for explicitly requested AI work. No test generation is required; the key may still be rejected during an explicitly requested AI task. Verify credentials is disabled with an explanation, and the verification API performs no call or catalogue reset. New connections default to the provider with enabled discovery. Other providers explain that model setup is deferred.
 
@@ -27,7 +27,7 @@ The supported fixed API bases are OpenAI `/v1`, Anthropic `/v1`, Gemini `/v1beta
 
 New password and Google user records get explicit eligibility. Existing records, normal login and Google account linking never create or reset it. Six stops introduce workspace activity, requests, lead lists, outreach/watch, connections and workspace management. Progress uses account-owned revision checks; completed/dismissed states cannot be reopened by stale tabs.
 
-Refresh can restore an active session. A later session offers Resume. Closing or skipping dismisses the automatic introduction. Finishing does not configure services or create a request; the final Create a request action only opens the normal form. No provider discovery, search, export, outreach or billing action runs during the tour. Persistence errors keep a locally closed tour closed for that session and offer retry. Local session markers contain no credentials and are scoped by account ID.
+Refresh can restore an active session. A later session offers Resume. Closing or skipping dismisses the automatic introduction. Finishing does not configure services or create a request; the final Create a request action only opens the normal form. No provider discovery, search, export or outreach action runs during the tour. Persistence errors keep a locally closed tour closed for that session and offer retry. Local session markers contain no credentials and are scoped by account ID.
 
 ## ModelPort assessment
 

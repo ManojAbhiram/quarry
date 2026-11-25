@@ -15,7 +15,7 @@
 
 Quarry stores two kinds of sensitive data:
 
-1. **The customer's secrets**: API keys, mailbox passwords, CRM tokens, payment state.
+1. **The customer's secrets**: API keys, mailbox passwords, CRM tokens.
 2. **Third-party personal data**: names, job titles, email addresses and profile links of people who never signed up.
    This is the larger obligation. Those people have rights (to be told, to object, to be erased) that Quarry's
    customers have to be able to honour through the product.
@@ -32,8 +32,7 @@ Security and compliance are therefore part of the product, not a launch checklis
 | Customer API and mailbox secrets | High | Encrypted fields in `users`, `outreach_mailboxes`, `provider_keys`, `crm_connections` |
 | Lead and decision-maker data (third-party PII) | High | `leads`, `decision_makers`, `lead_enrichments` |
 | Suppression ledger | High (legal effect) | `suppressions` |
-| Billing state | High | `credit_ledger`, `subscriptions`, `billing_events` |
-| Operator service credentials (payments, system SMTP, OAuth clients) | High | Environment or deployment secret store; personal Serper and AI keys are account-owned encrypted fields |
+| Operator service credentials (system SMTP and OAuth clients) | High | Environment or deployment secret store; personal Serper and AI keys are account-owned encrypted fields |
 
 ## 2.2 Actors
 
@@ -44,7 +43,7 @@ Security and compliance are therefore part of the product, not a launch checklis
 | Hostile web page or search result | Content Quarry fetches and feeds to an LLM | SSRF to internal services; prompt injection |
 | Hostile DNS server | Answers differently on repeated lookups | DNS rebinding past the address check |
 | Malicious email recipient | Receives outreach | Forge an unsubscribe for someone else |
-| Network attacker | Observes or replays traffic | Session theft, replayed payment webhooks |
+| Network attacker | Observes or replays traffic | Session theft |
 | Compromised dependency | Runs in the API process | Exfiltrate secrets |
 
 ## 2.3 STRIDE summary
@@ -55,7 +54,7 @@ Security and compliance are therefore part of the product, not a launch checklis
 | **T**ampering | Client sets request status to Completed | `status` is server-controlled; client value ignored | None known |
 | **R**epudiation | "I never erased that person" | Append-only `audit_log` of compliance actions | Audit log is in the same database |
 | **I**nformation disclosure | Cross-tenant read; PII in logs; secrets in URLs | Ownership checks on every lookup; enriched payloads not logged at INFO; no tokens in URLs (SSE `?token=` exists only for clients that cannot send headers) | `?token=` can reach proxy logs; prefer the cookie |
-| **D**enial of service | Many launches on one SQLite writer | Rate limits, plan and cost quotas, `num_leads` capped at 200 per request | Single-writer ceiling |
+| **D**enial of service | Many launches on one SQLite writer | Rate limits and a cap of 200 on `num_leads` per request | Single-writer ceiling |
 | **E**levation | Viewer performs admin action | Per-endpoint minimum role | None known |
 
 # 3. Authentication and sessions
@@ -84,7 +83,7 @@ Security and compliance are therefore part of the product, not a launch checklis
   widens write access.
 * **Public API keys.** Stored only as a SHA-256 hash, shown once, prefixed `qk_`, revocable, and usable only on the
   read-only `/public/v1` routes.
-* **Admin operations.** Billing top-ups, member management and integrations require admin.
+* **Admin operations.** Member management and CRM administration require the admin role or higher.
 
 # 5. Outbound request safety (SSRF)
 
@@ -214,12 +213,11 @@ proxy; dependency vulnerability scanning in CI; secret scanning; backups of the 
 | Ownership and flow hardening | `test_flow_hardening.py`, `tests/db/test_hardening.py`, `test_dependencies.py` |
 | SSRF guard and pinning | `test_url_guard*.py` (six modules) |
 | Compliance | `tests/phase2/test_compliance.py`, `test_provenance_region.py` |
-| Billing idempotency and webhook signatures | `tests/growth/test_billing.py`, `test_topup.py` |
 | Outreach footer, unsubscribe and tokens | `tests/p3/test_outreach_footer.py`, `test_p3_outreach_logic.py` |
 | Deployment env | `test_deployment_env.py` |
 
 **Not yet done:** an external penetration test, dependency vulnerability scanning in CI, and a review of the
-live-service paths (payments, OAuth, real SMTP) against real providers.
+live-service paths (OAuth and SMTP) against real providers.
 
 # 12. Known gaps and recommended fixes
 
@@ -229,7 +227,7 @@ These were found while writing this document by reading the code. None is a regr
 |---|---|---|---|---|
 | 1 | Password-reset token is a stateless JWT: reusable until expiry | A leaked reset email link works more than once | Store a one-time token hash (or a password-version claim) and invalidate on use | P2 |
 | 2 | Password reset does not revoke existing sessions | An attacker holding a stolen session survives a password change | Delete all `user_sessions` for the user on reset and on password change | P2 |
-| 3 | No cap on concurrent pipeline runs per user | One user can queue many runs against one SQLite writer | Limit active runs per user; the plan and cost quotas already bound monthly volume | P3 |
+| 3 | No cap on concurrent pipeline runs per user | One user can queue many runs against one SQLite writer | Limit active runs per user | P3 |
 | 4 | No response-size cap in the scraper | A hostile page could return a very large body | Stream with a byte limit | P3 |
 | 5 | Encryption key derived from `SECRET_KEY` | Rotation orphans stored credentials | Versioned data key from a secret manager | P2 before hosting |
 | 6 | SSE accepts `?token=` | Token can appear in proxy logs | Prefer cookie auth; strip the query string from access logs | P3 |

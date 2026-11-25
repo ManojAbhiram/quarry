@@ -79,7 +79,6 @@ WAL mode, `foreign_keys=ON`, one process-wide write lock.
 | Table | Key columns | Notes |
 |---|---|---|
 | `provider_keys` | `user_id`, `provider` | Encrypted Hunter, Snov and PDL keys |
-| `enrichment_credit_ledger` | `user_id`, `created_at` | Email-lookup credits (separate from request credits) |
 | `fallback_suppressions` | `owner_id`, `value` | Providers/values to skip in the waterfall |
 | `saved_searches` | `user_id` | Filters, alert settings, `seen_ids` |
 | `signal_events` | `user_id`, `domain`, `kind`, `detected_at` | Hiring, funding, news, tech change |
@@ -87,15 +86,6 @@ WAL mode, `foreign_keys=ON`, one process-wide write lock.
 | `api_keys` | `user_id`, `key_hash` | SHA-256 hash only; prefix kept for display |
 | `webhooks`, `webhook_deliveries`, `webhook_subscriptions` | `user_id`; `webhook_id`, `status`, `next_attempt_at`; `scope_id`, `event` | Delivery log with attempts and next attempt time |
 | `crm_connections`, `crm_sync` | `scope_id`, `provider`; `connection_id`, `lead_id` | Per-lead sync status |
-
-### Billing
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `subscriptions` | `scope_id`, `provider_subscription_id` | Scope is the user or the organization |
-| `credit_ledger` | `scope_id`, `kind`, `ref`, `created_at` | Append-only: grant, spend, top-up. Balance is the sum |
-| `billing_events` | `event_key` (unique) | Idempotency record for payment webhooks |
-| `invoices` | `scope_id`, `invoice_key` | |
 
 ### Compliance and usage
 
@@ -122,7 +112,7 @@ WAL mode, `foreign_keys=ON`, one process-wide write lock.
 | `app/jobs.py` | Durable queue and worker: `enqueue`, `register_handler`, `cancel_job`, `recover_running_jobs` |
 | `app/core/` | `config`, `cookies` (sessions and CSRF), `url_guard` (SSRF), `rate_limit`, `security_crypto`, `scoring_config`, `logger` |
 | `app/db/` | `engine`, `docstore`, `models`, `models_trust`, `growth_models`, `migrations`, one repository per table |
-| `app/api/` | Routers: auth, google_auth, users, organizations, teams, requests, request_intake, leads, lists, competitors, tech_stack, jobs, verification, compliance, usage, billing, integrations, connections |
+| `app/api/` | Routers: auth, google_auth, users, organizations, teams, requests, request_intake, leads, lists, competitors, tech_stack, jobs, verification, compliance, usage, integrations, connections |
 | `app/services/` | Pipeline (`leads.py`, `pipeline_jobs.py`), AI (`llm.py`, `ai_providers.py`, `connections.py`), account introduction (`onboarding.py`), `scraper`, `serper`, `scoring`, tech-stack fingerprinting, company enrichment, `product_similarity`, `competitor_service`, `export_service`, `auth`, `email` |
 | `app/outreach/` | `service` (mailboxes, sequences, send loop), `inbound` (IMAP polling, DSN), `logic` (templates, windows, warmup, signed tokens), `dnscheck`, `api` |
 | `app/verification/` | `service`, `local` checks, `smtp` probe, `providers`, `types` |
@@ -130,11 +120,10 @@ WAL mode, `foreign_keys=ON`, one process-wide write lock.
 | `app/watch/` | `searches`, `signals`, `ports`, `api` |
 | `app/integrations/` | Public API keys, outbound webhooks, `api` |
 | `app/crm/` | `CrmConnector` interface, `hubspot`, `mapping`, `service`, `jobs` |
-| `app/billing/` | `plans`, `service`, `store`, payment `providers` (Stripe, Razorpay, mock) |
 | `app/teams/` | Role helpers, workspace dependencies, invite mailer |
 | `app/compliance/` | `optout`, `person_erasure`, `retention`, `region`, `exports`, `audit` |
 | `app/p3/` | Wiring for scheduled jobs and settings for outreach, enrichment and watch |
-| `app/usage.py`, `provenance.py`, `suppression.py` | Metering and quotas, per-field provenance, suppression matching |
+| `app/usage.py`, `provenance.py`, `suppression.py` | Provider usage metering, per-field provenance, suppression matching |
 
 # 4. Pipeline internals
 
@@ -214,7 +203,7 @@ provider-signed webhook. **Role** is the minimum workspace role when an organiza
 | POST | `/requests/launch`, `/requests/launch-direct` | Start a discovery or direct-company run (202) |
 | POST | `/requests/parse-companies-csv` | Parse an uploaded company list |
 | POST | `/usage/estimate`, `/usage/sample-run` | Cost estimate; first search only, no commitment |
-| GET | `/usage/summary` | Runs, calls, estimated cost and quota left this month |
+| GET | `/usage/summary` | Monthly runs, samples, provider calls and estimated provider cost |
 
 ## 5.3 Leads
 
@@ -229,7 +218,7 @@ provider-signed webhook. **Role** is the minimum workspace role when an organiza
 | POST | `/verification/decision-makers/{dm_id}/verify` | Verify one decision maker's email |
 | GET / PUT / DELETE | `/verification/settings`, `/verification/settings/key` | Verifier provider and key |
 | POST | `/enrichment/leads/{lead_id}/waterfall` | Run the waterfall for a lead |
-| GET | `/enrichment/credits` | Email-lookup credit balance |
+| GET | `/enrichment/keys` | Masked email lookup keys and availability of operator-configured keys |
 | PUT / DELETE | `/enrichment/keys/{provider}` | Store or remove a provider key |
 | POST / GET | `/enrichment/scoring/batch`, `/enrichment/scoring/batch/{id}` | Batch AI scoring |
 | GET | `/leads/{request_id}/export/{companies\|competitors\|decision-makers}?format=csv\|xlsx\|pdf` | Export |
@@ -287,7 +276,7 @@ Webhook events: `outreach.reply`, `outreach.bounce`, `outreach.unsubscribe`, `si
 `X-Quarry-Signature: t=<unix>,v1=HMAC_SHA256(secret, "<t>." + body)`; receivers should reject timestamps older than
 5 minutes.
 
-## 5.8 Workspaces and billing
+## 5.8 Workspaces
 
 | Method | Path | Role | Purpose |
 |---|---|---|---|
@@ -298,10 +287,6 @@ Webhook events: `outreach.reply`, `outreach.bounce`, `outreach.unsubscribe`, `si
 | GET / POST / DELETE | `/orgs/{id}/invites[/{invite_id}]` | admin | Invites; the API returns the link at once and sends email in the background (`email_status`) |
 | POST / DELETE | `/orgs/{id}/shares[/{type}/{resource_id}]` | member | Share or unshare a request or list |
 | GET | `/orgs/{id}/shared/requests[/{id}]`, `/shared/lists[/{id}]` | viewer | Read teammates' shared items |
-| GET | `/billing/plans`, `/billing/summary`, `/billing/invoices` | member | Plans, balances and quota, invoices |
-| GET / POST | `/billing/topup` | admin | Credit packs; start checkout |
-| POST | `/billing/checkout` | admin | Plan checkout |
-| POST | `/billing/webhooks/{provider}` | W | Signed, idempotent provider callback |
 
 ## 5.9 Compliance and operations
 
@@ -328,13 +313,10 @@ Webhook events: `outreach.reply`, `outreach.bounce`, `outreach.unsubscribe`, `si
 | `COOKIE_SECURE`, `COOKIE_SAMESITE`, `COOKIE_DOMAIN` | no | secure when https; `lax` | Session cookie attributes |
 | `JOB_WORKER_CONCURRENCY`, `JOB_POLL_INTERVAL_SECONDS`, `JOB_MAX_ATTEMPTS`, `JOB_BACKOFF_*` | no | 4, 1.0, 3 | Worker tuning |
 | `ICP_FILTER_ENABLED`, `ICP_SCORE_THRESHOLD` | no | false, 60 | Optional score filter |
-| `QUOTA_RUNS_PER_MONTH`, `QUOTA_COST_USD_PER_MONTH` | no | 30, 20 | Per-user usage quota |
 | `SERPER_USD_PER_CALL`, `LLM_USD_PER_CALL` | no | 0.001, 0.002 | Cost estimate unit prices |
 | `P3_SCHEDULER`, `P3_SCHEDULER_INTERVAL` | no | true, 60 | Periodic job scheduler |
 | `OUTREACH_POSTAL_ADDRESS` | for sending | placeholder | Footer sender address |
 | `OUTREACH_BOUNCE_PAUSE_THRESHOLD`, `OUTREACH_BOUNCE_MIN_SAMPLE` | no | 0.02, 20 | Mailbox auto-pause |
-| `ENRICH_FREE_CREDITS` | no | 100 | Starting email-lookup credits |
 | `CLAUDE_BATCH_SCORING` | no | false | Optional batch scoring; requires the owner's Anthropic connection and selected fast/primary model. New Anthropic model setup remains deferred |
-| `PAYMENT_PROVIDER` and Stripe / Razorpay keys | for billing | `stripe` | Default checkout provider; payment options require configured credentials. `mock` must be explicitly selected for local demonstrations |
 
 The root `.env.production.example` documents deployment settings. Serper and AI credentials are stored per account, not configured through operator environment variables. See [Personal API Connections](../user-api-connections.md) for the setup sequence and metadata restrictions.
