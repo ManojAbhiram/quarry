@@ -37,10 +37,6 @@ class P3Settings:
         return int(os.getenv("OUTREACH_BOUNCE_MIN_SAMPLE", "20"))
 
     @property
-    def free_credits(self) -> int:
-        return int(os.getenv("ENRICH_FREE_CREDITS", "100"))
-
-    @property
     def claude_batch_scoring(self) -> bool:
         return _bool("CLAUDE_BATCH_SCORING", "false")
 

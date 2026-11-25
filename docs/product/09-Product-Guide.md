@@ -36,7 +36,7 @@ This guide follows the tasks you will perform in the application. Start with acc
 
 Bold labels identify controls in the application. Numbered lists are steps to follow in order. Workflow diagrams show how tasks connect. Tips and checkpoints highlight decisions worth making before you continue.
 
-Available integrations and payment options depend on your account and workspace setup. Where a connection is unavailable, ask your workspace administrator for help. Example company names and domains are illustrative; `.example` addresses are not for live sending.
+Available integrations depend on your account and workspace setup. Where a connection is unavailable, ask your workspace administrator for help. Example company names and domains are illustrative; `.example` addresses are not for live sending.
 
 ## 02. Your Complete Product Journey
 
@@ -49,7 +49,7 @@ flowchart LR
 
 | Stage | Your action | What to check |
 |---|---|---|
-| Prepare | Sign in, choose your workspace, and configure search and AI connections | You are working in the right account and have available usage |
+| Prepare | Sign in, choose your workspace, and configure search and AI connections | The intended account and workspace are active and both provider connections are configured |
 | Define | Describe your product and ICP, or supply companies and roles | Geography, customer type, and buyer roles match your brief |
 | Research | Launch the saved request | The request progresses or gives a clear recovery action |
 | Review | Inspect companies, sources, people, and email status | Each approved record is suitable for its intended next use |
@@ -87,7 +87,6 @@ You need your Quarry web address, an account, and access to the intended workspa
 | Quarry account and web address | Signing in and accessing your work |
 | Personal Serper API key | Live search and lead research |
 | Personal AI provider key and selected primary model | ICP generation, extraction, and AI-assisted research; OpenRouter model setup is available |
-| Available request allowance and credits | Creating requests and using research tools |
 | Mailbox credentials | Outreach, when you choose to enable it |
 | Authorized CRM or provider credentials | Optional integrations |
 
@@ -110,7 +109,7 @@ For an existing account, enter **Email** and **Password** and select **Sign in**
 4. Confirm that the key is saved. It is masked and should not be shared in screenshots or support messages.
 5. A search you explicitly request may still fail if the key is invalid or its provider quota is exhausted.
 
-> **Before creating requests:** Set up your key first. Creating a saved request, including a draft, uses a request credit and counts toward your request allowance. Deleting the draft does not return that credit.
+> **Before running research:** Save your Serper key and choose an AI model in Account settings.
 
 ### Connect Your AI Provider
 
@@ -155,7 +154,7 @@ The sidebar groups research, outreach, and settings. On smaller screens, open th
 | Integrations | API keys, webhooks, and enrichment-provider keys |
 | CRM integrations | HubSpot connection, mapping, and list push |
 | Team | Organization membership, invitations, and sharing |
-| Billing | Plans, balances, credit packs, and invoices |
+| Usage | Monthly research runs, provider calls and estimated provider cost in Account |
 | Compliance | Suppression, erasure, retention, and action history |
 | Account | Profile, personal search/AI connections and models, email-verification settings |
 
@@ -271,7 +270,7 @@ Use **Run a sample first** to inspect a small candidate preview. Review its titl
 ### Launch the Request
 
 1. Confirm the product, geography, exclusions, roles, and 1-200 target count.
-2. Check your saved Serper key, configured AI connection and primary model, request allowance, and usage estimate.
+2. Check your saved Serper key, configured AI connection and primary model, and usage estimate.
 3. Select **Find matching companies** once.
 4. Wait for **Request launched**, then select **View requests** or return through Dashboard.
 5. Use **Dashboard > Follow progress** to review the running request.
@@ -346,7 +345,7 @@ flowchart LR
 3. Keep useful partial results instead of deleting the whole request.
 4. For a company-specific issue, open its drawer and select **Retry enrichment**. Give the retry time to finish.
 5. If progress remains stalled, contact your administrator with the request ID and approximate time.
-6. Re-launch only after understanding the issue. Repeated research can use additional credits or provider quota.
+6. Re-launch only after understanding the issue. Repeated research uses additional provider calls.
 
 Deleting a request permanently removes its research data; it is not a pause or retry control. Ask your administrator about stopping a running job when necessary.
 
@@ -361,7 +360,7 @@ Begin with identity, then fit, then timing. Use scores to prioritize review rath
 3. Review **Recommended**, **Saved**, **Excluded**, **Valid**, and **Invalid** as needed. Recommended means not yet classified; it is not a separate approval.
 4. Check the company name and website before reading the score.
 5. Click the company to open its drawer. Review **Why it matches**, **Contact**, **Company facts**, **Technology**, and signals.
-6. Open source links and confirm that the information supports your brief and is still relevant.
+6. Follow the source links and confirm that the information supports your brief and is still relevant.
 7. Use the row menu to save, exclude, mark valid/invalid, or **Add to list...**.
 
 The first 25 rows are shown initially; **Show more** reveals additional rows. If results remain filtered after Clear, check header search too. Filters rely on available extracted information and may not cover every company characteristic.
@@ -416,17 +415,17 @@ With email only means an address is present, not that it is deliverable. A gener
 
 Open the company drawer and select **Verify email**, or **Re-check** for an existing result. Lead-list rows also expose verification. Wait for the result and read the reason/date. Individual decision-maker statuses are visible in the contact panel; direct per-person verification may require an administrator-assisted action.
 
-Free checks assess syntax, disposable domains, and mail-domain records. Domain checks alone do not confirm a person's mailbox. Optional paid verification and SMTP checks can provide more information, but a technical result does not establish consent or guarantee delivery.
+Built-in checks assess syntax, disposable domains, and mail-domain records. Domain checks alone do not confirm a person's mailbox. An optional verification provider and SMTP checks can provide more information, but a technical result does not establish consent or guarantee delivery.
 
 ### Set Verification Preferences
 
-Open **Account settings > Email verification**, choose **Paid provider (optional)** or **None, free checks only**, enter a provider key if required, and select **Save settings**. Enable direct SMTP probing only when appropriate for your network/provider. Review a sample result after changing settings.
+Open **Account settings > Email verification**, choose **Verification provider (optional)** or **None, built-in checks only**, enter a provider key if required, and select **Save settings**. Enable direct SMTP probing only when appropriate for your network/provider. Review a sample result after changing settings.
 
 ### Fill Missing Contact Information
 
-**Integrations** provides Hunter, Snov, and People Data Labs key settings and a separate email-lookup credit balance. An administrator-assisted waterfall lookup can try available sources for missing emails. Existing addresses, including inferred ones, may be left unchanged. Verify any returned address before outreach.
+**Integrations > Email lookup providers** is where you manage Hunter, Snov, and People Data Labs keys. An administrator-assisted waterfall lookup can try available sources for missing emails. Existing addresses, including inferred ones, may be left unchanged. Verify any returned address before outreach.
 
-Your own provider keys can incur provider charges even when no Quarry lookup credits are charged. Keep search, verification, and enrichment credentials in their intended settings.
+A lookup can count toward the external provider account used for the request. Keep search, verification, and enrichment credentials in their intended settings.
 
 ## 12. Build Lists and Export
 
@@ -711,7 +710,7 @@ Save work before changing workspace because the page reloads.
 | Role | Typical responsibility |
 |---|---|
 | Owner | Workspace ownership and highest administrative authority |
-| Admin | Membership, invitations, billing, and integration administration |
+| Admin | Membership, invitations, and integration administration |
 | Member | Day-to-day research and sharing eligible work |
 | Viewer | Reading work explicitly shared by the team |
 
@@ -724,36 +723,11 @@ Save work before changing workspace because the page reloads.
 
 Shared requests provide a compact read-only summary; shared lists provide read-only lead rows. Unsharing does not recall downloaded files or external copies. During offboarding, review membership, shared data, and any external keys or mailbox/CRM access the person could use.
 
-## 20. Understand Billing and Usage
+## 20. Review Provider Usage
 
-**Billing** is the place to check your current plan, available balances, credit options, and invoices. Use the prices and limits displayed in your account rather than assuming a fixed catalogue.
+Open **Account > Usage this month** or view the usage card on **Dashboard**. The card shows research runs, sample runs, search and model calls, and estimated provider cost for the current month.
 
-### Understand the Balances
-
-| Limit or balance | What it controls |
-|---|---|
-| Request credits | Creating saved research requests, including drafts |
-| Monthly request allowance | How many requests your plan permits |
-| Research usage | Available launches and estimated provider usage |
-| Email-lookup credits | Eligible missing-email lookups; a separate personal balance |
-| Provider quota | Limits or charges on your own search, AI, verification, or enrichment account |
-
-A credit balance does not override every other limit. A top-up does not necessarily increase your monthly request allowance. Creating a request uses one request credit; deleting it does not refund the credit. Samples, repeats, and additional analysis can use external-provider quota.
-
-### Add Credits or Change Plan
-
-1. Check the active workspace and identify the balance or limit blocking your task.
-2. If top-ups are available, select **Credit pack** and **Add to** Request credits or Email lookup credits.
-3. Select **Add credits** and complete the offered checkout.
-4. Return to Billing and confirm the updated balance and invoice status.
-5. For a plan change, use an available **Upgrade to ...** option and confirm the resulting plan.
-6. If a balance is missing or payment is pending, contact your administrator before paying again.
-
-Owners/admins manage team billing. Payment options depend on service configuration; if checkout is unavailable, ask your administrator. For cancellation or payment-method changes not provided on screen, use your organization's billing process.
-
-### Review Value, Not Only Volume
-
-Compare usage with approved companies, useful contacts, and real conversations. Start small, refine the segment, and scale only after the result pattern is useful. Estimates are planning aids, not final provider invoices.
+The request wizard shows an estimate before launching a run. Actual charges and limits depend on the search, AI, verification, or enrichment provider account used. Check the relevant provider dashboard for its current usage and charges.
 
 ## 21. Manage Opt-Outs and Personal Data
 
@@ -885,8 +859,6 @@ Start with replies, bounces, opt-outs, and failed work. Refresh stale contact ch
 | First scan shows no changes | It establishes a baseline; review later scans |
 | HubSpot push fails | Check permission, destination, credentials, mapping, and per-lead errors |
 | Webhook test fails | Check receiver availability, hook state, and signature setup with your technical team |
-| Payment/balance is pending | Check Billing status and contact your administrator before purchasing again |
-| Credits remain but work is blocked | Check monthly request allowance, research usage, and provider quota separately |
 
 ### Contact Your Administrator
 

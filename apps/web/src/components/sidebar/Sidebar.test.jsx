@@ -64,7 +64,6 @@ const LINKS = [
   ['Integrations', '/integrations'],
   ['CRM integrations', '/integrations/crm'],
   ['Team', '/team'],
-  ['Billing', '/billing'],
   ['Compliance', '/compliance'],
   ['Account', '/profile'],
 ]
@@ -179,9 +178,9 @@ describe('Sidebar', () => {
       renderShell()
       await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar to icons' }))
       expect(sidebarEl()).toHaveAttribute('data-state', 'collapsed')
-      const link = within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Billing' })
-      expect(link).toHaveAttribute('title', 'Billing')
-      expect(link).toHaveAttribute('href', '/billing')
+      const link = within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Account' })
+      expect(link).toHaveAttribute('title', 'Account')
+      expect(link).toHaveAttribute('href', '/profile')
       await userEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }))
       expect(sidebarEl()).toHaveAttribute('data-state', 'open')
     })

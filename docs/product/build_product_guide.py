@@ -124,11 +124,12 @@ class Workflow(Flowable):
 
 
 class Guide(BaseDocTemplate):
-    def __init__(self, output, styles):
+    def __init__(self, output, styles, revision_date):
         super().__init__(str(output), pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
                          topMargin=69, bottomMargin=52, title='Quarry Customer Guide',
                          author='Quarry', subject='Quarry customer guide')
         self.styles = styles
+        self.revision_date = revision_date
         self.chapter = 'Contents'
         frame = Frame(MARGIN, 52, CONTENT, HEIGHT - 121, leftPadding=0, rightPadding=0,
                       topPadding=0, bottomPadding=0)
@@ -164,7 +165,7 @@ class Guide(BaseDocTemplate):
         canvas.setFillColor(colors.HexColor('#d7eaf1'))
         canvas.setFont('Segoe', 10)
         canvas.drawString(47, 75, 'Customer Guide')
-        canvas.drawRightString(WIDTH - 47, 75, 'November 2026')
+        canvas.drawRightString(WIDTH - 47, 75, self.revision_date)
         canvas.restoreState()
 
     def page_end(self, canvas, doc):
@@ -184,7 +185,7 @@ class Guide(BaseDocTemplate):
         canvas.line(47, HEIGHT - 47, WIDTH - 47, HEIGHT - 47)
         canvas.line(47, 40, WIDTH - 47, 40)
         canvas.drawString(47, 25, 'Customer Guide')
-        canvas.drawCentredString(WIDTH / 2, 25, 'November 2026')
+        canvas.drawCentredString(WIDTH / 2, 25, self.revision_date)
         canvas.setFillColor(NAVY)
         canvas.setFont('Segoe-Bold', 9)
         canvas.drawRightString(WIDTH - 47, 24, str(doc.page))
@@ -248,7 +249,10 @@ def build(source, output, font_dir):
     toc.dotsMinLevel = 0
     story = [Spacer(1, 1), PageBreak(), Paragraph('Contents', styles['chapter']),
              Paragraph('Select a chapter to jump to its page. Use the PDF bookmarks to find a specific topic.', styles['small']), toc, PageBreak()]
-    lines = source.read_text(encoding='utf-8').splitlines()
+    markdown = source.read_text(encoding='utf-8')
+    revision = re.search(r'Last reviewed: ([^\n]+)', markdown)
+    revision_date = revision.group(1).strip() if revision else ''
+    lines = markdown.splitlines()
     # The title and subtitle belong on the branded cover, not a duplicate body page.
     i = next(n for n, line in enumerate(lines) if line.startswith('## '))
     bookmarks = 0
@@ -305,7 +309,7 @@ def build(source, output, font_dir):
                 i += 1
             story.append(Paragraph(inline(' '.join(block)), styles['body']))
     output.parent.mkdir(parents=True, exist_ok=True)
-    Guide(output, styles).multiBuild(story)
+    Guide(output, styles, revision_date).multiBuild(story)
     print(output)
 
 

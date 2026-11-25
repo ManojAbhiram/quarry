@@ -3,7 +3,6 @@ import json
 import httpx
 import pytest
 
-from app.billing.store import upsert_subscription
 from app.crm import hooks, service
 from app.crm.base import CrmConnector, CrmError, UpsertResult
 from app.crm.hubspot import HubSpotConnector
@@ -175,9 +174,8 @@ class FakeCrm(CrmConnector):
         return UpsertResult(self.contacts[props["email"]], created)
 
 
-async def _setup(api, signup, email, plan="pro"):
+async def _setup(api, signup, email):
     h, uid = await signup(email)
-    await upsert_subscription(f"user:{uid}", {"plan": plan, "status": "active"})
     lead_ids = []
     for i, (title, url, mail) in enumerate([("A", "https://a.com", "x@a.com"), ("A2", "https://www.a.com/p2", "y@a.com"),
                                              ("B", "https://b.com", None), ("NoSite", "", None)]):
@@ -192,7 +190,6 @@ async def _setup(api, signup, email, plan="pro"):
 
 async def test_connect_with_token_stores_encrypted_and_never_returns_it(api, signup, monkeypatch):
     h, uid = await signup("crm1@x.com")
-    await upsert_subscription(f"user:{uid}", {"plan": "pro", "status": "active"})
 
     async def ok(self):
         return {"portal_id": 99}
@@ -205,10 +202,8 @@ async def test_connect_with_token_stores_encrypted_and_never_returns_it(api, sig
     assert "pat-secret" not in (await api.get("/api/integrations", headers=h)).text
 
 
-async def test_connect_requires_plan_and_valid_token(api, signup, monkeypatch):
-    h, uid = await signup("crm2@x.com")  # free plan: 0 CRM connections
-    assert (await api.put("/api/integrations/hubspot/token", json={"access_token": "abcdefghij"}, headers=h)).status_code == 402
-    await upsert_subscription(f"user:{uid}", {"plan": "pro", "status": "active"})
+async def test_connect_rejects_invalid_token(api, signup, monkeypatch):
+    h, _ = await signup("crm2@x.com")
 
     async def bad(self):
         raise CrmError("rejected", status=401)
@@ -271,7 +266,6 @@ async def test_failed_lead_is_recorded_and_retried_later(api, signup, monkeypatc
 async def test_cannot_push_someone_elses_list_or_use_their_connection(api, signup, monkeypatch):
     h1, uid1, lst1, _ = await _setup(api, signup, "crm5@x.com")
     h2, uid2 = await signup("crm6@x.com")
-    await upsert_subscription(f"user:{uid2}", {"plan": "pro", "status": "active"})
     await service.save_connection(f"user:{uid2}", "hubspot", access_token="t", refresh_token=None, auth_type="private_app", info={})
     monkeypatch.setitem(service.CONNECTOR_FACTORIES, "hubspot", lambda conn: FakeCrm())
     assert (await api.post("/api/integrations/hubspot/push", json={"list_id": lst1}, headers=h2)).status_code == 404
@@ -292,7 +286,6 @@ async def test_mapping_endpoints(api, signup):
 async def test_org_viewer_cannot_push_and_org_data_is_isolated(api, signup, monkeypatch):
     oh, ouid = await signup("crmo@x.com")
     org = (await api.post("/api/orgs", json={"name": "O"}, headers=oh)).json()["id"]
-    await upsert_subscription(org, {"plan": "team", "status": "active"})
     await service.save_connection(org, "hubspot", access_token="t", refresh_token=None, auth_type="private_app", info={})
     vh, _ = await signup("crmv@x.com")
     inv = await api.post(f"/api/orgs/{org}/invites", json={"email": "crmv@x.com", "role": "viewer"}, headers=oh)
@@ -401,7 +394,6 @@ async def test_adding_leads_to_list_emits_list_updated(api, signup, monkeypatch)
 
 async def test_oauth_callback_checks_state_and_exchanges_code(api, signup, monkeypatch):
     h, uid = await signup("oauth2@x.com")
-    await upsert_subscription(f"user:{uid}", {"plan": "pro", "status": "active"})
     monkeypatch.setenv("HUBSPOT_CLIENT_ID", "cid")
     monkeypatch.setenv("HUBSPOT_CLIENT_SECRET", "sec")
     url = (await api.get("/api/integrations/hubspot/oauth/url", headers=h)).json()

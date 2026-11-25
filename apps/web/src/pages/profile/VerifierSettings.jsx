@@ -4,7 +4,7 @@ import { api } from '../../api'
 import { Button, Field, Skeleton, useToast } from '../../components/kit'
 import Section from './Section'
 
-/** Choose how email addresses are verified: free checks, an optional SMTP probe, or your own paid provider key. */
+/** Choose how email addresses are verified: built-in checks, an optional SMTP probe, or your own provider key. */
 export default function VerifierSettings() {
   const toast = useToast()
   const [s, setS] = useState(null)
@@ -60,7 +60,7 @@ export default function VerifierSettings() {
   }
 
   return (
-    <Section id="email-verification" title="Email verification" description="Every address gets a status: Verified, Likely, Risky or Invalid. Free checks always run; add a provider key for deeper checks." icon={MailCheck}>
+    <Section id="email-verification" title="Email verification" description="Every address gets a status: Verified, Likely, Risky or Invalid. Built-in checks always run; add a provider key for deeper checks." icon={MailCheck}>
       {!s && !loadError && <Skeleton className="h-24 w-full" />}
       {loadError && (
         <p className="flex flex-wrap items-center gap-3 text-sm">
@@ -71,9 +71,9 @@ export default function VerifierSettings() {
       {s && (
         <form onSubmit={save} noValidate className="space-y-5">
           <div>
-            <label htmlFor="verifier-provider" className="label">Paid provider (optional)</label>
+            <label htmlFor="verifier-provider" className="label">Verification provider (optional)</label>
             <select id="verifier-provider" className="input sm:max-w-md" value={provider} onChange={(e) => { setProvider(e.target.value); setError('') }} disabled={saving}>
-              <option value="">None, free checks only</option>
+              <option value="">None, built-in checks only</option>
               {s.providers.map((p) => <option key={p.name} value={p.name}>{p.label}</option>)}
             </select>
           </div>

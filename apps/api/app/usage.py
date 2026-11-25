@@ -1,11 +1,8 @@
-"""Cost estimates, usage metering and per-user quotas.
+"""Provider cost estimates and usage metering.
 
 Metering: pipeline entry points wrap a run in `tracked(...)`. The Serper client and the LLM helpers call `count(...)`,
 which adds to the active run's counters. When the run ends the counters (and an estimated cost) are stored on a
-`usage_events` row. Unit prices are estimates, set by env vars; they exist to show order of magnitude, not to bill.
-
-Quota: a user may start RUN_QUOTA runs and spend COST_QUOTA_USD (estimated) per calendar month. `check_quota` raises
-429 when either is used up. Both can be overridden per user (`quota_runs_monthly`, `quota_cost_monthly_usd` on the user).
+`usage_events` row. Environment variables set the per-call rates used for these estimates.
 """
 from __future__ import annotations
 
@@ -17,16 +14,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Mapping
 
-from fastapi import HTTPException
-
 from app.core.logger import logger
 from app.db.models import TABLES
 from app.db.models_trust import UsageEvent
 
 SERPER_USD_PER_CALL = float(os.getenv("SERPER_USD_PER_CALL", "0.001"))
 LLM_USD_PER_CALL = float(os.getenv("LLM_USD_PER_CALL", "0.002"))
-RUN_QUOTA = int(os.getenv("QUOTA_RUNS_PER_MONTH", "30"))
-COST_QUOTA_USD = float(os.getenv("QUOTA_COST_USD_PER_MONTH", "20"))
 
 _events = TABLES["usage_events"]
 
@@ -107,7 +100,7 @@ def count(kind: str, n: int = 1) -> None:
 
 
 async def begin_run(user_id: str, request_id: str, estimate: dict | None = None) -> None:
-    """Record a launch up front, at its estimated cost, so quota counts runs that are still in flight."""
+    """Record a launch up front, at its estimated cost, so in-flight runs appear in the summary."""
     est = estimate or {}
     await _events.upsert(
         {"user_id": str(user_id), "kind": "run", "request_id": request_id},
@@ -158,7 +151,7 @@ async def record_sample(user_id: str, serper_calls: int, llm_calls: int) -> None
     })
 
 
-# ── summary and quota ───────────────────────────────────────────────────────
+# ── summary ───────────────────────────────────────────────────────
 
 def _month_start(now: datetime | None = None) -> datetime:
     now = now or datetime.utcnow()
@@ -169,14 +162,11 @@ def _next_month(start: datetime) -> datetime:
     return datetime(start.year + (start.month == 12), start.month % 12 + 1, 1)
 
 
-async def get_summary(user_id: str, user: dict | None = None, now: datetime | None = None) -> dict:
+async def get_summary(user_id: str, now: datetime | None = None) -> dict:
     start = _month_start(now)
     rows = await _events.find(UsageEvent.user_id == str(user_id), UsageEvent.created_at >= start)
     runs = [r for r in rows if r.get("kind") == "run"]
     cost = round(sum(float(r.get("cost_usd") or 0) for r in rows), 4)
-    user = user or {}
-    run_quota = int(user.get("quota_runs_monthly") or RUN_QUOTA)
-    cost_quota = float(user.get("quota_cost_monthly_usd") or COST_QUOTA_USD)
     recent = sorted(rows, key=lambda r: r.get("created_at") or datetime.min, reverse=True)[:10]
     return {
         "period_start": start.isoformat(), "period_end": _next_month(start).isoformat(),
@@ -184,8 +174,6 @@ async def get_summary(user_id: str, user: dict | None = None, now: datetime | No
         "search_calls": sum(int(r.get("serper_calls") or 0) for r in rows),
         "llm_calls": sum(int(r.get("llm_calls") or 0) for r in rows),
         "cost_usd": cost,
-        "quota": {"runs": run_quota, "cost_usd": cost_quota,
-                  "runs_left": max(0, run_quota - len(runs)), "cost_left_usd": round(max(0.0, cost_quota - cost), 4)},
         "recent": [
             {"kind": r.get("kind"), "request_id": r.get("request_id"), "search_calls": r.get("serper_calls") or 0,
              "llm_calls": r.get("llm_calls") or 0, "cost_usd": r.get("cost_usd") or 0, "estimated": bool(r.get("estimated")),
@@ -194,17 +182,3 @@ async def get_summary(user_id: str, user: dict | None = None, now: datetime | No
         ],
         "unit_prices": {"search_call_usd": SERPER_USD_PER_CALL, "llm_call_usd": LLM_USD_PER_CALL},
     }
-
-
-async def check_quota(user_id: str, user: dict | None = None, estimate: dict | None = None) -> None:
-    """Raise 429 if starting another run would exceed the user's monthly runs or estimated spend."""
-    s = await get_summary(user_id, user)
-    q = s["quota"]
-    if q["runs_left"] <= 0:
-        raise HTTPException(status_code=429, detail=f"Monthly run limit reached ({q['runs']} of {q['runs']}). It resets on the 1st.")
-    typical = ((estimate or {}).get("cost_usd") or {}).get("typical", 0)
-    if s["cost_usd"] >= q["cost_usd"] or s["cost_usd"] + typical > q["cost_usd"]:
-        raise HTTPException(
-            status_code=429,
-            detail=f"This run (about ${typical:.2f}) would exceed your monthly budget of ${q['cost_usd']:.2f} (${s['cost_usd']:.2f} used).",
-        )

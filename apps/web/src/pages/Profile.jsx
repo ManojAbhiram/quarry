@@ -37,13 +37,14 @@ export default function Profile() {
   const toast = useToast()
   const pageRef = useRef(null)
   const connectionsHeading = useRef(null)
+  const usageSection = useRef(null)
   const { hash, key: locationKey } = useLocation()
   useStaggerIn(pageRef)
 
   useEffect(() => {
-    if (hash !== '#api-connections') return
-    connectionsHeading.current?.scrollIntoView?.({ block: 'start' })
-    connectionsHeading.current?.focus({ preventScroll: true })
+    const target = hash === '#api-connections' ? connectionsHeading.current : hash === '#usage' ? usageSection.current : null
+    target?.scrollIntoView?.({ block: 'start' })
+    target?.focus({ preventScroll: true })
   }, [hash, locationKey])
 
   const [profile, setProfile] = useState(() => fromUser(user))
@@ -295,7 +296,7 @@ export default function Profile() {
 
           <VerifierSettings />
 
-          <div data-reveal><UsageCard /></div>
+          <div id="usage" ref={usageSection} tabIndex={-1} data-reveal><UsageCard /></div>
 
           <Section id="privacy-compliance" title="Privacy and compliance" description="Manage your suppression list, erase a person's data, and read how Quarry handles personal data." icon={ShieldAlert}>
             <div className="flex flex-wrap gap-3">

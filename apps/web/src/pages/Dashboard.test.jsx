@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
@@ -49,7 +49,7 @@ describe('Dashboard', () => {
     setup()
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Dashboard')
     const tile = document.getElementById(id)
-    expect(tile.querySelector('.dashboard-stat-value')).toHaveTextContent(String(value))
+    expect(within(tile).getByText(String(value), { exact: true })).toBeInTheDocument()
     await user.click(tile)
     expect(screen.getByTestId('where')).toHaveTextContent(`/lead-requests|${filter}`)
   })

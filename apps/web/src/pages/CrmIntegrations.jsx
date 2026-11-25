@@ -83,7 +83,6 @@ function Connection({ data, onChange }) {
 
   return (
     <form onSubmit={connect} noValidate className="space-y-4">
-      {data.crm_connections_allowed < 1 && <p role="status" className="rounded-xl bg-warn-soft p-3 text-sm font-medium text-warn">Your plan does not include CRM integrations. Upgrade on the Billing page.</p>}
       <Field id="hubspot-token" label="Private app access token" type="password" autoComplete="off" className="sm:max-w-md" value={token} disabled={busy} placeholder="pat-na1-…" hint="Create a private app in HubSpot with company and contact read/write scopes. The token is stored encrypted." error={error} onChange={(e) => { setToken(e.target.value); setError('') }} />
       <div className="flex flex-wrap gap-3">
         <Button type="submit" loading={busy}><Link2 aria-hidden="true" className="h-4 w-4" /> Connect HubSpot</Button>

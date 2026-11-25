@@ -45,14 +45,17 @@ async def test_legacy_db_is_baselined_without_data_loss(tmp_path):
     Base.metadata.create_all(sync)
     with sync.begin() as c:
         c.execute(text("INSERT INTO organizations (id, data) VALUES ('o1', '{\"name\": \"Acme\"}')"))
-        c.execute(text("DROP TABLE credit_ledger"))  # an older DB that lacks a later table
+        c.execute(text("DROP TABLE crm_connections"))  # an older DB that lacks a later table
+        c.execute(text("CREATE TABLE credit_ledger (id VARCHAR PRIMARY KEY)"))
+        c.execute(text("INSERT INTO credit_ledger (id) VALUES ('legacy-entry')"))
     sync.dispose()
     eng = create_async_engine(f"sqlite+aiosqlite:///{path}")
     assert await mig.run_migrations(eng) == [1]
     async with eng.begin() as c:
         rows = (await c.execute(text("SELECT id FROM organizations"))).all()
+        assert (await c.execute(text("SELECT id FROM credit_ledger"))).scalar_one() == "legacy-entry"
     assert [tuple(r) for r in rows] == [("o1",)]
-    assert "credit_ledger" in await _tables(eng)
+    assert "crm_connections" in await _tables(eng)
     await eng.dispose()
 
 
@@ -105,9 +108,9 @@ async def test_drift_is_reported(tmp_path):
     eng = await _engine(tmp_path)
     await mig.run_migrations(eng)
     async with eng.begin() as c:
-        await c.execute(text("DROP TABLE credit_ledger"))
-        await c.execute(text("CREATE TABLE credit_ledger (id VARCHAR PRIMARY KEY)"))
-        assert any("credit_ledger.scope_id" in p for p in await c.run_sync(mig.schema_drift))
+        await c.execute(text("DROP TABLE crm_connections"))
+        await c.execute(text("CREATE TABLE crm_connections (id VARCHAR PRIMARY KEY)"))
+        assert any("crm_connections.scope_id" in p for p in await c.run_sync(mig.schema_drift))
     await eng.dispose()
 
 

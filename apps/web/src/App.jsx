@@ -26,7 +26,6 @@ import Integrations from './pages/Integrations'
 import CrmIntegrations from './pages/CrmIntegrations'
 import Watch from './pages/Watch'
 import TeamSettings from './pages/TeamSettings'
-import Billing from './pages/Billing'
 import HubspotCallback from './pages/HubspotCallback'
 import AcceptInvite from './pages/AcceptInvite'
 import { BootScreen, ErrorBoundary, NotFound, ToastProvider } from './components/kit'
@@ -79,7 +78,7 @@ function AppRoutes() {
           <Route path="watch" element={<Watch />} />
           <Route path="integrations" element={<Integrations />} />
           <Route path="team" element={<TeamSettings />} />
-          <Route path="billing" element={<Billing />} />
+          <Route path="billing" element={<Navigate to="/profile#usage" replace />} />
           <Route path="integrations/crm" element={<CrmIntegrations />} />
           <Route path="integrations/hubspot/callback" element={<HubspotCallback />} />
         </Route>

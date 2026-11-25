@@ -16,7 +16,7 @@
    reduced-motion settings.
 2. **Show the truth about data.** Every email carries a status, a reason and a checked-at date; every fact can show
    its source. Never present a guess as a fact.
-3. **No surprise cost.** Estimate before spend, show credits and quota where decisions are made.
+3. **No surprise cost.** Show estimated provider usage before launch and recent usage in Account.
 4. **Failure is a state, not a blank.** Running, empty, failed and partial states are designed for every list.
 5. **Guided, not technical.** A wizard that explains itself, for people who are not growth engineers.
 6. **Accessible by default.** Keyboard reachable, labelled, with status conveyed by text and symbol as well as colour.
@@ -41,7 +41,6 @@ flowchart LR
     WA[Watch]
     INT[Integrations] --> CRM[CRM integrations]
     TM[Team]
-    BI[Billing]
     CO[Compliance]
     PF[Profile]
   end
@@ -58,9 +57,8 @@ flowchart LR
 | Watch | `/watch` | Saved searches, signal feed, alerts |
 | Integrations | `/integrations`, `/integrations/crm` | API keys, webhooks, HubSpot |
 | Team | `/team` | Members, roles, invites |
-| Billing | `/billing` | Plan, balances, top-ups, invoices |
 | Compliance | `/compliance` | Suppressions, erasure, audit log, retention |
-| Account settings | `/profile` | Profile, personal Serper key, AI provider connection and model selection, verifier settings |
+| Account settings | `/profile` | Profile, personal Serper key, AI provider connection and model selection, verifier settings, monthly usage |
 
 The sidebar is resizable and collapsible, hides its scrollbar while staying scrollable, and includes the workspace
 switcher. A help drawer gives in-context guidance.

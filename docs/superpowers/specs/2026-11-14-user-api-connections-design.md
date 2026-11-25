@@ -64,7 +64,7 @@ Eligibility: accept text input AND generate text using a protocol supported by Q
 ### Verification with no inference spend
 The documented non-billable endpoint policy also applies to automatic model discovery and every onboarding metadata call. If its billing behavior is not established, do not call it automatically; explain that discovery is unavailable and allow setup to be deferred.
 
-Verification never calls completion, messages, responses, embedding, generation, search or batch-creation endpoints, even with max_tokens=0 or 1. No automatic paid fallback. Only provider adapters with a reviewed, documented non-billable metadata/authentication route may advertise cost-free verification; GET alone is not evidence that an endpoint is free. Custom providers with unknown billing policies remain unverified. The consulted API reference pages establish metadata operations, but do not consistently give explicit billing guarantees; verify provider billing documentation before enabling a zero-cost claim.
+Verification never calls completion, messages, responses, embedding, generation, search or batch-creation endpoints, even with max_tokens=0 or 1. No automatic paid fallback. Only provider adapters with a reviewed, documented non-billable metadata/authentication route may advertise verification without provider charges. A GET request can still incur provider charges. Custom providers with unknown billing policies remain unverified. The consulted API reference pages establish metadata operations, but do not consistently give explicit billing guarantees; verify provider billing documentation before enabling a zero-cost claim.
 
 Separate credential status, discovery status and model compatibility. States: authenticated, rejected credentials, insufficient permissions, temporarily unavailable, verification unsupported. A timeout/429/403 must not be flattened into invalid key. Public catalogues cannot authenticate a connection. Authenticated metadata success does not prove inference permission, remaining credit, regional availability or output quality. UI should say 'Credentials accepted; no generation performed' rather than 'Model tested'. Persist a verification timestamp tied to the connection configuration; no plaintext secrets in responses or logs.
 
@@ -78,7 +78,7 @@ Separate credential status, discovery status and model compatibility. States: au
 - LiteLLM was evaluated as an alternative and is not selected for the new runtime.
 
 ### Serper consequence
-Current validate_serper_key performs a real search. That can consume search credits. Do not describe the existing verification as free. No documented no-charge Serper verification route was established in this research. Proposed behavior: save Serper keys without a test search and mark them unverified until the first explicitly requested search succeeds, unless a documented free account/auth endpoint is established. Apply this consistently in Profile and onboarding.
+Current validate_serper_key performs a real search. That can consume search credits. Account for provider usage when describing this check. No documented no-charge Serper verification route was established in this research. Proposed behavior: save Serper keys without a test search and mark them unverified until the first explicitly requested search succeeds, unless a documented non-billable account or authentication endpoint is established. Apply this consistently in Profile and onboarding.
 
 ### Required verification tests
 Assert verification invokes only approved metadata endpoints and never inference/search, handles all pages and provider errors, does not authenticate via a public catalogue, preserves unknown capabilities, excludes unsuitable workloads, scopes discovery/credentials to the owner, invalidates stale status after edits, and propagates selected primary/fast models into requests and background jobs. Use mocked provider responses; no real paid calls.
@@ -104,11 +104,11 @@ Alternatives considered: a guided API setup would help configure services but wo
 | 3. Organize your leads | Review results, save leads into Lead lists, and export when ready. | Lead lists navigation |
 | 4. Follow up and monitor | Outreach is where follow-up work lives; Watch monitors saved targets and signals. | Outreach and Watch navigation |
 | 5. Connect your tools | Integrations and CRM integrations connect external tools. Account/Profile holds the user's Serper and LLM keys and model choices. These must be configured before work that needs them. | Integrations, CRM integrations and Account navigation |
-| 6. Manage your workspace | Team manages membership, Billing shows plan and usage, and Compliance provides privacy controls. Finish with Explore Quarry or Create a request. | Team, Billing and Compliance navigation |
+| 6. Manage your workspace | Team manages membership, Account shows provider usage, and Compliance provides privacy controls. Finish with Explore Quarry or Create a request. | Team, Account and Compliance navigation |
 
 Keep each stop to one or two short sentences. Highlight grouped navigation anchors without forcing navigation through every page. Explain request results without requiring an existing request or inventing production data. Adapt descriptions to actual shipped features and permissions; hide inaccessible sections rather than promising access.
 
-No setup forms or model fetching run as part of the tour. An optional Open settings action ends the tour and opens the normal settings flow; it does not make setup part of tour completion. Never launch generation, search, outreach, monitoring, exports or billing changes automatically. Creating a request after finishing remains an explicit user action.
+No setup forms or model fetching run as part of the tour. An optional Open settings action ends the tour and opens the normal settings flow; it does not make setup part of tour completion. Never launch generation, search, outreach, monitoring or exports automatically. Creating a request after finishing remains an explicit user action.
 
 ### Meaning of first time
 Proposed persistence is per user account, stored server-side, independent of browser storage and organization membership.

@@ -10,7 +10,6 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.billing.store import get_plan_for_scope
 from app.core.config import settings
 from app.core.url_guard import UnsafeURLError, check_url
 from app.crm import hooks, service
@@ -59,20 +58,7 @@ async def _connection(ws: Workspace, provider: str = "hubspot") -> dict:
     return conn
 
 
-async def _check_plan_allows(ws: Workspace) -> None:
-    plan = await get_plan_for_scope(ws.scope_id)
-    used = len(await service.list_connections(ws.scope_id))
-    if used >= plan.crm_connections:
-        raise HTTPException(
-            status_code=402,
-            detail=f"The {plan.name} plan includes {plan.crm_connections} CRM integration(s). Upgrade to connect more.",
-        )
-
-
 async def _connect(ws: Workspace, access: str, refresh: Optional[str], auth_type: str) -> dict:
-    existing = await service.get_connection(ws.scope_id, "hubspot")
-    if not existing:
-        await _check_plan_allows(ws)
     connector = HubSpotConnector(access)
     try:
         info = await connector.test_connection()
@@ -88,11 +74,9 @@ async def _connect(ws: Workspace, access: str, refresh: Optional[str], auth_type
 @router.get("")
 async def overview(ws: Workspace = Depends(get_workspace)):
     conn = await service.get_connection(ws.scope_id, "hubspot")
-    plan = await get_plan_for_scope(ws.scope_id)
     return {
         "integrations": [service.public_connection(conn, "hubspot")],
         "hubspot_oauth_available": bool(os.getenv("HUBSPOT_CLIENT_ID") and os.getenv("HUBSPOT_CLIENT_SECRET")),
-        "crm_connections_allowed": plan.crm_connections,
         "can_manage": not ws.org_id or ws.role in ("owner", "admin"),
         "fields": {"company": COMPANY_FIELDS, "contact": CONTACT_FIELDS},
         "default_mapping": DEFAULT_MAPPING,

@@ -3,7 +3,7 @@ import UsageCard from '../components/UsageCard'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, FileSearch } from 'lucide-react'
 import { useLeads } from '../context/LeadContext'
-import { Button, EmptyState, ErrorState, Skeleton, StatusBadge } from '../components/kit'
+import { Button, EmptyState, ErrorState, PageHeader, Skeleton, StatusBadge } from '../components/kit'
 import StatTile from './dashboard/StatTile'
 
 const RECENT_COUNT = 5
@@ -70,15 +70,7 @@ export default function Dashboard() {
 
   return (
     <div id="dashboard-page" className="h-full overflow-y-auto pb-12 page-container">
-      <header id="dashboard-header" className="mb-8">
-        <p className="dashboard-kicker mb-2 text-xs font-medium text-muted">
-          Workspace
-        </p>
-        <h1 className="break-words text-3xl font-medium leading-tight text-ink sm:text-4xl">
-          Dashboard
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-muted">Your company searches, results, and contact research</p>
-      </header>
+      <PageHeader title="Dashboard" description="Track your lead requests, results, and provider usage." />
 
       {phase === 'loading' && <DashboardSkeleton />}
 
@@ -97,45 +89,41 @@ export default function Dashboard() {
             </div>
           )}
 
-          <section id="cta-card" aria-labelledby="cta-title" className="dashboard-cta card">
+          <section id="cta-card" aria-labelledby="cta-title" className="card mb-6 flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6">
             <div className="min-w-0">
-              <p className="dashboard-kicker mb-2 text-xs font-medium text-muted">Company research</p>
-              <h2 id="cta-title" className="text-2xl font-medium leading-8 text-ink">Find companies that fit</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-                Describe your product to build a customer profile, find matching companies, and identify the people to contact
+              <h2 id="cta-title" className="text-lg font-semibold text-ink">Find companies that fit</h2>
+              <p className="mt-1 max-w-xl text-sm text-muted">
+                Build a customer profile, then find matching companies and decision makers.
               </p>
-              <ul className="dashboard-capabilities mt-4 text-xs text-muted">
-                {['Customer profile', 'Decision makers', 'Match scoring'].map((label) => <li key={label}>{label}</li>)}
-              </ul>
             </div>
-            <button type="button" onClick={() => navigate('/new-request')} className="dashboard-primary">
+            <Button onClick={() => navigate('/new-request')}>
               New request <ArrowRight aria-hidden="true" className="h-4 w-4" />
-            </button>
+            </Button>
           </section>
 
-          <section aria-label="Request summary" className="dashboard-summary card">
+          <section aria-label="Request summary" className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatTile id="summary-total" label="Total requests" value={stats?.totalLeads || 0} hint="All time" onClick={() => goFilter('All')} />
             <StatTile id="summary-pending" label="In progress" value={stats?.pending || 0} hint="Running or queued" onClick={() => goFilter('Active')} />
             <StatTile id="summary-completed" label="Completed" value={stats?.completed || 0} hint={successRate === null ? 'No finished runs yet' : `${successRate}% of finished runs`} onClick={() => goFilter('Completed')} />
             <StatTile id="summary-failed" label="Failed" value={stats?.failed || 0} hint={stats?.failed ? 'Review failed requests' : 'No failed requests'} onClick={() => goFilter('Failed')} />
           </section>
 
-          <div id="workspace" className="dashboard-workspace">
-            <section id="result-panel" aria-labelledby="pipeline-title" className="dashboard-panel card">
-              <div className="mb-6">
-                <h2 id="pipeline-title" className="text-base font-medium text-ink">Active pipeline</h2>
+          <div id="workspace" className="grid gap-6 xl:grid-cols-2">
+            <section id="result-panel" aria-labelledby="pipeline-title" className="card flex min-w-0 flex-col p-5">
+              <div className="mb-4">
+                <h2 id="pipeline-title" className="text-base font-semibold text-ink">Active pipeline</h2>
                 <p className="mt-1 text-sm text-muted">The request currently running or queued</p>
               </div>
               {active ? (
                 <div id="result-content" className="flex flex-1 flex-col gap-6">
-                  <div className="dashboard-dossier">
+                  <div className="rounded-xl border border-line bg-head p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <StatusBadge status={badgeStatus(active.status)} />
-                      <span className="request-reference font-mono text-xs" aria-label={`Request reference ${requestId(active)}`} title={String(requestId(active))}>
+                      <span className="font-mono text-xs text-muted" aria-label={`Request reference ${requestId(active)}`} title={String(requestId(active))}>
                         QR / {String(requestId(active)).slice(0, 8)}
                       </span>
                     </div>
-                    <p className="dashboard-request-title" title={active.title}>{active.title || 'Untitled request'}</p>
+                    <p className="mt-3 break-words text-lg font-semibold text-ink" title={active.title}>{active.title || 'Untitled request'}</p>
                     <p className="mt-3 text-sm leading-6 text-muted">
                       {String(active.status).toLowerCase() === 'pending'
                         ? 'Waiting to start. This page updates when the request finishes.'
@@ -161,22 +149,22 @@ export default function Dashboard() {
               )}
             </section>
 
-            <section aria-labelledby="recent-title" className="dashboard-panel card">
+            <section aria-labelledby="recent-title" className="card flex min-w-0 flex-col p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 id="recent-title" className="text-base font-medium text-ink">Recent requests</h2>
+                <h2 id="recent-title" className="text-base font-semibold text-ink">Recent requests</h2>
                 {list.length > 0 && (
-                  <button type="button" onClick={() => navigate('/lead-requests')} className="dashboard-text-button">
+                  <Button size="sm" variant="ghost" onClick={() => navigate('/lead-requests')}>
                     View all <ArrowRight aria-hidden="true" className="h-4 w-4" />
-                  </button>
+                  </Button>
                 )}
               </div>
               {recent.length === 0 ? (
                 <EmptyState title="No requests yet" description="Your latest requests will appear here" action={{ label: 'New request', onClick: () => navigate('/new-request') }} />
               ) : (
-                <ul className="dashboard-recent-list">
+                <ul className="divide-y divide-line">
                   {recent.map((r) => (
                     <li key={requestId(r)}>
-                      <button type="button" onClick={() => navigate(openPath(r))} className="dashboard-request-row">
+                      <button type="button" onClick={() => navigate(openPath(r))} className="flex w-full min-w-0 items-center justify-between gap-3 rounded-lg px-2 py-3 text-left hover:bg-head focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-btn">
                         <span className="min-w-0 truncate text-sm text-ink" title={r.title}>{r.title || 'Untitled request'}</span>
                         <StatusBadge status={badgeStatus(r.status)} className="shrink-0" />
                       </button>
@@ -185,7 +173,7 @@ export default function Dashboard() {
                 </ul>
               )}
             </section>
-            <div className="dashboard-usage"><UsageCard dashboard /></div>
+            <div className="xl:col-span-2"><UsageCard /></div>
           </div>
         </>
       )}

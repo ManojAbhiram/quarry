@@ -84,13 +84,13 @@ _None open._
 
 ### No schema migrations: existing databases do not get new columns (DONE: `app/db/migrations.py`)
 
-**What:** Tables come from `create_all`, which never alters an existing table. During this QA a hot-reloading dev server created `credit_ledger` with another phase's columns mid-merge, and Billing returned HTTP 500 until the (empty) table was dropped. Add Alembic (or a small versioned migration runner) before any hosted deployment, and give each phase's tables unique names.
+**What:** Tables come from `create_all`, which never alters an existing table. Use the versioned migration runner for schema changes and keep table names unique across feature modules.
 
 **Priority:** P1 before hosting. **Depends on:** None.
 
 ### Real-service coverage not exercised
 
-Not tested in a browser or against live services: the full pipeline run (needs a Serper key), request details and lead drawer with real leads, email verification providers, outbound SMTP/IMAP, Stripe/Razorpay/HubSpot, and the cost estimate and sample run. These are covered only by mocked automated tests.
+Not tested in a browser or against live services: the full pipeline run (needs a Serper key), request details and lead drawer with real leads, email verification providers, outbound SMTP/IMAP, HubSpot, and the cost estimate and sample run. These are covered only by mocked automated tests.
 
 ## From /qa on 2026-11-09 (second pass: sidebar and next-tasks)
 

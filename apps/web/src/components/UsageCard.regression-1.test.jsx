@@ -12,7 +12,6 @@ vi.mock('../api', () => ({
       llm_calls: 0,
       samples: 0,
       spend_usd: 0,
-      quota: { runs: 30, usd: 20, runs_left: 30 },
       unit_prices: { search_call_usd: 0.001, llm_call_usd: 0.002 },
     }),
   },

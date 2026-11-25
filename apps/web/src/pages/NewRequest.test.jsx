@@ -73,25 +73,29 @@ describe('NewRequest step 1', () => {
     expect(api.generateStructuredIcp).not.toHaveBeenCalled()
   })
 
-  it('rejects a number of leads outside 1 to 1000 before calling the API', async () => {
+  it.each(['0', '201', '1.5'])('rejects %s leads before asking the provider to generate an ICP', async (count) => {
+    api.generateStructuredIcp.mockResolvedValue(ICP)
     setup([])
     await userEvent.type(screen.getByLabelText(/product name/i), 'Acme')
     const n = screen.getByLabelText(/number of leads/i)
     await userEvent.clear(n)
-    await userEvent.type(n, '5000')
+    await userEvent.type(n, count)
     await userEvent.click(generateButton())
-    expect(screen.getByText(/between 1 and 1,000/i)).toBeInTheDocument()
     expect(api.generateStructuredIcp).not.toHaveBeenCalled()
+    expect(screen.getByText(/between 1 and 200/i)).toBeInTheDocument()
   })
 
-  it('generates the ICP, saves the draft and moves to step 2', async () => {
+  it('generates the ICP for the maximum lead count and saves the draft', async () => {
     api.generateStructuredIcp.mockResolvedValue(ICP)
     setup([{ id: 'r1', title: 'Untitled', status: 'Draft' }])
     await userEvent.clear(screen.getByLabelText(/product name/i))
     await userEvent.type(screen.getByLabelText(/product name/i), 'Acme')
+    const count = screen.getByLabelText(/number of leads/i)
+    await userEvent.clear(count)
+    await userEvent.type(count, '200')
     await userEvent.click(generateButton())
     expect(await screen.findByRole('heading', { name: /icp definition/i })).toBeInTheDocument()
-    expect(api.generateStructuredIcp).toHaveBeenCalledWith(expect.objectContaining({ product_name: 'Acme' }), 'r1')
+    expect(api.generateStructuredIcp).toHaveBeenCalledWith(expect.objectContaining({ product_name: 'Acme', num_leads: 200 }), 'r1')
     expect(api.updateLeadRequest).toHaveBeenCalledWith('r1', expect.objectContaining({ status: 'Draft' }))
   })
 
@@ -179,6 +183,15 @@ describe('NewRequest step 2', () => {
     await userEvent.click(screen.getByRole('button', { name: /save draft/i }))
     await waitFor(() => expect(api.updateLeadRequest).toHaveBeenCalledWith('r1', expect.objectContaining({ status: 'Draft', icp_dimensions: ICP })))
     expect(await screen.findByRole('status')).toHaveTextContent(/draft saved/i)
+  })
+
+  it('keeps the saved lead count when launching a reopened draft', async () => {
+    api.createRequest.mockResolvedValue({})
+    setup([{ ...DRAFT, product_intake: { ...DRAFT.product_intake, num_leads: 1 } }])
+
+    await userEvent.click(await screen.findByRole('button', { name: /find matching companies/i }))
+
+    expect(api.createRequest).toHaveBeenCalledWith(expect.objectContaining({ num_leads: 1 }), 'r1')
   })
 
   it('shows an error toast when the draft cannot be saved', async () => {

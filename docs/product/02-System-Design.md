@@ -40,12 +40,11 @@ flowchart LR
   A --> V[Contact data: Hunter, Snov, PDL, verifier providers]
   A --> M[User mailbox: SMTP send, IMAP poll]
   A --> H[HubSpot: OAuth and push]
-  A --> P[Stripe and Razorpay: checkout, webhooks]
   A --> X[Customer webhooks: signed POST]
   A --> G[Google: OAuth sign-in]
 ```
 
-External actors: signed-in users, email recipients who opt out, payment providers that call back, and the customer's
+External actors: signed-in users, email recipients who opt out, and the customer's
 own systems that receive webhooks or call the public API with a key.
 
 # 3. Architecture overview
@@ -82,10 +81,10 @@ flowchart TB
 
 ```mermaid title="Logical layers (API)" page=portrait
 flowchart TB
-  R[Routers: app/api, outreach/api, watch/api,<br/>integrations/api, waterfall/api] --> SV[Services and domain modules:<br/>services, outreach, verification, waterfall,<br/>watch, billing, crm, compliance, teams]
+  R[Routers: app/api, outreach/api, watch/api,<br/>integrations/api, waterfall/api] --> SV[Services and domain modules:<br/>services, outreach, verification, waterfall,<br/>watch, crm, compliance, teams]
   SV --> RP[Repositories: app/db<br/>DocTable per table]
   RP --> EN[Engine: async SQLAlchemy,<br/>write lock, WAL]
-  SV --> PT[Ports and adapters:<br/>HTTP client, payment provider,<br/>CRM connector, verifier, mail transport]
+  SV --> PT[Ports and adapters:<br/>HTTP client, CRM connector,<br/>verifier, mail transport]
   PT --> EXT[External services]
   CORE[core: config, cookies, url_guard,<br/>rate_limit, security_crypto, logger] -.used by.-> R
   CORE -.used by.-> SV
@@ -96,7 +95,7 @@ flowchart TB
 | Routers | Validate input, authenticate, authorize, and shape responses | Delegate orchestration to services; some account endpoints use DocTable directly |
 | Services / domain | Business rules, orchestration, the pipeline | Talk to the database only through repositories |
 | Repositories | JSON-document storage with indexed key columns | Encapsulate shared queries; domain storage modules also issue SQL |
-| Ports and adapters | Interfaces around every external system | Swappable in tests (a fake HTTP client, mock payment provider) |
+| Ports and adapters | Interfaces around every external system | Swappable in tests (a fake HTTP client or CRM connector) |
 | Core | Cross-cutting: config, auth cookies, SSRF guard, rate limit, crypto | No imports from domain modules |
 
 ## 3.3 Frontend architecture
@@ -108,7 +107,7 @@ flowchart TB
 | Motion | GSAP and the `motion` library for reveals and transitions; reduced-motion respected |
 | API access | `src/api.js` and `src/api.p3.js`; cookie session plus CSRF header; refresh on 401 |
 | State | Component state and context (`context/`); no global store |
-| Routes | Public: login, register, forgot/reset password, privacy, opt-out, invite, OAuth callbacks. Protected inside `Layout`: lead requests, dashboard, new request wizard, request intake, direct companies, request details, lead lists, outreach, watch, integrations, CRM integrations, team, billing, compliance, profile |
+| Routes | Public: login, register, forgot/reset password, privacy, opt-out, invite, OAuth callbacks. Protected inside `Layout`: lead requests, dashboard, new request wizard, request intake, direct companies, request details, lead lists, outreach, watch, integrations, CRM integrations, team, compliance, profile |
 | Tests | Vitest and Testing Library; component, page, API-session, connection, and onboarding coverage |
 
 # 4. Core flows
@@ -123,7 +122,7 @@ sequenceDiagram
   participant W as Worker
   participant X as External services
   B->>A: POST /requests/launch
-  A->>A: auth, CSRF, quota, debit credit
+  A->>A: check authentication, CSRF, provider setup and draft ownership
   A->>Q: enqueue pipeline.run
   A-->>B: 202 request_id
   W->>Q: claim oldest due job
@@ -216,8 +215,8 @@ Statuses: `verified`, `likely`, `risky`, `invalid`. A result also carries `reaso
 | 1. Syntax | Bad syntax is `invalid` |
 | 2. Disposable-domain list | Disposable provider is `risky` |
 | 3. DNS MX lookup | No MX records is `invalid` |
-| 4. Paid provider (only if the user configured one) | Provider status is used; if the provider errors, Quarry falls back to the free checks and says so in the reason |
-| 5. Free baseline | MX found but mailbox not probed is `likely` |
+| 4. Configured verification provider | Provider status is used; if the provider errors, Quarry falls back to the built-in checks and records the reason |
+| 5. Built-in baseline | MX found but mailbox not probed is `likely` |
 | 6. Optional SMTP RCPT probe | Rejected is `invalid`; accepted on a catch-all domain is `risky`; accepted is `verified`; inconclusive stays `likely` |
 | 7. Role-account downgrade | `info@`, `sales@` and similar shared inboxes drop `verified` or `likely` to `risky` |
 
@@ -226,29 +225,11 @@ addresses.
 
 ## 4.5 Waterfall enrichment
 
-Providers are tried in order `scrape, hunter, snov, pdl` through one interface. Each provider uses the user's own key
-(or a platform key). A credit is charged **only on a hit**, so a miss costs nothing. A `fallback_suppressions` table
-records providers that already failed for a person so the waterfall does not retry them. Email-lookup credits are a
-separate balance from request credits.
+The waterfall tries an existing scraped address, Hunter, Snov, and People Data Labs in order. Each external lookup uses the user's saved key or a key configured by the operator. The runner skips providers without a key and stops at the first address found.
 
-## 4.6 Billing and credits
+## 4.6 Usage reporting
 
-```mermaid title="Top-up flow" page=portrait
-sequenceDiagram
-  participant U as Owner / admin
-  participant A as API
-  participant PP as Payment provider
-  U->>A: POST /billing/topup (pack)
-  A->>PP: create hosted checkout session
-  A-->>U: checkout URL
-  U->>PP: pays
-  PP->>A: POST /billing/webhooks/{provider}
-  A->>A: verify signature, parse to a normalized event
-  A->>A: credit ledger entry, idempotent per event id
-```
-
-The request quota check and the credit debit run in one write transaction, so concurrent launches cannot overshoot.
-The `mock` provider credits instantly and exists only for local demos.
+Quarry records search and model calls and estimates their cost using configured per-call rates. Account and Dashboard show the monthly totals. The request wizard previews provider usage and offers a sample search.
 
 ## 4.7 CRM push
 
@@ -297,7 +278,6 @@ feature modules; startup logs a `Schema drift` warning when a model column is mi
 ```mermaid title="Core entities" page=portrait
 flowchart LR
   ORG[Organization] --> MEM[Org member]
-  ORG --> CRE[Credit entry]
   MEM --> USER[User]
   USER --> REQ[Request]
   REQ --> ICP[ICP profile]
@@ -327,7 +307,6 @@ flowchart LR
     BR[Browser]
     WEB[Scraped web pages]
     RC[Email recipients]
-    HK[Inbound payment webhooks]
   end
   subgraph Trusted
     API[Quarry API]
@@ -336,7 +315,6 @@ flowchart LR
   BR -->|cookie + CSRF, authz per object| API
   WEB -->|url_guard and timeouts| API
   RC -->|signed token only| API
-  HK -->|signature verified| API
   API --> DB
 ```
 
@@ -351,7 +329,6 @@ flowchart LR
 | SSRF | All outbound fetches of influenced URLs pass `core/url_guard.py`: public addresses only, DNS resolved once and the connection pinned to the checked IP, redirects re-checked at each hop, TLS verified against the real hostname |
 | Secrets | Personal AI and Serper keys, mailbox credentials and enrichment provider keys encrypted with Fernet (AES-128-CBC plus HMAC) using a key derived from `SECRET_KEY`; secrets never placed in job payloads; public API keys stored only as SHA-256 hashes (shown once, prefix `qk_`) |
 | Webhooks out | HMAC-SHA256 over `timestamp.body`, with a 5-minute tolerance on verify; exponential-backoff retries at 1, 5, 30, 120, 720 minutes, then give up |
-| Webhooks in | Payment webhooks verified by signature; handlers idempotent per event id |
 | Data protection | Cascade deletion, suppression ledger, retention purge, audit log, region flags |
 | CORS | Explicit origin list with credentials |
 
@@ -368,7 +345,6 @@ HTTP client ignores environment proxy settings; the scraper has no response-size
 | Mailbox send failure | Retried to 3 attempts; permanent errors fail at once |
 | Hard-bounce rate above 2% (min 20 sent) | Mailbox auto-paused with a reason; resumed manually |
 | Webhook endpoint down | Backoff retries over about 14 hours, delivery log visible |
-| Payment webhook replayed | Idempotent per event; no double credit |
 | Queue write failure on launch | Falls back to in-process background task (does not survive restart) |
 | Deleting a request or account | Research leads, decision makers, and enrichments are deleted; account deletion also removes lists and sessions. Shared company facts are kept; automation resources and external copies need separate cleanup |
 
@@ -391,7 +367,6 @@ HTTP client ignores environment proxy settings; the scraper has no response-size
 | Poll interval | `JOB_POLL_INTERVAL_SECONDS`, default 1.0 | |
 | External timeouts | Serper 30 s, page scrape 15 s, LLM 30 s | |
 | Cost estimate | Serper about $0.001 per call, LLM about $0.002 per call (env-tunable, order of magnitude only) | |
-| Per-user quota | 30 runs and $20 estimated cost per month by default; overridable per user | Plus plan limits |
 | Run duration | **Not measured.** Time the first real runs and record p50 and p95 | Open item |
 
 The design assumes tens of concurrent users, not thousands. The first bottleneck will be the single SQLite writer,
@@ -401,14 +376,14 @@ then the single-process job worker.
 
 | # | Decision | Alternatives | Why chosen | Revisit when |
 |---|---|---|---|---|
-| D1 | SQLite with JSON-document tables | Postgres from day one | Zero ops, simple, free; schema churn is low | More than one API instance, or heavy analytical queries |
+| D1 | SQLite with JSON-document tables | Postgres from day one | Low operational overhead and infrequent schema changes | More than one API instance, or heavy analytical queries |
 | D2 | Jobs as a database table | Redis or a broker | No new infrastructure; durable by default | Multiple workers (move to `SELECT ... FOR UPDATE SKIP LOCKED`) |
 | D3 | HttpOnly cookies plus CSRF | Tokens in localStorage | Resistant to token theft by script injection | Third-party embedding |
 | D4 | SMTP and IMAP for mailboxes | Gmail and Microsoft OAuth | Avoids restricted-scope security assessments | Demand for one-click connect justifies the review cost |
 | D5 | Bring-your-own provider keys | Resell vendor data | Apollo-style plans restrict resale; cost lands on the user | A negotiated data license |
 | D6 | Direct provider adapters with account-owned primary and fast models | Gateway or shared operator credentials | Explicit credential ownership and provider routing; no automatic inference retry or cross-provider fallback | Additional providers require reviewed protocols and metadata policies |
 | D7 | Four-state email status with timestamps | Boolean "verified" | The top competitor complaint is inaccurate data | Never; add providers instead |
-| D8 | Ports and adapters for externals | Direct SDK calls | Testable, swappable (payments, CRM, verifier) | n/a |
+| D8 | Ports and adapters for externals | Direct SDK calls | Testable, swappable (CRM and verification) | n/a |
 | D9 | Compliance in the data model | A later add-on | Erasure and suppression are hard to retrofit | n/a |
 | D10 | Single deployable unit | Microservices | One builder; simple operations | Team growth |
 
@@ -425,7 +400,6 @@ then the single-process job worker.
 | Test and lint | pytest, ruff, vitest, Testing Library, eslint |
 | Packaging | Docker, docker compose, nginx |
 | CI | GitHub Actions: ruff, pytest, eslint, vitest, build |
-| Payments | Stripe, Razorpay, mock |
 | CRM | HubSpot |
 
 # 12. Scaling path

@@ -860,8 +860,9 @@ async def run_lead_pipeline(request_id: str, request_payload: dict) -> list[dict
 
         # Process any available standalone items
         if all_standalone and len(enriched) < TARGET_ENRICHED:
-            batch = all_standalone[:BATCH_SIZE]
-            all_standalone = all_standalone[BATCH_SIZE:]
+            batch_size = min(BATCH_SIZE, TARGET_ENRICHED - len(enriched))
+            batch = all_standalone[:batch_size]
+            all_standalone = all_standalone[batch_size:]
             # Dedup batch against companies collection before scraping
             batch = await _dedup_against_companies(batch)
             all_processed_standalone.extend(batch)

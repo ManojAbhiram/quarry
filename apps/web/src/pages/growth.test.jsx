@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { ToastProvider } from '../components/kit'
@@ -11,7 +11,6 @@ vi.mock('../context/OrgContext', () => ({ useOrg: () => org }))
 
 import { api } from '../api'
 import TeamSettings from './TeamSettings'
-import Billing from './Billing'
 import Integrations from './CrmIntegrations'
 import AcceptInvite from './AcceptInvite'
 import OrgSwitcher from '../components/OrgSwitcher'
@@ -115,107 +114,9 @@ describe('TeamSettings', () => {
   })
 })
 
-describe('Billing', () => {
-  const SUMMARY = {
-    scope: 'personal',
-    can_manage: true,
-    plan: { id: 'free', name: 'Free' },
-    usage: { requests_created: 3, requests_limit: 3, credits_spent: 3 },
-    credits: { balance: 22, monthly_grant: 25, recent: [] },
-    subscription: null,
-  }
-  const PLANS = {
-    plans: [
-      { id: 'free', name: 'Free', price_usd_month: 0, features: ['3 lead requests / month'] },
-      { id: 'pro', name: 'Pro', price_usd_month: 49, features: ['50 lead requests / month'] },
-    ],
-    providers: ['stripe'],
-  }
-
-  beforeEach(() => {
-    api.get.mockImplementation((p) => Promise.resolve(p === '/billing/summary' ? SUMMARY : p === '/billing/plans' ? PLANS : { invoices: [] }))
-  })
-
-  it('shows plan, usage meters, credits and an empty invoice state', async () => {
-    wrap(<Billing />)
-    expect(await screen.findByRole('heading', { name: 'Free plan' })).toBeInTheDocument()
-    expect(screen.getByRole('progressbar', { name: 'Lead requests this month' })).toHaveAttribute('aria-valuenow', '3')
-    expect(screen.getByText('22')).toBeInTheDocument()
-    expect(screen.getByText('No invoices yet')).toBeInTheDocument()
-  })
-
-  it('labels the two credit balances and lets an admin add credits', async () => {
-    const TOPUP = { packs: [{ credits: 100, price_usd: 10 }, { credits: 500, price_usd: 40 }], providers: ['mock'], can_manage: true }
-    api.get.mockImplementation((p) => Promise.resolve(
-      p === '/billing/summary' ? { ...SUMMARY, credits: { ...SUMMARY.credits, label: 'Request credits', recent: [{ kind: 'topup', label: 'Top-up', amount: 100, note: '' }] }, enrichment_credits: { label: 'Email lookup credits', balance: 97 } }
-        : p === '/billing/plans' ? PLANS : p === '/billing/topup' ? TOPUP : { invoices: [] }))
-    api.post.mockResolvedValue({ settled: true, credits: 500, target: 'enrichment' })
-    const user = userEvent.setup()
-    wrap(<Billing />)
-    expect(await screen.findByText('Request credits', { selector: 'dt' })).toBeInTheDocument()
-    expect(screen.getByText('Email lookup credits', { selector: 'dt' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Email lookup credit balance')).toHaveTextContent('97')
-    expect(screen.getByRole('list', { name: 'Recent request credit activity' })).toHaveTextContent('Top-up')
-    await user.selectOptions(screen.getByLabelText('Credit pack'), '500')
-    await user.selectOptions(screen.getByLabelText('Add to'), 'enrichment')
-    await user.click(screen.getByRole('button', { name: 'Add credits' }))
-    expect(api.post).toHaveBeenCalledWith('/billing/topup', { credits: 500, target: 'enrichment' })
-    expect(await screen.findByText('Added 500 email lookup credits.')).toBeInTheDocument()
-  })
-
-  it('hides the top-up form when no provider is enabled and disables it for non-admins', async () => {
-    wrap(<Billing />)
-    expect(await screen.findByRole('heading', { name: 'Free plan' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Add credits' })).not.toBeInTheDocument()
-    cleanup()
-    api.get.mockImplementation((p) => Promise.resolve(
-      p === '/billing/summary' ? SUMMARY : p === '/billing/plans' ? PLANS
-        : p === '/billing/topup' ? { packs: [{ credits: 100, price_usd: 10 }], providers: ['mock'], can_manage: false } : { invoices: [] }))
-    wrap(<Billing />)
-    expect(await screen.findByRole('button', { name: 'Add credits' })).toBeDisabled()
-    expect(screen.getByText('Only owners and admins can add credits.')).toBeInTheDocument()
-  })
-
-  it('shows the error when adding credits fails', async () => {
-    api.get.mockImplementation((p) => Promise.resolve(
-      p === '/billing/summary' ? SUMMARY : p === '/billing/plans' ? PLANS
-        : p === '/billing/topup' ? { packs: [{ credits: 100, price_usd: 10 }], providers: ['mock'], can_manage: true } : { invoices: [] }))
-    api.post.mockRejectedValue(new Error('The payment provider could not start the top-up'))
-    const user = userEvent.setup()
-    wrap(<Billing />)
-    await user.click(await screen.findByRole('button', { name: 'Add credits' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('could not start the top-up')
-  })
-
-  it('starts checkout for an upgrade', async () => {
-    const assign = vi.fn()
-    Object.defineProperty(window, 'location', { value: { ...window.location, assign }, writable: true })
-    api.post.mockResolvedValue({ url: 'https://pay.test/x' })
-    const user = userEvent.setup()
-    wrap(<Billing />)
-    await user.click(await screen.findByRole('button', { name: 'Upgrade to Pro' }))
-    expect(api.post).toHaveBeenCalledWith('/billing/checkout', { plan: 'pro', provider: 'stripe' })
-    await waitFor(() => expect(assign).toHaveBeenCalledWith('https://pay.test/x'))
-  })
-
-  it('disables upgrades for non-admins and lists invoices when present', async () => {
-    const invoices = { invoices: [{ id: 'stripe:in_1', amount: 4900, currency: 'usd', status: 'paid', created_at: '2026-01-02T00:00:00', url: 'https://r.test' }] }
-    api.get.mockImplementation((p) => Promise.resolve(p === '/billing/summary' ? { ...SUMMARY, can_manage: false } : p === '/billing/plans' ? PLANS : invoices))
-    wrap(<Billing />)
-    expect(await screen.findByRole('button', { name: 'Upgrade to Pro' })).toBeDisabled()
-    expect(within(screen.getByRole('table')).getByText('paid')).toBeInTheDocument()
-  })
-
-  it('shows an error with retry', async () => {
-    api.get.mockRejectedValue(new Error('nope'))
-    wrap(<Billing />)
-    expect(await screen.findByText('Could not load billing')).toBeInTheDocument()
-  })
-})
-
 describe('Integrations', () => {
   const FIELDS = { company: { name: 'Company name', domain: 'Website domain' }, contact: { email: 'Email', first_name: 'First name' } }
-  const base = { hubspot_oauth_available: false, crm_connections_allowed: 1, can_manage: true, fields: FIELDS }
+  const base = { hubspot_oauth_available: false, can_manage: true, fields: FIELDS }
 
   it('connects HubSpot with a private-app token', async () => {
     api.get.mockResolvedValue({ ...base, integrations: [{ provider: 'hubspot', connected: false }] })

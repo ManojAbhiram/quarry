@@ -11,7 +11,6 @@ def test_production_env_example_documents_every_variable():
     for f in APP.rglob("*.py"):
         src = f.read_text(encoding="utf-8")
         names |= set(re.findall(r'(?:getenv|environ\.get)\(\s*"([A-Z][A-Z0-9_]+)"', src))
-    names |= {"STRIPE_SECRET_KEY", "RAZORPAY_KEY_ID"}
     missing = sorted(n for n in names if not re.search(rf"^#?\s*{n}=", text, re.M))
     assert not missing, f"undocumented env vars: {missing}"
 
