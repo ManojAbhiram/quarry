@@ -1,4 +1,4 @@
-"""Enrichment HTTP API: credits, BYO provider keys, per-lead waterfall, optional Claude batch scoring."""
+"""Enrichment HTTP API: provider keys, per-lead waterfall, optional Claude batch scoring."""
 from __future__ import annotations
 
 from typing import Optional
@@ -7,10 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from app.db.models import TABLES
-from app.p3.config import p3_settings
 from app.services.auth import get_current_user
 from app.waterfall import claude_scoring, service
-from app.waterfall.providers import PROVIDER_ORDER
 
 router = APIRouter(prefix="/enrichment", tags=["enrichment"])
 _leads = TABLES["leads"]
@@ -21,12 +19,9 @@ def _uid(user: dict) -> str:
     return str(user["_id"])
 
 
-@router.get("/credits")
-async def credits(user: dict = Depends(get_current_user)):
-    uid = _uid(user)
-    return {"balance": await service.balance(uid), "history": await service.history(uid),
-            "order": list(PROVIDER_ORDER), "providers": await service.list_keys(uid),
-            "claude_batch_scoring": p3_settings.claude_batch_scoring}
+@router.get("/keys")
+async def keys(user: dict = Depends(get_current_user)):
+    return {"providers": await service.list_keys(_uid(user))}
 
 
 class KeyIn(BaseModel):

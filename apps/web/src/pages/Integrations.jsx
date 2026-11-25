@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Coins, KeyRound, Plus, Webhook } from 'lucide-react'
+import { KeyRound, Plus, Webhook } from 'lucide-react'
 import { enrichApi, integrationsApi } from '../api.p3'
 import { Button, EmptyState, Field, PageHeader, useToast } from '../components/kit'
 import { Loadable, Pill, Section } from './p3/ui'
@@ -26,7 +26,7 @@ function SecretOnce({ label, value }) {
 
 const keysFn = () => integrationsApi.keys()
 const hooksFn = () => integrationsApi.webhooks()
-const credFn = () => enrichApi.credits()
+const enrichmentKeysFn = () => enrichApi.keys()
 
 function ApiKeys() {
   const toast = useToast()
@@ -99,24 +99,21 @@ function Webhooks() {
 
 function Enrichment() {
   const toast = useToast()
-  const { state, data, load } = useLoad(credFn)
+  const { state, data, load } = useLoad(enrichmentKeysFn)
   const [drafts, setDrafts] = useState({})
   const save = async (p) => {
     try { await enrichApi.setKey(p, drafts[p]); setDrafts({ ...drafts, [p]: '' }); toast.push({ type: 'success', message: 'Key saved.' }); load() } catch (err) { toast.push({ type: 'error', message: err.message || 'Could not save the key.' }) }
   }
   return (
-    <Section title="Email lookup credits" description="These are separate from the request credits on your Billing page. Emails are looked up in order: existing scrape, Hunter, Snov, People Data Labs. You pay credits only for hits on platform keys; your own keys cost no credits.">
-      <Loadable state={state} onRetry={load} label="credits">
+    <Section title="Email lookup providers" description="Manage API keys for Hunter, Snov, and People Data Labs. Lookups may count toward your provider usage.">
+      <Loadable state={state} onRetry={load} label="email lookup providers">
         {data && (
-          <>
-            <p className="mb-4 flex items-center gap-2 text-3xl font-black text-ink tabular-nums"><Coins aria-hidden="true" className="h-7 w-7 text-primary-600" />{data.balance}<span className="text-sm font-semibold text-muted">credits</span></p>
-            <ul className="space-y-3">{data.providers.map((p) => (
-              <li key={p.provider} className="flex flex-wrap items-end gap-2">
-                <Field className="min-w-[14rem] flex-1" label={`${p.provider} API key`} type="password" autoComplete="off" placeholder={p.byo_key || (p.platform_key ? 'Using the platform key' : 'Not set')} value={drafts[p.provider] || ''} onChange={(e) => setDrafts({ ...drafts, [p.provider]: e.target.value })} hint={`${p.credits_per_hit} credit${p.credits_per_hit === 1 ? '' : 's'} per hit on the platform key`} />
-                <Button variant="secondary" disabled={!(drafts[p.provider] || '').trim()} onClick={() => save(p.provider)}>Save</Button>
-                {p.byo_key && <Button variant="ghost" aria-label={`Remove ${p.provider} key`} onClick={async () => { await enrichApi.deleteKey(p.provider); load() }}>Remove</Button>}
-              </li>))}</ul>
-          </>
+          <ul className="space-y-3">{data.providers.map((p) => (
+            <li key={p.provider} className="flex flex-wrap items-end gap-2">
+              <Field className="min-w-[14rem] flex-1" label={`${p.provider} API key`} type="password" autoComplete="off" placeholder={p.byo_key || (p.platform_key ? 'Using the platform key' : 'Not set')} value={drafts[p.provider] || ''} onChange={(e) => setDrafts({ ...drafts, [p.provider]: e.target.value })} />
+              <Button variant="secondary" disabled={!(drafts[p.provider] || '').trim()} onClick={() => save(p.provider)}>Save</Button>
+              {p.byo_key && <Button variant="ghost" aria-label={`Remove ${p.provider} key`} onClick={async () => { await enrichApi.deleteKey(p.provider); load() }}>Remove</Button>}
+            </li>))}</ul>
         )}
       </Loadable>
     </Section>

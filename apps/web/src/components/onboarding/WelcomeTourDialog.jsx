@@ -37,8 +37,8 @@ export const steps = [
   },
   {
     label: 'Management', title: 'Manage your workspace', icon: UsersRound,
-    description: 'Invite teammates, review your plan and usage, and find the privacy controls for your workspace.',
-    places: [['Team', 'Manage workspace members'], ['Billing and Compliance', 'Review usage and privacy controls']],
+    description: 'Invite teammates, review your provider usage, and find the privacy controls for your workspace.',
+    places: [['Team', 'Manage workspace members'], ['Account and Compliance', 'Review usage and privacy controls']],
   },
 ]
 

@@ -1,44 +1,16 @@
-"""Atomic request quota and HubSpot pushes as background jobs."""
+"""Concurrent request creation and HubSpot pushes as background jobs."""
 import asyncio
 
 import pytest
 
 from app import jobs
-from app.billing import store
-from app.billing.store import QuotaExceeded, consume_request_quota
 from app.crm import jobs as crm_jobs
 from app.crm import service
 from app.db.models import TABLES
 from tests.growth.test_crm import FakeCrm, _setup
 
 
-# -- atomic quota ----------------------------------------------------------------------------------------------------
-
-async def _race(scope: str, n: int):
-    results = await asyncio.gather(*[consume_request_quota(scope) for _ in range(n)], return_exceptions=True)
-    ok = [r for r in results if not isinstance(r, Exception)]
-    refused = [r for r in results if isinstance(r, QuotaExceeded)]
-    assert len(ok) + len(refused) == n, results  # nothing else may go wrong
-    return ok, refused
-
-
-async def test_concurrent_requests_cannot_overshoot_the_monthly_limit(db):
-    ok, refused = await _race("user:race1", 12)  # free plan allows 3 requests per month
-    assert len(ok) == 3 and len(refused) == 9
-    assert {r.code for r in refused} == {"request_limit"}
-    assert (await store.usage_this_period("user:race1"))["requests_created"] == 3
-    assert await store.credit_balance("user:race1") == 22  # 25 granted - 3 debited, never negative
-
-
-async def test_concurrent_requests_cannot_overspend_credits(db):
-    await store.ensure_period_grant("user:race2", await store.get_plan_for_scope("user:race2"))
-    await store.debit_credits("user:race2", 23, "adjustment")  # leaves 2 credits, plan limit is 3
-    ok, refused = await _race("user:race2", 8)
-    assert len(ok) == 2 and {r.code for r in refused} == {"insufficient_credits"}
-    assert await store.credit_balance("user:race2") == 0
-
-
-async def test_concurrent_http_creates_respect_the_limit(db, monkeypatch):
+async def test_concurrent_http_creates_all_requests(db):
     import httpx
 
     from app.main import app
@@ -51,7 +23,8 @@ async def test_concurrent_http_creates_respect_the_limit(db, monkeypatch):
             api.post("/api/requests", json={"name": f"R{i}", "description": "d"}, headers=h) for i in range(8)
         ])
     statuses = sorted(c.status_code for c in codes)
-    assert statuses.count(201) == 3 and statuses.count(402) == 5
+    assert statuses == [201] * 8
+    assert len(await TABLES["requests"].find()) == 8
 
 
 # -- HubSpot push as a background job ---------------------------------------------------------------------------------

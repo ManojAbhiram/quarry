@@ -12,11 +12,11 @@ from typing import Optional
 
 import httpx
 
-from app.billing.store import personal_scope
 from app.core.logger import logger
 from app.core.url_guard import httpx_request_guard
 from app.db.growth_models import OrgMember, WebhookSubscription
 from app.db.models import TABLES
+from app.teams.store import personal_scope
 
 EVENTS = ("lead.created", "list.updated")
 MAX_CONSECUTIVE_FAILURES = 10

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
-import { AlertTriangle, Bell, Check, ChevronDown, CreditCard, FolderDot, HelpCircle, Info, LogOut, Moon, PanelLeft, Plug, Plus, Search, ShieldCheck, Sun, UserCircle, Users } from 'lucide-react'
+import { AlertTriangle, Bell, Check, ChevronDown, FolderDot, Gauge, HelpCircle, Info, LogOut, Moon, PanelLeft, Plug, Plus, Search, ShieldCheck, Sun, UserCircle, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useLeads } from '../context/LeadContext'
@@ -259,9 +259,9 @@ export default function Header({ sidebar, quiet = false }) {
                       <Users aria-hidden="true" className="h-4 w-4 text-muted" />
                       Team settings
                     </Link>
-                    <Link to="/billing" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
-                      <CreditCard aria-hidden="true" className="h-4 w-4 text-muted" />
-                      Billing and usage
+                    <Link to="/profile#usage" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
+                      <Gauge aria-hidden="true" className="h-4 w-4 text-muted" />
+                      Usage
                     </Link>
                     <Link to="/integrations/crm" onClick={close} className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-head">
                       <Plug aria-hidden="true" className="h-4 w-4 text-muted" />

@@ -145,7 +145,6 @@ async def create_request_endpoint(
     if not serper_api_key:
         raise HTTPException(status_code=400, detail=SERPER_KEY_REQUIRED_MSG)
     estimate = usage.estimate_run(body.num_leads or 10, body.icp_dimensions.model_dump())
-    await usage.check_quota(user_id, current_user, estimate)
     require_connection()
     request_id = await svc.create_request(body, user_id, draft_id)
     await usage.begin_run(user_id, request_id, estimate)
@@ -272,7 +271,6 @@ async def launch_direct_companies_endpoint(
         raise HTTPException(status_code=400, detail=SERPER_KEY_REQUIRED_MSG)
     require_connection()
     estimate = usage.estimate_direct(len(body.companies))
-    await usage.check_quota(user_id, current_user, estimate)
     request_id = await svc.create_direct_companies_request(body, user_id, draft_id)
     await usage.begin_run(user_id, request_id, estimate)
 

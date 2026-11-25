@@ -11,8 +11,8 @@ import Section from './profile/Section'
 const ROLES = ['owner', 'admin', 'member', 'viewer']
 const INVITE_ROLES = ['admin', 'member', 'viewer']
 const ROLE_HELP = {
-  owner: 'Full control, including billing and ownership.',
-  admin: 'Manage members, invites, billing and integrations.',
+  owner: 'Full control, including workspace ownership.',
+  admin: 'Manage members, invitations and integrations.',
   member: 'Create requests and share work with the team.',
   viewer: 'Read what the team shares.',
 }

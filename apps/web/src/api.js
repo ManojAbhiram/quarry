@@ -144,7 +144,6 @@ async function parseResponse(res) {
     if (Array.isArray(detail)) {
       throw httpError(detail[0]?.msg || 'Validation error', res.status)
     }
-    // Plan-limit errors (402) carry { code, message }.
     throw httpError((detail && typeof detail === 'object' ? detail.message : detail) || 'Request failed', res.status)
   }
   return data

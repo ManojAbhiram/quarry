@@ -1,6 +1,6 @@
-"""Cost controls: launch estimate, sample run and the user's usage against quota.
+"""Cost controls: launch estimate, sample run and measured provider usage.
 
-GET  /usage/summary     this month's runs, calls, estimated cost and quota left
+GET  /usage/summary     this month's runs, calls, and estimated provider cost
 POST /usage/estimate    estimate calls and cost of a run from the number of leads wanted and the ICP
 POST /usage/sample-run  run the first search only and return a few candidates, before committing to the full run
 """
@@ -27,7 +27,7 @@ SERPER_KEY_REQUIRED_MSG = "Add your Serper API key in Profile to run a sample."
 
 @router.get("/summary")
 async def summary(current_user: dict = Depends(get_current_user)):
-    return await usage.get_summary(str(current_user["_id"]), current_user)
+    return await usage.get_summary(str(current_user["_id"]))
 
 
 class EstimateIn(BaseModel):
@@ -36,13 +36,8 @@ class EstimateIn(BaseModel):
 
 
 @router.post("/estimate")
-async def estimate(body: EstimateIn, current_user: dict = Depends(get_current_user)):
-    est = usage.estimate_run(body.num_leads, body.icp_dimensions)
-    s = await usage.get_summary(str(current_user["_id"]), current_user)
-    est["quota"] = s["quota"]
-    est["month_cost_usd"] = s["cost_usd"]
-    est["fits_quota"] = s["quota"]["runs_left"] > 0 and s["cost_usd"] + est["cost_usd"]["typical"] <= s["quota"]["cost_usd"]
-    return est
+async def estimate(body: EstimateIn, _: dict = Depends(get_current_user)):
+    return usage.estimate_run(body.num_leads, body.icp_dimensions)
 
 
 @router.post("/sample-run")
