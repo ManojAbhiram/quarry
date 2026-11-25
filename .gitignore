@@ -17,6 +17,15 @@ __pycache__/
 dist/
 build/
 
+# Local QA artifacts and scratch directories
+/qa-reports/
+/tmp/
+/temp/
+/~/
+test-results/
+playwright-report/
+playwright/.cache/
+
 # Local tooling & AI agents
 .claude/
 .agents/
