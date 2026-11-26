@@ -15,6 +15,7 @@ Lead generation pipeline — end-to-end flow:
   10. Mark the request as Completed (or Failed on error)
 """
 import asyncio
+from app.services.connections import bind_owner, require_connection, ConnectionRequired
 import time
 import re
 
@@ -56,7 +57,7 @@ from app.verification import VerifierConfig
 from app import usage
 from app.verification.service import current_verifier
 from app.services.scraper import scrape_directory_links
-from app.services.serper import fetch_leads_from_serper, current_serper_key
+from app.services.serper import fetch_leads_from_serper
 from app.services.tech_stack import detect_infrastructure_profile_parallel
 
 # Limit how many _resolve_company() calls run concurrently so that a large
@@ -859,8 +860,9 @@ async def run_lead_pipeline(request_id: str, request_payload: dict) -> list[dict
 
         # Process any available standalone items
         if all_standalone and len(enriched) < TARGET_ENRICHED:
-            batch = all_standalone[:BATCH_SIZE]
-            all_standalone = all_standalone[BATCH_SIZE:]
+            batch_size = min(BATCH_SIZE, TARGET_ENRICHED - len(enriched))
+            batch = all_standalone[:batch_size]
+            all_standalone = all_standalone[batch_size:]
             # Dedup batch against companies collection before scraping
             batch = await _dedup_against_companies(batch)
             all_processed_standalone.extend(batch)
@@ -1110,6 +1112,7 @@ async def run_direct_companies_pipeline(
     return enriched
 
 
+@bind_owner
 async def run_direct_companies_background(
     request_id: str,
     companies: list[str],
@@ -1118,15 +1121,14 @@ async def run_direct_companies_background(
     serper_api_key: str | None = None,
 ) -> None:
     try:
-        if serper_api_key:
-            current_serper_key.set(serper_api_key)
+        require_connection()
         async with usage.tracked(user_id, request_id):
             await run_direct_companies_pipeline(request_id, companies, target_roles, user_id)
     except BaseException as exc:  # catches asyncio.CancelledError too
         logger.error("Direct-companies pipeline failed for request %s: %s", request_id, exc, exc_info=True)
         try:
             await update_request_status(
-                request_id, "Failed", failure_reason="The run stopped unexpectedly (%s). Please try again." % type(exc).__name__
+                request_id, "Failed", failure_reason=str(exc) if isinstance(exc, ConnectionRequired) else "The run stopped unexpectedly (%s). Please try again." % type(exc).__name__
             )
         except Exception:
             pass
@@ -1198,12 +1200,12 @@ async def _load_verifier(user_id: str) -> None:
         logger.warning("Could not load email verifier settings for user %s: %s", user_id, exc)
 
 
+@bind_owner
 async def run_pipeline_background(
     request_id: str, data_dict: dict, user_id: str, serper_api_key: str | None = None
 ) -> None:
     try:
-        if serper_api_key:
-            current_serper_key.set(serper_api_key)
+        require_connection()
         data_dict["user_id"] = user_id
         await _load_verifier(user_id)
         async with usage.tracked(user_id, request_id):
@@ -1212,7 +1214,7 @@ async def run_pipeline_background(
         logger.error("Pipeline failed for request %s: %s", request_id, exc, exc_info=True)
         try:
             await update_request_status(
-                request_id, "Failed", failure_reason="The run stopped unexpectedly (%s). Please try again." % type(exc).__name__
+                request_id, "Failed", failure_reason=str(exc) if isinstance(exc, ConnectionRequired) else "The run stopped unexpectedly (%s). Please try again." % type(exc).__name__
             )
         except Exception:
             pass

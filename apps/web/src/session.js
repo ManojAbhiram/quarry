@@ -24,6 +24,12 @@ export function markSession() {
 /** Forget the hint, and any token an older version stored in localStorage. */
 export function clearSession() {
   try {
+    // Refresh restores an active introduction; a new login offers quiet Resume.
+    Object.keys(sessionStorage).forEach((key) => {
+      if (key.startsWith('quarry:tour:') && sessionStorage.getItem(key) === 'active') sessionStorage.removeItem(key)
+    })
+  } catch { /* storage unavailable */ }
+  try {
     localStorage.removeItem(STORAGE_KEYS.SESSION)
     localStorage.removeItem(STORAGE_KEYS.LEGACY_TOKEN)
     localStorage.removeItem(STORAGE_KEYS.LEGACY_REFRESH_TOKEN)

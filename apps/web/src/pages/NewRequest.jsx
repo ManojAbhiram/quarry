@@ -15,6 +15,8 @@ import Reveal from '../components/motion/Reveal'
 import SearchKeyNotice, { useSearchKey } from './requests/SearchKeyNotice'
 import CommandPalette from './requests/CommandPalette'
 
+const MAX_LEADS = 200
+const LEAD_COUNT_ERROR = `Enter a whole number between 1 and ${MAX_LEADS}.`
 const DIMENSION_KEYS = ['firmographic', 'technographic', 'team_structure', 'buying_signals', 'compliance', 'deployment_pref']
 
 const errorText = (err, fallback) => (err?.isNetworkError ? "Couldn't reach Quarry. Check your connection and try again." : err?.message || fallback)
@@ -86,7 +88,11 @@ export default function NewRequest() {
   const [uploadedFiles, setUploadedFiles] = useState([])
 
   const [productName, setProductName] = useState('')
-  const [numLeads, setNumLeads] = useState(10)
+  const [leadCountOverride, setLeadCountOverride] = useState(null)
+  const savedLeadCount = currentRequest?.product_intake?.num_leads ?? 10
+  const numLeads = leadCountOverride && leadCountOverride.requestId === requestId
+    ? leadCountOverride.value
+    : savedLeadCount
 
   const [details, setDetails] = useState({
     productCategory: '', oneLiner: '', deploymentModel: '',
@@ -175,7 +181,7 @@ export default function NewRequest() {
   })
 
   const leadsCount = parseInt(numLeads, 10)
-  const leadsValid = Number.isInteger(leadsCount) && leadsCount >= 1 && leadsCount <= 1000 && String(numLeads).trim() === String(leadsCount)
+  const leadsValid = Number.isInteger(leadsCount) && leadsCount >= 1 && leadsCount <= MAX_LEADS && String(numLeads).trim() === String(leadsCount)
 
   const handleSaveDraft = async () => {
     if (!requestId || saving) return
@@ -260,7 +266,7 @@ export default function NewRequest() {
     if (!productName.trim() && !description.trim() && scrapedUrls.length === 0 && uploadedFiles.length === 0) {
       next.product = 'Enter a product name or a description.'
     }
-    if (!leadsValid) next.numLeads = 'Enter a whole number between 1 and 1,000.'
+    if (!leadsValid) next.numLeads = LEAD_COUNT_ERROR
     if (Object.keys(next).length) {
       setErrors(next)
       return
@@ -456,14 +462,14 @@ export default function NewRequest() {
                     type="number"
                     inputMode="numeric"
                     min="1"
-                    max="1000"
+                    max={MAX_LEADS}
                     label="Number of leads"
                     value={numLeads}
                     disabled={loading}
-                    hint="How many companies to aim for, from 1 to 1,000."
+                    hint={`How many companies to aim for, from 1 to ${MAX_LEADS}.`}
                     error={errors.numLeads}
                     onChange={(e) => {
-                      setNumLeads(e.target.value)
+                      setLeadCountOverride({ requestId, value: e.target.value })
                       if (errors.numLeads) setErrors((x) => ({ ...x, numLeads: null }))
                     }}
                   />

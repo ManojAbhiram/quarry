@@ -1,4 +1,4 @@
-"""Enrichment HTTP API: credits, BYO provider keys, per-lead waterfall, optional Claude batch scoring."""
+"""Enrichment HTTP API: provider keys, per-lead waterfall, optional Claude batch scoring."""
 from __future__ import annotations
 
 from typing import Optional
@@ -7,10 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from app.db.models import TABLES
-from app.p3.config import p3_settings
 from app.services.auth import get_current_user
 from app.waterfall import claude_scoring, service
-from app.waterfall.providers import PROVIDER_ORDER
 
 router = APIRouter(prefix="/enrichment", tags=["enrichment"])
 _leads = TABLES["leads"]
@@ -21,12 +19,9 @@ def _uid(user: dict) -> str:
     return str(user["_id"])
 
 
-@router.get("/credits")
-async def credits(user: dict = Depends(get_current_user)):
-    uid = _uid(user)
-    return {"balance": await service.balance(uid), "history": await service.history(uid),
-            "order": list(PROVIDER_ORDER), "providers": await service.list_keys(uid),
-            "claude_batch_scoring": p3_settings.claude_batch_scoring}
+@router.get("/keys")
+async def keys(user: dict = Depends(get_current_user)):
+    return {"providers": await service.list_keys(_uid(user))}
 
 
 class KeyIn(BaseModel):
@@ -68,13 +63,19 @@ async def scoring_submit(body: ScoreIn, user: dict = Depends(get_current_user)):
         raise HTTPException(404, "Request not found")
     leads = await _leads.find(_leads.model.request_id == body.request_id, _leads.model.user_id == uid, limit=500)
     try:
-        return {"batch_id": await claude_scoring.submit(leads, body.icp), "leads": len(leads)}
+        batch_id = await claude_scoring.submit(leads, body.icp)
+        await TABLES['users'].modify(uid, lambda doc: {'ai_scoring_batches': {
+            **doc.get('ai_scoring_batches', {}), batch_id: {'request_id': body.request_id},
+        }})
+        return {"batch_id": batch_id, "leads": len(leads)}
     except claude_scoring.Disabled as exc:
         raise HTTPException(409, str(exc)) from exc
 
 
 @router.get("/scoring/batch/{batch_id}")
 async def scoring_collect(batch_id: str, apply: Optional[bool] = False, user: dict = Depends(get_current_user)):
+    if batch_id not in user.get('ai_scoring_batches', {}):
+        raise HTTPException(404, 'Scoring batch not found')
     try:
         res = await claude_scoring.collect(batch_id)
     except claude_scoring.Disabled as exc:

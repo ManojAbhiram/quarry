@@ -10,7 +10,7 @@ vi.mock('../../api.p3', () => ({
     createMailbox: vi.fn(), preflight: vi.fn(), resumeMailbox: vi.fn(), deleteMailbox: vi.fn(), createSequence: vi.fn(),
   },
   integrationsApi: { keys: vi.fn(), createKey: vi.fn(), revokeKey: vi.fn(), webhooks: vi.fn(), createWebhook: vi.fn(), testWebhook: vi.fn(), patchWebhook: vi.fn(), deleteWebhook: vi.fn() },
-  enrichApi: { credits: vi.fn(), setKey: vi.fn(), deleteKey: vi.fn() },
+  enrichApi: { keys: vi.fn(), setKey: vi.fn(), deleteKey: vi.fn() },
   watchApi: { searches: vi.fn(), signals: vi.fn(), createSearch: vi.fn(), runSearch: vi.fn(), deleteSearch: vi.fn(), scan: vi.fn() },
 }))
 
@@ -92,16 +92,16 @@ describe('Integrations', () => {
     vi.clearAllMocks()
     integrationsApi.keys.mockResolvedValue({ keys: [{ _id: 'k1', name: 'ci', prefix: 'qk_abc12', revoked_at: null }] })
     integrationsApi.webhooks.mockResolvedValue({ webhooks: [] })
-    enrichApi.credits.mockResolvedValue({ balance: 97, providers: [{ provider: 'hunter', credits_per_hit: 1, byo_key: '••••9999', platform_key: false }] })
+    enrichApi.keys.mockResolvedValue({ providers: [{ provider: 'hunter', byo_key: '••••9999', platform_key: false }] })
   })
 
-  it('shows keys, credits and an empty webhook state; reveals a new key once', async () => {
+  it('shows provider keys and an empty webhook state; reveals a new key once', async () => {
     const user = userEvent.setup()
     integrationsApi.createKey.mockResolvedValue({ _id: 'k2', key: 'qk_secretvalue' })
     wrap(<Integrations />)
     expect(await screen.findByText('qk_abc12…')).toBeInTheDocument()
     expect(await screen.findByText('No webhooks')).toBeInTheDocument()
-    expect(await screen.findByText('97')).toBeInTheDocument()
+    expect(await screen.findByPlaceholderText('••••9999')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /create key/i }))
     expect(await screen.findByText('qk_secretvalue')).toBeInTheDocument()
   })

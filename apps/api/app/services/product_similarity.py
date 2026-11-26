@@ -18,7 +18,6 @@ from urllib.parse import urlparse, parse_qs, unquote
 
 from bs4 import BeautifulSoup
 
-from app.core.config import settings
 from app.core.url_guard import GuardedAsyncClient
 from app.db.competitors import create_competitor_run, update_competitor_run_status
 from app.services.llm import _llm_json_completion
@@ -27,8 +26,8 @@ from app.services.serper import fetch_leads_from_serper
 
 logger = logging.getLogger("app.services.product_similarity_pipeline")
 
-_MODEL = settings.LITELLM_MODEL
-_MODEL_MINI = settings.LITELLM_MODEL_MINI
+_MODEL = "primary"
+_MODEL_MINI = "fast"
 
 _DENY_DOMAINS = {
     "linkedin.com", "facebook.com", "twitter.com", "x.com",

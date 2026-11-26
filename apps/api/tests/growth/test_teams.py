@@ -69,9 +69,6 @@ async def test_role_permissions(api, signup):
     mh, mid = await signup("m4@x.com")
     vh, vid = await signup("v4@x.com")
     org_id = await _org(api, oh)
-    from app.billing.store import upsert_subscription
-
-    await upsert_subscription(org_id, {"plan": "team", "status": "active"})  # enough seats for four people
     await _join(api, oh, org_id, "m4@x.com", mh, "member")
     await _join(api, oh, org_id, "v4@x.com", vh, "viewer")
     # members cannot invite, rename or change roles
@@ -106,14 +103,15 @@ async def test_member_can_leave_and_admin_can_remove(api, signup):
     assert (await api.get(f"/api/orgs/{org_id}/members", headers=mh)).status_code == 404
 
 
-async def test_seat_limit_enforced_on_free_plan(api, signup):
-    oh, _ = await signup("o7@x.com")
-    org_id = await _org(api, oh)  # free plan: 3 seats; owner uses one
-    for i in range(2):
-        r = await api.post(f"/api/orgs/{org_id}/invites", json={"email": f"s{i}@x.com"}, headers=oh)
-        assert r.status_code == 201
-    r = await api.post(f"/api/orgs/{org_id}/invites", json={"email": "s9@x.com"}, headers=oh)
-    assert r.status_code == 402
+async def test_owner_can_invite_more_than_two_members(api, signup):
+    owner, _ = await signup("o7@x.com")
+    org_id = await _org(api, owner)
+    for index in range(3):
+        email = f"s{index}@x.com"
+        headers, _ = await signup(email)
+        await _join(api, owner, org_id, email, headers)
+    roster = await api.get(f"/api/orgs/{org_id}/members", headers=owner)
+    assert len(roster.json()["members"]) == 4
 
 
 async def test_revoke_invite(api, signup):
@@ -152,7 +150,7 @@ async def test_member_of_org_a_cannot_access_org_b(api, signup):
     assert (await api.get(f"/api/orgs/{org_a}/shared/lists/{list_b}", headers=a_h)).status_code == 404
     assert (await api.get(f"/api/lists/{list_b}", headers=a_h)).status_code == 404
     # X-Org-Id header for an org you are not in is refused
-    r = await api.get("/api/billing/summary", headers={**a_h, "X-Org-Id": org_b})
+    r = await api.get("/api/integrations", headers={**a_h, "X-Org-Id": org_b})
     assert r.status_code == 403
 
 
@@ -184,3 +182,17 @@ async def test_share_list_and_request_with_org(api, signup):
     assert (await api.get(f"/api/orgs/{org_id}/shared/lists/{list_id}", headers=mh)).status_code == 404
     stolen = await api.post(f"/api/orgs/{org_id}/shares", json={"resource_type": "list", "resource_id": list_id}, headers=mh)
     assert stolen.status_code == 404
+
+
+async def test_viewer_cannot_create_workspace_requests(api, signup):
+    owner, _ = await signup("request-owner@x.com")
+    viewer, _ = await signup("request-viewer@x.com")
+    org_id = await _org(api, owner)
+    await _join(api, owner, org_id, "request-viewer@x.com", viewer, "viewer")
+    payload = {"name": "Team request", "description": "Research"}
+    response = await api.post("/api/requests", json=payload, headers={**owner, "X-Org-Id": org_id})
+    assert response.status_code == 201
+    request = await TABLES["requests"].get(_id=response.json()["id"])
+    assert request["org_id"] == org_id
+    response = await api.post("/api/requests", json=payload, headers={**viewer, "X-Org-Id": org_id})
+    assert response.status_code == 403

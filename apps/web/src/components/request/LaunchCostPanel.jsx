@@ -47,7 +47,7 @@ export default function LaunchCostPanel({ numLeads, icpDimensions, buildPayload 
     <section aria-labelledby="launch-cost-title" className="card space-y-4 p-4 sm:p-5">
       <div className="flex items-center gap-2">
         <Coins aria-hidden="true" className="h-5 w-5 text-primary-600 dark:text-primary-400" />
-        <h2 id="launch-cost-title" className="text-base font-black tracking-tight text-ink">Cost estimate</h2>
+        <h2 id="launch-cost-title" className="text-base font-black tracking-tight text-ink">Provider cost estimate</h2>
       </div>
 
       {estError && <p className="text-sm text-muted">The estimate is not available right now. You can still launch.</p>}
@@ -61,11 +61,6 @@ export default function LaunchCostPanel({ numLeads, icpDimensions, buildPayload 
           <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-muted">
             {est.assumptions.map((a) => <li key={a}>{a}</li>)}
           </ul>
-          {!est.fits_quota && (
-            <p role="alert" className="mt-2 rounded-md bg-warn-soft p-2 text-sm font-medium text-warn">
-              This run may exceed your monthly limit ({est.quota.runs_left} runs left, {usd(est.quota.cost_left_usd)} of budget left). Launching could be refused.
-            </p>
-          )}
         </div>
       )}
 
@@ -75,13 +70,13 @@ export default function LaunchCostPanel({ numLeads, icpDimensions, buildPayload 
             {!sampling && <Beaker aria-hidden="true" className="h-4 w-4" />}
             {sample ? 'Run sample again' : 'Run a sample first'}
           </Button>
-          <span className="text-xs text-muted">One search, a few candidate companies, a fraction of the cost. Recommended before a large run.</span>
+          <span className="text-xs text-muted">Preview a few candidate companies with one search.</span>
         </div>
         {sampleError && <p role="alert" className="mt-2 text-sm font-medium text-bad">{sampleError}</p>}
         {sample && (
           <div className="mt-3" aria-live="polite">
             <p className="text-sm text-ink">
-              Search used: <em className="break-words">{sample.query}</em>. Sample cost {usd(sample.sample_cost_usd)}.
+              Search used: <em className="break-words">{sample.query}</em>. Estimated sample cost {usd(sample.sample_cost_usd)}.
             </p>
             {sample.samples.length === 0 ? (
               <p className="mt-1 text-sm text-muted">No candidates came back. Broaden your ICP before launching.</p>

@@ -53,12 +53,16 @@ describe('AuthProvider bootstrap', () => {
     localStorage.setItem('session', '1')
     localStorage.setItem('token', 'legacy')
     localStorage.setItem('refresh_token', 'legacy')
+    sessionStorage.setItem('quarry:tour:account-a', 'active')
+    sessionStorage.setItem('quarry:tour:account-b', 'closed')
     api.get.mockRejectedValueOnce(serverError(401, 'Invalid token'))
     renderAuth()
     await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('anonymous'))
     expect(localStorage.getItem('session')).toBeNull()
     expect(localStorage.getItem('token')).toBeNull() // legacy tokens are wiped too
     expect(localStorage.getItem('refresh_token')).toBeNull()
+    expect(sessionStorage.getItem('quarry:tour:account-a')).toBeNull()
+    expect(sessionStorage.getItem('quarry:tour:account-b')).toBe('closed')
   })
 
   it('keeps the session when the network is down, and lets the user retry', async () => {

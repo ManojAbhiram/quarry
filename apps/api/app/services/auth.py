@@ -132,4 +132,15 @@ async def get_current_user(
     user = await get_user_by_id(user_id)
     if user is None:
         raise credentials_exception
-    return user
+    from app.services.connections import connection_from_user, current_connection
+    from app.services.serper import current_serper_key
+    from app.core.security_crypto import decrypt_secret
+
+    ai_token = current_connection.set(connection_from_user(user))
+    encrypted = user.get('serper_api_key_encrypted')
+    search_token = current_serper_key.set(decrypt_secret(encrypted) if encrypted else None)
+    try:
+        yield user
+    finally:
+        current_serper_key.reset(search_token)
+        current_connection.reset(ai_token)

@@ -4,7 +4,7 @@ import logging
 import re
 from typing import Any, List,Dict
 
-from litellm import acompletion
+from app.services.connections import complete, ConnectionRequired
 
 from app.schemas.leads import SearchQueryList
 from app.schemas.request_intake import ConsistencyCheckResponse, StructuredICP
@@ -216,68 +216,19 @@ async def _llm_json_completion_checked(
     temperature: float,
 ) -> dict:
     """Like `_llm_json_completion` but raises LLMCompletionError on every failure."""
-    active_fallbacks = [m for m in settings.LITELLM_FALLBACK_MODELS if m != model]
-    messages = [
-        {"role": "system", "content": _guarded_system_prompt(system_prompt)},
-        {"role": "user", "content": user_prompt},
-    ]
-    response = None
-    content = ""
-    last_error: Exception | None = None
-
     usage.count("llm")
     async with _LLM_SEM:
         try:
-            response = await acompletion(
-                model=model,
-                fallbacks=active_fallbacks,
-                messages=messages,
-                response_format={"type": "json_object"},
-                max_tokens=max_tokens,
-                temperature=temperature,
-                num_retries=1,
-                timeout=timeout,
-            )
-            content = response.choices[0].message.content or ""
-        except Exception as exc:
-            last_error = exc
-            logger.warning("JSON-mode acompletion failed: %s. Retrying without JSON-mode format...", exc)
-            content = ""
-
-        if not content.strip():
-            logger.warning("JSON-mode returned empty content. Retrying completion WITHOUT native json_object format...")
-            try:
-                response = await acompletion(
-                    model=model,
-                    fallbacks=active_fallbacks,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    num_retries=1,
-                    timeout=timeout,
-                )
-                content = response.choices[0].message.content or ""
-                last_error = None
-            except Exception as exc2:
-                last_error = exc2
-                logger.error("Text-mode retry acompletion failed: %s", exc2)
-                content = ""
-
-    if response is not None:
-        actual_model = getattr(response, "model", None)
-        if actual_model and actual_model != model:
-            logger.warning(
-                "LLM fallback triggered during JSON completion: requested '%s', completed with '%s'",
-                model,
-                actual_model,
-            )
-
-    if last_error is not None and not content.strip():
-        raise LLMCompletionError("provider_error", f"{type(last_error).__name__}: {last_error}")
+            content = await complete(model, _guarded_system_prompt(system_prompt), user_prompt,
+                                     max_tokens, temperature, timeout)
+        except ConnectionRequired:
+            raise
+        except Exception:
+            raise LLMCompletionError("provider_error", "The configured AI provider could not complete the request.") from None
 
     raw = _unwrap_json(content)
     if not raw:
-        raise LLMCompletionError("empty_response", "no content after fallback retry")
+        raise LLMCompletionError("empty_response", "no content returned")
 
     parsed = _safe_json_loads(raw, {})
     if not parsed:
@@ -300,41 +251,16 @@ async def _llm_text_completion(
     Shared helper for plain text completions.
     """
 
-    try:
-        active_fallbacks = [
-            m
-            for m in settings.LITELLM_FALLBACK_MODELS
-            if m != model
-        ]
-
-        usage.count("llm")
-        async with _LLM_SEM:
-            response = await acompletion(
-                model=model,
-                fallbacks=active_fallbacks,
-                messages=[
-                    {"role": "system", "content": _guarded_system_prompt(system_prompt)},
-                    {"role": "user", "content": user_prompt},
-                ],
-                max_tokens=max_tokens,
-                temperature=temperature,
-                num_retries=2,
-                timeout=timeout,
-            )
-
-        actual_model = getattr(response, "model", None)
-        if actual_model and actual_model != model:
-            logger.warning(
-                "LLM fallback triggered during text completion: requested '%s', completed with '%s'",
-                model,
-                actual_model,
-            )
-
-        return response.choices[0].message.content.strip()
-
-    except Exception as exc:
-        logger.error("LLM text completion failed: %s", exc)
-        return ""
+    usage.count("llm")
+    async with _LLM_SEM:
+        try:
+            return (await complete(model, _guarded_system_prompt(system_prompt), user_prompt,
+                                   max_tokens, temperature, timeout)).strip()
+        except ConnectionRequired:
+            raise
+        except Exception:
+            logger.error("The configured AI provider could not complete a text request.")
+            return ""
 
 
 # ---------------------------------------------------------------------------
@@ -504,7 +430,7 @@ async def generate_sales_queries(context: dict) -> list[str]:
 """
 
     parsed = await _llm_json_completion(
-        model=settings.LITELLM_MODEL,
+        model="primary",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=1000,
@@ -577,7 +503,7 @@ Example output format:
 """
 
     return await _llm_json_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=400,
@@ -663,7 +589,7 @@ Return a JSON object with a "results" array matching the requested schema exactl
 """
 
     parsed = await _llm_json_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_msg,
         user_prompt=user_msg,
         max_tokens=2000,
@@ -858,7 +784,7 @@ async def extract_lead_from_page(
     try:
         try:
             llm_result = await _llm_json_completion(
-                model=settings.LITELLM_MODEL,
+                model="primary",
                 system_prompt=system_msg,
                 user_prompt=user_msg,
                 max_tokens=900,
@@ -1029,7 +955,7 @@ Rules:
 """
 
     return await _llm_text_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=700,
@@ -1143,7 +1069,7 @@ Rules:
 """
 
     return await _llm_text_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=1100,
@@ -1176,7 +1102,7 @@ async def extract_target_outreach_roles(ideal_lead_profile: str) -> list[str]:
     )
 
     data = await _llm_json_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=250,
@@ -1286,7 +1212,7 @@ async def extract_decision_makers_from_serper(results: list, company_name: str) 
     )
 
     data = await _llm_json_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=2000,
@@ -1354,7 +1280,7 @@ async def summarize_linkedin_posts_from_serper(
     )
 
     data = await _llm_json_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=400,
@@ -1416,7 +1342,7 @@ Rules:
 """
     try:
         res = await _llm_text_completion(
-            model=settings.LITELLM_MODEL,
+            model="primary",
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             max_tokens=250,
@@ -1474,7 +1400,7 @@ Return ONLY a JSON object with these exact keys:
 }}
 """
     return await _llm_json_completion(
-        model=settings.LITELLM_MODEL,
+        model="primary",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=800,
@@ -1505,7 +1431,7 @@ You must return a JSON object with exactly these 6 keys:
 - deployment_pref: Cloud infrastructure preferences, on-premises needs, or hosting restrictions.
 
 Each key maps to an object with exactly 3 fields:
-- "value": bullet-pointed text (lines starting with '•')
+- "value": up to three short bullet points (lines starting with '•')
 - "confidence": exactly one of "High Confidence", "Medium Confidence", "Low Confidence"
 - "warning": brief alert text if Medium/Low confidence, null if High
 
@@ -1524,10 +1450,10 @@ Example:
 Return ONLY a JSON object with these 6 keys.
 """
     res = await _llm_json_completion(
-        model=settings.LITELLM_MODEL,
+        model="primary",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
-        max_tokens=1500,
+        max_tokens=2400,
         timeout=45,
     )
     
@@ -1650,7 +1576,7 @@ Return ONLY the JSON object.
 """
 
     parsed = await _llm_json_completion(
-        model=settings.LITELLM_MODEL,
+        model="primary",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=600,
@@ -1759,7 +1685,7 @@ Return ONLY a valid JSON object with a single key `competitors` containing a lis
 """
 
     parsed = await _llm_json_completion(
-        model=settings.LITELLM_MODEL,
+        model="primary",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=2200,
@@ -1807,7 +1733,7 @@ Rules:
 """
 
     parsed = await _llm_json_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=700,
@@ -1897,7 +1823,7 @@ Rules:
 """
 
     parsed = await _llm_json_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=400,
@@ -1944,7 +1870,7 @@ Rules:
 """
 
     parsed = await _llm_json_completion(
-        model=settings.LITELLM_MODEL_MINI,
+        model="fast",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=350,

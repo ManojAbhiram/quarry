@@ -1,4 +1,4 @@
-import { CreditCard, FolderKanban, LayoutDashboard, ListChecks, Plug, PlugZap, Radar, Send, ShieldCheck, UserCircle, Users } from 'lucide-react'
+import { FolderKanban, LayoutDashboard, ListChecks, Plug, PlugZap, Radar, Send, ShieldCheck, UserCircle, Users } from 'lucide-react'
 
 /**
  * Sidebar sections. `also` adds extra path prefixes that count as "inside" the item (a request's detail pages
@@ -29,7 +29,6 @@ export const NAV_SECTIONS = [
       { to: '/integrations', label: 'Integrations', icon: Plug, exact: true },
       { to: '/integrations/crm', label: 'CRM integrations', icon: PlugZap },
       { to: '/team', label: 'Team', icon: Users },
-      { to: '/billing', label: 'Billing', icon: CreditCard },
       { to: '/compliance', label: 'Compliance', icon: ShieldCheck },
       { to: '/profile', label: 'Account', icon: UserCircle },
     ],

@@ -75,6 +75,23 @@ async def test_pipeline_completes_and_saves_leads(request_row, monkeypatch):
     assert rows[0]["enrichment_failed"] is False
 
 
+async def test_one_lead_run_only_processes_one_candidate_after_a_match(request_row, monkeypatch):
+    results = [{"url": f"https://installer-{i}.test", "title": f"Installer {i}"} for i in range(10)]
+    _mock_pipeline(monkeypatch, [], serper=results)
+    scraped = []
+
+    async def scrape(batch, payload, request_id, user_id):
+        scraped.extend(item["url"] for item in batch)
+        return [{"company_name": item["title"], "website": item["url"], "match_score": "82"} for item in batch]
+
+    monkeypatch.setattr(svc, "_scrape_and_extract", scrape)
+    leads = await svc.run_lead_pipeline(request_row, {"user_id": "u1", "num_leads": 1})
+
+    assert len(scraped) == 1
+    assert len(leads) == 1
+    assert (await _status(request_row))["status"] == "Completed"
+
+
 async def test_failed_enrichment_is_persisted_and_exposed(request_row, monkeypatch):
     failed = {"company_name": "Acme", "website": "https://acme.test", "source_url": "https://acme.test",
               "enrichment_failed": True, "enrichment_failure_reason": "The AI provider was unreachable or rejected the request."}
@@ -116,6 +133,8 @@ async def test_icp_filter_applied_only_when_enabled(request_row, monkeypatch):
 
 
 async def test_background_wrapper_marks_request_failed_on_crash(request_row, monkeypatch):
+    from app.core.security_crypto import encrypt_secret
+    await TABLES['users'].insert({'_id': 'u1', 'ai_connection': {'provider': 'groq', 'key_encrypted': encrypt_secret('test-owner-key'), 'primary_model': 'test-chat'}})
     async def explode(rid, payload):
         raise RuntimeError("kaboom")
 

@@ -5,7 +5,6 @@ from typing import Literal, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 
-from app.billing.store import get_plan_for_scope
 from app.core.config import settings
 from app.core.logger import logger
 from app.db.leads import get_leads_by_ids
@@ -86,8 +85,7 @@ async def accept_invite(body: InviteAccept, user: dict = Depends(get_current_use
 @router.get("/{org_id}")
 async def get_org(ctx: OrgContext = Depends(org_member("viewer"))):
     org = await TABLES["organizations"].get(_id=ctx.org_id)
-    plan = await get_plan_for_scope(ctx.org_id)
-    return {**_org_out(org, ctx.role), "plan": plan.id, "seat_limit": plan.seats}
+    return _org_out(org, ctx.role)
 
 
 @router.put("/{org_id}")
@@ -154,9 +152,8 @@ async def invite(body: InviteCreate, background: BackgroundTasks, ctx: OrgContex
     `email_status`: disabled (SMTP not configured, nothing sent), queued (sending now), later sent or failed
     (visible on the invite list).
     """
-    plan = await get_plan_for_scope(ctx.org_id)
     try:
-        doc, token = await store.create_invite(ctx.org_id, body.email, body.role, str(ctx.user["_id"]), plan.seats)
+        doc, token = await store.create_invite(ctx.org_id, body.email, body.role, str(ctx.user["_id"]))
     except store.TeamError as e:
         _fail(e)
     link = f"{settings.FRONTEND_URL}/invite?token={token}"

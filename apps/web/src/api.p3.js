@@ -45,7 +45,7 @@ export const watchApi = {
 }
 
 export const enrichApi = {
-  credits: () => api.get('/enrichment/credits'),
+  keys: () => api.get('/enrichment/keys'),
   setKey: (provider, key) => api.put(`/enrichment/keys/${e(provider)}`, { key }),
   deleteKey: (provider) => api.delete(`/enrichment/keys/${e(provider)}`),
 }

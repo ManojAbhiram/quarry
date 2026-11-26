@@ -4,7 +4,6 @@ from typing import Optional
 
 from fastapi import Depends, Header, HTTPException
 
-from app.billing.store import personal_scope
 from app.services.auth import get_current_user
 from app.teams import store
 
@@ -18,7 +17,7 @@ class OrgContext:
 
 @dataclass
 class Workspace:
-    """Where an action is billed and scoped: a personal workspace (org_id None) or an organization."""
+    """Scope for workspace actions: a personal workspace (org_id None) or an organization."""
 
     user: dict
     org_id: Optional[str]
@@ -26,7 +25,7 @@ class Workspace:
 
     @property
     def scope_id(self) -> str:
-        return self.org_id or personal_scope(self.user["_id"])
+        return self.org_id or store.personal_scope(str(self.user["_id"]))
 
 
 def org_member(minimum: str = "viewer"):

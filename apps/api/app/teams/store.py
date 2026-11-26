@@ -19,6 +19,10 @@ INVITE_TTL_DAYS = 7
 SHAREABLE = ("request", "list")
 
 
+def personal_scope(user_id: str) -> str:
+    return f"user:{user_id}"
+
+
 def role_at_least(role: Optional[str], minimum: str) -> bool:
     return RANK.get(role or "", 0) >= RANK[minimum]
 
@@ -130,7 +134,7 @@ async def remove_member(org_id: str, target_user_id: str, actor_user_id: str, ac
 
 # -- invites ------------------------------------------------------------------------------------------------------
 
-async def create_invite(org_id: str, email: str, role: str, invited_by: str, seat_limit: int) -> tuple[dict, str]:
+async def create_invite(org_id: str, email: str, role: str, invited_by: str) -> tuple[dict, str]:
     email = email.lower().strip()
     if role not in ROLES or role == "owner":
         raise TeamError(422, "Invites can grant admin, member or viewer")
@@ -142,9 +146,6 @@ async def create_invite(org_id: str, email: str, role: str, invited_by: str, sea
     pending = [i for i in await TABLES["org_invites"].find(OrgInvite.org_id == org_id) if i.get("status") == "pending"]
     for old in [i for i in pending if i["email"] == email]:  # re-inviting replaces the previous link
         await TABLES["org_invites"].update(old["_id"], {"status": "revoked"})
-    pending = [i for i in pending if i["email"] != email]
-    if len(members) + len(pending) >= seat_limit:
-        raise TeamError(402, "Seat limit reached for this plan. Upgrade to invite more people.")
     token = secrets.token_urlsafe(32)
     doc = {
         "org_id": org_id, "email": email, "role": role, "token_hash": _hash(token), "status": "pending",

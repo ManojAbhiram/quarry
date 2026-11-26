@@ -17,12 +17,12 @@ from app.schemas.request_intake import (
     SuggestChipResponse,
 )
 from app.services.auth import get_current_user
+from app.services.connections import bind_owner, require_connection
 import app.services.request_intake_service as svc
 import app.services.competitor_service as competitor_svc
 import app.services.pipeline_jobs as pipeline_jobs
 from app import jobs
 from app.services.leads import run_pipeline_background, run_direct_companies_background
-from app.services.serper import current_serper_key
 from app.db.requests import get_request_by_id
 from app.db.users import get_user_serper_key
 from app import usage
@@ -32,6 +32,7 @@ SERPER_KEY_REQUIRED_MSG = "Add your Serper API key in Profile to launch lead gen
 logger = logging.getLogger("app.api.request_intake")
 
 
+@bind_owner
 async def run_parallel_pipelines(
     request_id: str,
     pipeline_payload: dict,
@@ -40,7 +41,6 @@ async def run_parallel_pipelines(
     serper_api_key: str,
 ) -> None:
     """Run lead generation and competitor pipelines in true parallel."""
-    current_serper_key.set(serper_api_key)
     logger.info("Starting parallel pipelines for request_id=%s", request_id)
     try:
         async with usage.tracked(user_id, request_id):
@@ -107,11 +107,13 @@ async def generate_icp_endpoint(
 ):
     if not request_id:
         raise HTTPException(status_code=422, detail="request_id query parameter is required")
+    user_id = str(current_user["_id"])
+    if not await get_request_by_id(request_id, user_id):
+        raise HTTPException(status_code=404, detail="Lead request not found")
     logger.info(
         "ICP generation for user=%s product=%s request_id=%s",
         current_user.get("email"), body.product_name, request_id,
     )
-    user_id = str(current_user["_id"])
     icp_data = await svc.generate_icp(body.model_dump(), request_id, user_id)
     # NOTE: Competitor pipeline is intentionally NOT triggered here.
     # It runs exactly once from the /launch endpoint to avoid duplicate executions.
@@ -143,7 +145,7 @@ async def create_request_endpoint(
     if not serper_api_key:
         raise HTTPException(status_code=400, detail=SERPER_KEY_REQUIRED_MSG)
     estimate = usage.estimate_run(body.num_leads or 10, body.icp_dimensions.model_dump())
-    await usage.check_quota(user_id, current_user, estimate)
+    require_connection()
     request_id = await svc.create_request(body, user_id, draft_id)
     await usage.begin_run(user_id, request_id, estimate)
 
@@ -267,8 +269,8 @@ async def launch_direct_companies_endpoint(
     serper_api_key = await get_user_serper_key(user_id)
     if not serper_api_key:
         raise HTTPException(status_code=400, detail=SERPER_KEY_REQUIRED_MSG)
+    require_connection()
     estimate = usage.estimate_direct(len(body.companies))
-    await usage.check_quota(user_id, current_user, estimate)
     request_id = await svc.create_direct_companies_request(body, user_id, draft_id)
     await usage.begin_run(user_id, request_id, estimate)
 

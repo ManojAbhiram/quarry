@@ -7,7 +7,7 @@ import { ToastProvider } from '../components/kit'
 const auth = {}
 vi.mock('../context/AuthContext', () => ({ useAuth: () => auth }))
 vi.mock('../api', () => ({
-  api: { getSerperKey: vi.fn(), getUsageSummary: vi.fn(() => new Promise(() => {})), getVerifierSettings: vi.fn(() => new Promise(() => {})), setSerperKey: vi.fn(), deleteSerperKey: vi.fn(), put: vi.fn(), post: vi.fn(), delete: vi.fn() },
+  api: { get: vi.fn(() => Promise.resolve({ has_key: false, models: [], providers: [] })), getSerperKey: vi.fn(), getUsageSummary: vi.fn(() => new Promise(() => {})), getVerifierSettings: vi.fn(() => new Promise(() => {})), setSerperKey: vi.fn(), deleteSerperKey: vi.fn(), put: vi.fn(), post: vi.fn(), delete: vi.fn() },
 }))
 
 import { api } from '../api'
@@ -73,7 +73,7 @@ describe('Profile', () => {
     setup()
     expect(await screen.findByText('Could not check your key.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /try again/i }))
-    expect(await screen.findByText('Connected')).toBeInTheDocument()
+    expect(await screen.findByText('Key saved (unverified)')).toBeInTheDocument()
     expect(screen.getByText('abcd…wxyz')).toBeInTheDocument()
   })
 
@@ -91,7 +91,7 @@ describe('Profile', () => {
     await user.click(screen.getByRole('button', { name: /save key/i }))
     expect(await screen.findByText('That Serper API key was rejected.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /save key/i }))
-    expect(await screen.findByText('Connected')).toBeInTheDocument()
+    expect(await screen.findByText('Key saved (unverified)')).toBeInTheDocument()
     expect(screen.getByLabelText(/serper api key/i)).toHaveValue('')
   })
 

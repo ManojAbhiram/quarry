@@ -8,7 +8,7 @@ from app.core.security_crypto import decrypt_secret, encrypt_secret
 from app.crm.base import CrmConnector, CrmError
 from app.crm.hubspot import HubSpotConnector
 from app.crm.mapping import DEFAULT_MAPPING, build_company, build_contacts, lead_domain, validate_mapping
-from app.db.growth_models import CrmConnection, CrmSync
+from app.db.growth_models import CrmSync
 from app.db.models import TABLES
 
 PROVIDERS = ("hubspot",)
@@ -18,10 +18,6 @@ PROVIDERS = ("hubspot",)
 
 async def get_connection(scope_id: str, provider: str) -> Optional[dict]:
     return await TABLES["crm_connections"].get(scope_id=scope_id, provider=provider)
-
-
-async def list_connections(scope_id: str) -> list[dict]:
-    return await TABLES["crm_connections"].find(CrmConnection.scope_id == scope_id)
 
 
 async def save_connection(scope_id: str, provider: str, *, access_token: str, refresh_token: Optional[str],

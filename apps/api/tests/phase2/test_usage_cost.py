@@ -1,4 +1,4 @@
-"""Launch estimate, usage metering, sample run and quota."""
+"""Launch estimate, usage metering, and sample runs."""
 from datetime import datetime
 
 import pytest
@@ -103,20 +103,20 @@ async def test_serper_and_llm_helpers_feed_the_meter(db, monkeypatch):
 
     monkeypatch.setattr(httpx, "AsyncClient", Client)
 
-    async def fake_completion(**kw):
-        from types import SimpleNamespace as NS
+    async def fake_completion(*args):
+        return '{}'
 
-        return NS(choices=[NS(message=NS(content="{}"))])
-
-    monkeypatch.setattr(llm, "acompletion", fake_completion)
+    monkeypatch.setattr(llm, "complete", fake_completion)
+    token = serper.current_serper_key.set('explicit-test-owner-key')
     async with usage.tracked("u1", "rq"):
         await serper.fetch_leads_from_serper("q")
         await llm._llm_json_completion(model="m", system_prompt="s", user_prompt="u")
+    serper.current_serper_key.reset(token)
     ev = await TABLES["usage_events"].get(request_id="rq")
     assert ev["serper_calls"] == 1 and ev["llm_calls"] >= 1
 
 
-# ── summary and quota ────────────────────────────────────────────────────────
+# ── summary ────────────────────────────────────────────────────────
 
 async def test_summary_counts_this_month_only(db):
     ev = TABLES["usage_events"]
@@ -127,22 +127,7 @@ async def test_summary_counts_this_month_only(db):
     s = await usage.get_summary("u1")
     assert s["runs"] == 1 and s["samples"] == 1 and s["search_calls"] == 11 and s["llm_calls"] == 6
     assert s["cost_usd"] == pytest.approx(0.023)
-    assert s["quota"]["runs_left"] == usage.RUN_QUOTA - 1 and len(s["recent"]) == 2
-
-
-async def test_check_quota_blocks_on_runs_and_on_budget(db, monkeypatch):
-    monkeypatch.setattr(usage, "RUN_QUOTA", 2)
-    await usage.check_quota("u1")  # fine when empty
-    for i in range(2):
-        await usage.begin_run("u1", f"r{i}", {"cost_usd": {"typical": 0.01}})
-    with pytest.raises(usage.HTTPException) as e:
-        await usage.check_quota("u1")
-    assert e.value.status_code == 429 and "Monthly run limit" in e.value.detail
-
-    with pytest.raises(usage.HTTPException) as e:
-        await usage.check_quota("u3", {"quota_cost_monthly_usd": 0.5}, {"cost_usd": {"typical": 0.8}})
-    assert e.value.status_code == 429 and "budget" in e.value.detail
-    await usage.check_quota("u3", {"quota_cost_monthly_usd": 5}, {"cost_usd": {"typical": 0.8}})  # fits
+    assert len(s["recent"]) == 2
 
 
 # ── API ──────────────────────────────────────────────────────────────────────
@@ -152,10 +137,10 @@ async def test_estimate_and_summary_routes(api, signup):
     r = await api.post("/api/usage/estimate", headers=h, json={"num_leads": 20, "icp_dimensions": ICP})
     assert r.status_code == 200
     j = r.json()
-    assert j["search_calls"] > 0 and j["fits_quota"] is True and j["quota"]["runs_left"] > 0
+    assert j["search_calls"] > 0 and j["cost_usd"]["typical"] > 0 and "quota" not in j
     assert (await api.post("/api/usage/estimate", headers=h, json={"num_leads": 0})).status_code == 422
     s = (await api.get("/api/usage/summary", headers=h)).json()
-    assert s["runs"] == 0 and s["quota"]["runs"] == usage.RUN_QUOTA
+    assert s["runs"] == 0 and "quota" not in s
     api.cookies.clear()  # signup set a session cookie
     assert (await api.get("/api/usage/summary")).status_code == 401
 
@@ -217,11 +202,17 @@ async def test_sample_run_is_rate_limited_per_day(api, signup, monkeypatch):
     assert (await api.post("/api/usage/sample-run", headers=h, json=body())).status_code == 429
 
 
-async def test_launch_is_blocked_when_quota_is_used_up(api, signup, monkeypatch):
+@pytest.mark.parametrize("path", ["/api/requests/launch", "/api/requests/launch-direct"])
+async def test_launch_ignores_legacy_monthly_quotas(api, signup, monkeypatch, path):
+    from app.api import request_intake
+
+    monkeypatch.setattr(request_intake, "require_connection", lambda: None)
     h, uid = await signup()
     await TABLES["users"].update(uid, {
-        "serper_api_key_encrypted": encrypt_secret("serper-key-123"), "quota_runs_monthly": 1,
+        "serper_api_key_encrypted": encrypt_secret("serper-key-123"), "quota_runs_monthly": 1, "quota_cost_monthly_usd": 0.001,
     })
     await usage.begin_run(uid, "earlier", {"cost_usd": {"typical": 0.01}})
-    r = await api.post("/api/requests/launch", headers=h, json=body())
-    assert r.status_code == 429 and "Monthly run limit" in r.json()["detail"]
+    payload = body() if path.endswith("/launch") else {"companies": ["Acme"]}
+    r = await api.post(path, headers=h, json=payload)
+    assert r.status_code == 202, r.text
+    assert await TABLES["usage_events"].get(user_id=uid, request_id=r.json()["request_id"])

@@ -1,16 +1,18 @@
+# Quarry Product Requirements
+
+[Documentation index](../README.md)
+
 | | |
 |---|---|
 | **Product** | Quarry, AI-assisted B2B lead generation |
 | **Document** | Product Requirements Document (PRD) |
-| **Version** | 1.0 |
-| **Date** | 2026-11-10 |
-| **Status** | Feature-complete for roadmap phases 1 to 4, pre-hosting |
+| **Document revision** | 1.1 |
+| **Last reviewed** | 2026-11-18 |
+| **Status** | Core capabilities implemented; provider setup limitations and launch requirements remain |
 | **Owner** | Manoj Abhiram |
 
-> **How to read this document.** Statements about what the product does come from the current code and are marked
-> *Built*. Statements about users, market and pricing are *hypotheses*: the concierge-pilot design doc records that no
-> customer conversations have happened yet, so nothing here claims demand has been proven. Competitor facts come from
-> `reports/Quarry next feature roadmap.md`, which draws on vendor-authored sources and is directional only.
+> **How to read this document.** Statements about implemented capabilities come from the repository. *Built* identifies code coverage, not a production-readiness certification. Statements about users and the market are *hypotheses*: the concierge-pilot design doc records that no
+> customer conversations had been recorded at that stage, so nothing here claims demand has been proven. Market comparisons are planning assumptions, not verified purchasing advice. See the [historical pilot proposal](../designs/quarry-concierge-pilot.md) for the original context.
 
 ---
 
@@ -55,7 +57,7 @@ recurring problems:
 | Contact databases | ZoomInfo, Apollo, Lusha, Seamless.AI | Fresh data found live from the web per ICP; honest accuracy labels |
 | Enrichment engines | Clay | Guided, opinionated front end for non-technical sellers |
 | Cold-email senders | Instantly, Smartlead, lemlist | Quarry's edge is upstream of the send, but sending is included |
-| AI SDR platforms | 11x, Artisan | Transparent per-request pricing, reviewable output, no autonomous sending |
+| AI SDR platforms | 11x, Artisan | Reviewable output and user-controlled sending |
 
 The differentiator is not a single feature. It is the combination of **live discovery, visible provenance, honest
 email status, built-in compliance and predictable cost**.
@@ -68,7 +70,7 @@ email status, built-in compliance and predictable cost**.
 |---|---|---|
 | G1 | A first usable lead list within minutes of describing the ICP | Median time from launch to Completed (to be instrumented) |
 | G2 | Users can trust the data | Share of exported emails labelled Verified or Likely; bounce rate on a labelled 100 to 200 lead set |
-| G3 | No surprise spend | Cost estimate shown before every run; credits and quota visible in the product |
+| G3 | No surprise spend | Provider usage estimates before launch and monthly usage in Account |
 | G4 | Safe by default | Zero cross-tenant data access; SSRF, CSRF and auth controls tested |
 | G5 | Compliance is a feature | Suppression honoured before enrichment, export and send; erasure completes end to end |
 | G6 | Close the loop | Users can send sequences and sync to a CRM without leaving Quarry |
@@ -87,21 +89,21 @@ email status, built-in compliance and predictable cost**.
 # 4. Users and personas
 
 > These personas are working hypotheses from the pilot design doc. They must be validated by interviews before they
-> drive pricing or positioning.
+> drive positioning.
 
 | Persona | Context | Job to be done | What they care about |
 |---|---|---|---|
 | **Freelance SDR / lead-list builder** | Builds lists for clients, paid per list | Produce a clean, defensible list fast | Accuracy, speed, CSV export, per-list cost |
-| **Agency owner** | Runs outbound for several clients | Repeatable process across clients, team access | Seats and roles, shared lists, CRM push |
+| **Agency owner** | Runs outbound for several clients | Repeatable process across clients, team access | Workspace roles, shared lists, CRM push |
 | **Founder doing outbound** | Sells their own product, no sales team | Find the 50 right companies and email them this week | Simplicity, sending from own mailbox, low cost |
-| **Team admin** (secondary) | Owns a workspace | Control access, spend and compliance | Roles, billing, audit log, suppression |
+| **Team admin** (secondary) | Owns a workspace | Control access, spend and compliance | Roles, usage, audit log, suppression |
 
 ## 4.1 Roles inside a workspace
 
 | Role | Can do |
 |---|---|
-| **Owner** | Everything, including billing and ownership of the workspace |
-| **Admin** | Manage members, invites, billing top-ups, integrations |
+| **Owner** | Full workspace administration and ownership |
+| **Admin** | Manage members, invitations and integrations |
 | **Member** | Create requests, lists, sequences; use the product day to day |
 | **Viewer** | Read shared requests and lists |
 
@@ -109,7 +111,7 @@ Role order is `owner > admin > member > viewer`; API dependencies enforce a mini
 
 # 5. Product scope and requirements
 
-Priority key: **P0** launch-critical, **P1** important, **P2** later. Status: **Built** is implemented and tested; **Partial** means implemented with a known limit; **Open** is not done.
+Priority key: **P0** launch-critical, **P1** important, **P2** later. Status: **Built** is implemented with automated test coverage; **Partial** means implemented with a known limit; **Open** is not done.
 
 ## 5.1 Accounts and access (FR-A)
 
@@ -121,7 +123,9 @@ Priority key: **P0** launch-critical, **P1** important, **P2** later. Status: **
 | FR‑A4 | HttpOnly cookie sessions with rotating refresh tokens and CSRF protection on writes | P0 | Built |
 | FR‑A5 | Bearer-token access for API clients | P1 | Built |
 | FR‑A6 | Rate limiting on login, register and reset; uniform error messages | P0 | Built |
-| FR‑A7 | Delete account and cascade-delete the user's personal data | P0 | Built |
+| FR‑A7 | Delete account, requests, research data, lists, and sessions; automation and external copies require separate cleanup | P0 | Partial |
+| FR‑A8 | Encrypted personal Serper and direct AI connections with primary and optional fast models | P0 | Partial: OpenRouter model setup enabled; five providers deferred |
+| FR‑A9 | Six-stop introduction for new password and Google accounts, with persisted resume, completion, and dismissal | P1 | Built |
 
 **Acceptance (FR-A4).** A cookie-authenticated POST without a matching `X-CSRF-Token` returns 403. A refresh token
 presented as an access token is rejected. Logout deletes the server-side session and clears cookies.
@@ -141,7 +145,7 @@ presented as an access token is rejected. Logout deletes the server-side session
 | FR‑R9 | Pipeline finds decision makers and competitors in parallel with leads | P1 | Built |
 | FR‑R10 | Optional ICP score filter (off by default so nothing is silently discarded) | P2 | Built |
 | FR‑R11 | Retry a lead whose AI enrichment failed | P1 | Built |
-| FR‑R12 | Request quota check and credit debit are atomic | P0 | Built |
+| FR‑R12 | Workspace request creation requires the member role or higher | P0 | Built |
 
 **Acceptance (FR-R7).** If extraction fails for a page, the lead is kept, named from the page title, flagged
 `enrichment_failed` with a user-facing reason, and shown with a Retry action. It is never dropped silently.
@@ -158,7 +162,7 @@ presented as an access token is rejected. Logout deletes the server-side session
 | FR‑L6 | Per-field provenance: source URL and collection date, shown in the UI | P0 | Built |
 | FR‑L7 | Region flag per lead (EU, UK, CA, IN) with a compliance note | P1 | Built |
 | FR‑L8 | Waterfall email enrichment across scrape, Hunter, Snov and People Data Labs, charged per success | P1 | Built |
-| FR‑L9 | Batch AI scoring job | P2 | Built |
+| FR‑L9 | Optional Anthropic batch scoring using the account owner's connection and selected model | P2 | Partial: feature flag and configured Anthropic connection required; new model setup deferred |
 | FR‑L10 | Competitor discovery and comparison for the user's own product | P2 | Built |
 
 ## 5.4 Lists, export and sharing (FR-X)
@@ -169,7 +173,7 @@ presented as an access token is rejected. Logout deletes the server-side session
 | FR‑X2 | Export companies, competitors, decision makers and lists as CSV, XLSX or PDF | P0 | Built |
 | FR‑X3 | CSV carries a source-notice line and opt-out instruction | P1 | Built |
 | FR‑X4 | Share requests and lists with a workspace (read access for teammates) | P1 | Built |
-| FR‑X5 | Suppressed contacts never appear in an export | P0 | Built |
+| FR‑X5 | Standard server company, contact, and list exports apply owner suppression checks; local CSV and integration handoffs require separate review | P0 | Partial |
 
 ## 5.5 Outreach (FR-O)
 
@@ -206,35 +210,20 @@ presented as an access token is rejected. Logout deletes the server-side session
 | FR‑I4 | CSV export endpoint for automation tools | P1 | Built |
 | FR‑I5 | Salesforce, Pipedrive, Zapier and Make connectors | P2 | Open |
 
-## 5.8 Workspaces, billing and usage (FR-B)
+## 5.8 Workspaces and usage (FR-B)
 
 | ID | Requirement | Pri | Status |
 |---|---|---|---|
-| FR‑B1 | Organizations with owner, admin, member and viewer roles; email invites | P0 | Built |
-| FR‑B2 | Plans: Free, Pro, Team with request, credit, seat and CRM-connection limits | P0 | Built |
-| FR‑B3 | Credit ledger: monthly grant, spend, top-ups; two separate balances (request credits, email-lookup credits) | P0 | Built |
-| FR‑B4 | Payment providers behind one interface: Stripe, Razorpay, and a mock for local demos | P1 | Built |
-| FR‑B5 | Credit top-up packs, credited only after a verified paid webhook, idempotent per event | P0 | Built |
-| FR‑B6 | Usage summary: requests, spend and quota remaining | P1 | Built |
-
-### Plan catalogue (from `billing/plans.py`)
-
-| Plan | Price / month | Requests / month | Credits / month | Seats | CRM connections |
-|---|---|---|---|---|---|
-| Free | $0 | 3 | 25 | 3 | 0 |
-| Pro | $49 | 50 | 500 | 5 | 1 |
-| Team | $199 | 250 | 2,500 | 25 | 5 |
-
-Top-up packs: 100 credits for $10, 500 for $40, 2,000 for $140. A lead request costs 1 credit. These prices are
-placeholders set in code and **have not been validated with customers**.
+| FR‑B1 | Organizations with owner, admin, member and viewer roles and email invitations | P0 | Built |
+| FR‑B6 | Monthly usage summary with runs, provider calls and estimated provider cost | P1 | Built |
 
 ## 5.9 Compliance and trust (FR-C)
 
 | ID | Requirement | Pri | Status |
 |---|---|---|---|
-| FR‑C1 | Workspace-wide suppression ledger checked before enrichment, export and send | P0 | Built |
+| FR‑C1 | Owner-scoped suppression ledger checked before supported enrichment, standard server exports, and send operations | P0 | Built |
 | FR‑C2 | Public opt-out page and signed opt-out links | P0 | Built |
-| FR‑C3 | Person-level erasure tool | P0 | Built |
+| FR‑C3 | Owner-scoped erasure of matching decision makers and company contact fields; external copies and outreach history require separate handling | P0 | Partial |
 | FR‑C4 | Audit log of compliance-relevant actions | P0 | Built |
 | FR‑C5 | 30-day retention purge for rejected and unpromoted leads | P1 | Built |
 | FR‑C6 | Reject and restore a lead | P1 | Built |
@@ -245,14 +234,15 @@ placeholders set in code and **have not been validated with customers**.
 
 ## 6.1 Journey A: first list in one session
 
-1. Sign up (email or Google).
-2. Create a request: describe the product and buyer. Optionally paste a URL or document to seed the ICP.
-3. Review and edit the generated ICP in the wizard.
-4. See a cost and time estimate. Optionally run a small sample first.
-5. Launch. The request page shows live progress; the user can leave and return.
-6. Review leads: match score, tech stack, signals, decision makers, email status with source and date.
-7. Star, exclude or reject leads; add keepers to a list.
-8. Export a CSV, or continue to journey B.
+1. Sign up (email or Google); new accounts receive a skippable six-stop introduction.
+2. In Account settings, save a personal Serper key and configure an AI connection. For OpenRouter, refresh the public catalogue, select a primary model and optional fast model, and save the model choices. Saving credentials does not test them or start research.
+3. Create a request: describe the product and buyer. Optionally paste a URL or document to seed the ICP.
+4. Review and edit the generated ICP in the wizard.
+5. See a cost and time estimate. Optionally run a small sample first.
+6. Launch. The request page shows live progress; the user can leave and return.
+7. Review leads: match score, tech stack, signals, decision makers, email status with source and date.
+8. Star, exclude or reject leads; add keepers to a list.
+9. Export a CSV, or continue to journey B.
 
 ## 6.2 Journey B: from list to conversation
 
@@ -266,8 +256,8 @@ placeholders set in code and **have not been validated with customers**.
 ## 6.3 Journey C: a recipient opts out
 
 1. The recipient clicks Unsubscribe in the footer or the one-click header.
-2. A signed token adds them to the workspace suppression ledger and records an audit entry.
-3. Future enrichment, export and sends skip them. They can be erased entirely by an admin.
+2. A signed token adds them to the sender's suppression ledger and records an audit entry.
+3. Supported enrichment, standard server exports, and future sends check that sender's suppressions. The account owner can erase matching research contact data; other accounts and external copies need separate handling.
 
 # 7. Non-functional requirements
 
@@ -297,7 +287,6 @@ placeholders set in code and **have not been validated with customers**.
 | Run success rate | Reliability | Over 95% of runs Completed |
 | Reply rate on sequences | Outcome that matters | Track per user; no universal target |
 | Opt-out handled | Compliance | 100% of suppressions honoured at the next send |
-| Paid conversion | Business | Unknown until pricing is validated |
 
 Open measurement gap: Quarry cannot see bounces or replies for mail sent outside Quarry, and the accuracy of the
 LLM-extracted contacts is unmeasured. The roadmap proposes a labelled set of 100 to 200 leads.
@@ -306,15 +295,15 @@ LLM-extracted contacts is unmeasured. The roadmap proposes a labelled set of 100
 
 ## 9.1 Constraints
 
-* Solo builder; free tiers and bring-your-own keys are the build-time cost model.
+* Research uses account-owned search and AI provider connections.
 * One process and one SQLite writer: the job queue, schedulers and write lock are in-process.
 * No mailbox OAuth, to avoid restricted-scope security assessments.
 
 ## 9.2 Assumptions (unvalidated)
 
 1. A niche exists where live-web data beats stale databases.
-2. Buyers will pay per request or per month for transparent, reviewed lists.
-3. Users accept bringing their own Serper key, or an operator-paid key at a marked-up credit price.
+2. Users will return for transparent, reviewed lists.
+3. Users accept configuring their own Serper and AI provider credentials; no operator credential fallback is available.
 
 ## 9.3 Risk register
 
@@ -326,18 +315,17 @@ LLM-extracted contacts is unmeasured. The roadmap proposes a labelled set of 100
 | 4 | Deliverability harm to customers' domains | Medium | High | Caps, warmup, auto-pause, unsubscribe headers, DNS preflight |
 | 5 | SSRF or abuse via scraped URLs once hosted | Low after fixes | High | URL guard with DNS pinning; residual Playwright gap documented |
 | 6 | SQLite single-writer limits growth | Medium | Medium | One worker today; Postgres migration is the next infrastructure step |
-| 7 | Upstream cost spikes (Serper, LLM) | Medium | Medium | Estimates, quotas, credits, bring-your-own keys |
-| 8 | Unvalidated pricing | High | Medium | Treat plan prices as placeholders until interviews |
+| 7 | Upstream cost spikes (Serper, LLM) | Medium | Medium | Usage estimates and account-owned provider keys |
 
 # 10. Release plan and open items
 
-All four roadmap phases (foundation, data trust and compliance, features, growth) are implemented.
-What remains before a hosted launch:
+The foundation, data trust, outreach, and growth modules are implemented with the limits recorded above. Personal API connections and the account introduction are also implemented. OpenRouter model setup is available; model setup for the other five AI providers remains deferred. Requirements before a hosted launch include:
 
 | Item | Type | Priority |
 |---|---|---|
 | Legal review: data-broker status, legitimate-interest assessment, DPA, subprocessors | Compliance | P0 |
-| Exercise real services end to end (full pipeline with a live Serper key, email verification providers, SMTP and IMAP, Stripe, Razorpay, HubSpot) | Verification | P0 |
+| Exercise real services end to end (personal Serper and AI connections, email verification, SMTP and IMAP, HubSpot) | Verification | P0 |
+| Review protected metadata billing evidence before enabling model setup for additional AI providers | Integration policy | P1 |
 | Re-check shared work with two accounts in one organization | QA | P3 |
 | Response-size cap in the scraper | Hardening | P3 |
 | Customer interviews and a concierge pilot to validate persona, niche and price | Discovery | P0 |
@@ -353,8 +341,8 @@ What remains before a hosted launch:
 | **Lead** | A matched company with its enrichment |
 | **Decision maker** | A person at a lead who is likely to buy |
 | **Provenance** | Where a fact came from (URL) and when it was collected |
-| **Suppression** | A do-not-contact entry that blocks enrichment, export and sending |
-| **Waterfall** | Trying several data sources in order and paying only for a hit |
+| **Suppression** | An owner-scoped do-not-contact entry checked by supported enrichment, standard server exports, and sending |
+| **Waterfall** | Trying data sources in order until one provides an email address |
 | **Warmup** | A gradual increase in daily send volume for a new mailbox |
 | **DSN** | Delivery Status Notification: the bounce message mail servers return |
 | **SSRF** | Server-side request forgery: tricking the server into fetching internal addresses |

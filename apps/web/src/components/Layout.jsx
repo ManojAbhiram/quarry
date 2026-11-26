@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import Header from './Header'
 import Sidebar from './sidebar/Sidebar'
 import { useSidebar } from './sidebar/useSidebar'
+import WelcomeTour from './onboarding/WelcomeTour'
 
 export default function Layout() {
   const sidebar = useSidebar()
@@ -11,10 +12,10 @@ export default function Layout() {
         Skip to content
       </a>
       <Sidebar sidebar={sidebar} />
+      <WelcomeTour />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header sidebar={sidebar} />
         <main id="main-content" className="relative min-w-0 flex-1 overflow-hidden">
-          {/* Ambient background: two soft palette glows plus a faint dot grid, all behind the content */}
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 select-none overflow-hidden">
             <div className="absolute -right-24 -top-32 h-[34rem] w-[34rem] rounded-full bg-primary-400/15 blur-3xl dark:bg-primary-500/10" />
             <div className="absolute -bottom-40 -left-24 h-[30rem] w-[30rem] rounded-full bg-accent-400/15 blur-3xl dark:bg-accent-500/10" />

@@ -68,7 +68,6 @@ ports = Ports()
 
 class Provider(Protocol):
     name: str
-    credits: int  # platform credits debited per successful lookup (0 when the user brings their own key)
     needs_key: bool
 
     async def find_email(self, person: Person, api_key: str) -> Found | None: ...
@@ -77,14 +76,14 @@ class Provider(Protocol):
 class ScrapeProvider:
     """The app's existing scraping pipeline already ran; reuse whatever email it found. Free, no key."""
 
-    name, credits, needs_key = "scrape", 0, False
+    name, needs_key = "scrape", False
 
     async def find_email(self, person: Person, api_key: str) -> Found | None:
         return Found(person.known_email, 0.5) if "@" in (person.known_email or "") else None
 
 
 class HunterProvider:
-    name, credits, needs_key = "hunter", 1, True
+    name, needs_key = "hunter", True
 
     async def find_email(self, person: Person, api_key: str) -> Found | None:
         if not (person.domain and person.first):
@@ -102,7 +101,7 @@ class HunterProvider:
 class SnovProvider:
     """`api_key` is 'client_id:client_secret'."""
 
-    name, credits, needs_key = "snov", 1, True
+    name, needs_key = "snov", True
 
     async def find_email(self, person: Person, api_key: str) -> Found | None:
         if not (person.domain and person.first) or ":" not in api_key:
@@ -121,7 +120,7 @@ class SnovProvider:
 
 
 class PdlProvider:
-    name, credits, needs_key = "pdl", 3, True
+    name, needs_key = "pdl", True
 
     async def find_email(self, person: Person, api_key: str) -> Found | None:
         if not (person.name and (person.domain or person.company)):

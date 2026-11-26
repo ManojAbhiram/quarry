@@ -19,22 +19,22 @@ import Header from '../Header'
 import Sidebar from './Sidebar'
 import { useSidebar, SIDEBAR, WIDTH_KEY, STATE_KEY } from './useSidebar'
 
-function Shell() {
+function Shell({ quiet = false }) {
   const sidebar = useSidebar()
   return (
     <>
-      <Sidebar sidebar={sidebar} />
+      <Sidebar sidebar={sidebar} quiet={quiet} />
       <Header sidebar={sidebar} />
     </>
   )
 }
 
-const renderShell = (path = '/lead-requests') =>
+const renderShell = (path = '/lead-requests', quiet = false) =>
   render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/login" element={<p>login page</p>} />
-        <Route path="*" element={<Shell />} />
+        <Route path="*" element={<Shell quiet={quiet} />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -64,7 +64,6 @@ const LINKS = [
   ['Integrations', '/integrations'],
   ['CRM integrations', '/integrations/crm'],
   ['Team', '/team'],
-  ['Billing', '/billing'],
   ['Compliance', '/compliance'],
   ['Account', '/profile'],
 ]
@@ -77,6 +76,33 @@ describe('Sidebar', () => {
   })
   afterEach(() => {
     window.matchMedia = originalMatchMedia
+  })
+
+  it('keeps dashboard navigation and resizing immediate without hover transforms', async () => {
+    stubMedia({ reduce: false })
+    renderShell('/dashboard', true)
+    const user = userEvent.setup()
+    const link = within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Requests' })
+    await user.hover(link)
+    expect(link.querySelector('[data-nav-icon]').style.transform).toBe('')
+    separator().focus()
+    await user.keyboard('{ArrowRight}')
+    expect(sidebarEl()).toHaveStyle({ width: `${SIDEBAR.DEFAULT + SIDEBAR.STEP}px` })
+    await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
+    expect(sidebarEl()).toHaveStyle({ width: '0px' })
+    await user.click(screen.getByRole('button', { name: 'Show sidebar' }))
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument()
+  })
+
+  it('keeps the quiet mobile drawer accessible and restores focus on Escape', async () => {
+    stubMedia({ mobile: true, reduce: false })
+    renderShell('/dashboard', true)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Show sidebar' }))
+    expect(await screen.findByRole('dialog', { name: 'Navigation menu' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Navigation menu' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show sidebar' })).toHaveFocus()
   })
 
   describe('content', () => {
@@ -152,9 +178,9 @@ describe('Sidebar', () => {
       renderShell()
       await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar to icons' }))
       expect(sidebarEl()).toHaveAttribute('data-state', 'collapsed')
-      const link = within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Billing' })
-      expect(link).toHaveAttribute('title', 'Billing')
-      expect(link).toHaveAttribute('href', '/billing')
+      const link = within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Account' })
+      expect(link).toHaveAttribute('title', 'Account')
+      expect(link).toHaveAttribute('href', '/profile')
       await userEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }))
       expect(sidebarEl()).toHaveAttribute('data-state', 'open')
     })

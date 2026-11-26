@@ -37,20 +37,8 @@ class P3Settings:
         return int(os.getenv("OUTREACH_BOUNCE_MIN_SAMPLE", "20"))
 
     @property
-    def free_credits(self) -> int:
-        return int(os.getenv("ENRICH_FREE_CREDITS", "100"))
-
-    @property
     def claude_batch_scoring(self) -> bool:
         return _bool("CLAUDE_BATCH_SCORING", "false")
-
-    @property
-    def claude_scoring_model(self) -> str:
-        return os.getenv("CLAUDE_SCORING_MODEL", "claude-haiku-4-5")
-
-    @property
-    def anthropic_api_key(self) -> str:
-        return os.getenv("ANTHROPIC_API_KEY", "")
 
     def platform_key(self, provider: str) -> str:
         return os.getenv(f"{provider.upper()}_API_KEY", "")

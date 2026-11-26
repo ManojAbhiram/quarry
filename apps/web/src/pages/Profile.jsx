@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { CheckCircle2, KeyRound, Lock, Mail, Save, ShieldAlert, Trash2, UserCircle2 } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
+import { ArrowDown, CheckCircle2, Lock, Mail, Save, Search, ShieldAlert, Trash2, UserCircle2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { Button, Field, PageHeader, Skeleton, useToast } from '../components/kit'
@@ -9,6 +9,7 @@ import ConfirmDialog from './requests/ConfirmDialog'
 import Section from './profile/Section'
 import VerifierSettings from './profile/VerifierSettings'
 import UsageCard from '../components/UsageCard'
+import AIConnectionSettings from './profile/AIConnectionSettings'
 
 const FIELD_MAX = 100
 const PHONE_RE = /^[+()\d][\d\s().+-]{4,29}$/
@@ -35,7 +36,16 @@ export default function Profile() {
   const { user, logout, updateUser } = useAuth()
   const toast = useToast()
   const pageRef = useRef(null)
+  const connectionsHeading = useRef(null)
+  const usageSection = useRef(null)
+  const { hash, key: locationKey } = useLocation()
   useStaggerIn(pageRef)
+
+  useEffect(() => {
+    const target = hash === '#api-connections' ? connectionsHeading.current : hash === '#usage' ? usageSection.current : null
+    target?.scrollIntoView?.({ block: 'start' })
+    target?.focus({ preventScroll: true })
+  }, [hash, locationKey])
 
   const [profile, setProfile] = useState(() => fromUser(user))
   const [errors, setErrors] = useState({})
@@ -164,7 +174,11 @@ export default function Profile() {
     <div id="profile-page" ref={pageRef} className="h-full overflow-y-auto pb-12 page-container">
       <div className="mx-auto max-w-4xl">
         <div data-reveal id="profile-header">
-          <PageHeader title="Account settings" description="Manage your account details and security preferences." />
+          <PageHeader title="Account settings" description="Manage your account, API connections and security." actions={
+            <Link to="#api-connections" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-sm font-semibold text-ink transition-colors hover:bg-head">
+              API connections <ArrowDown aria-hidden="true" className="h-4 w-4" />
+            </Link>
+          } />
         </div>
 
         <div data-reveal id="profile-avatar-card" className="mb-6">
@@ -223,59 +237,66 @@ export default function Profile() {
             </div>
           </Section>
 
-          <Section id="integrations" title="Integrations" description="Connect your own Serper.dev API key. Lead generation uses your key and quota." icon={KeyRound}>
-            <form id="serper-key-form" onSubmit={handleSaveKey} noValidate className="space-y-5">
-              <div className="flex flex-wrap items-center gap-2.5 text-sm" aria-live="polite">
-                <span className="text-muted">Status:</span>
-                {serper.state === 'loading' && <Skeleton className="h-6 w-40" />}
-                {serper.state === 'error' && (
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-warn">Could not check your key.</span>
-                    <Button size="sm" variant="secondary" onClick={loadKey}>
-                      Try again
-                    </Button>
-                  </span>
-                )}
-                {serper.state === 'ready' && serper.has_key && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-ok-soft px-3 py-1 font-semibold text-ok ring-1 ring-inset ring-ok/20">
-                    <CheckCircle2 aria-hidden="true" className="h-4 w-4" /> Connected
-                    {serper.masked && <code className="ml-1 break-all rounded bg-surface/70 px-1.5 py-0.5 font-mono text-xs text-ink">{serper.masked}</code>}
-                  </span>
-                )}
-                {serper.state === 'ready' && !serper.has_key && <span className="rounded-full bg-warn-soft px-3 py-1 font-semibold text-warn ring-1 ring-inset ring-warn/20">Not set. Required to launch lead generation.</span>}
-              </div>
-              <Field
-                id="serperKey"
-                label="Serper API key"
-                type="password"
-                autoComplete="off"
-                className="sm:max-w-md"
-                value={keyInput}
-                disabled={keySaving}
-                placeholder={serper.has_key ? 'Enter a new key to replace' : 'Paste your Serper.dev API key'}
-                hint="Get a key at serper.dev. It is stored encrypted and never shown again."
-                error={keyError}
-                onChange={(e) => {
-                  setKeyInput(e.target.value)
-                  setKeyError('')
-                }}
-              />
-              <div id="serper-key-actions" className="flex flex-wrap items-center gap-3 border-t border-line pt-5">
-                <Button id="save-serper-btn" type="submit" loading={keySaving} disabled={!keyInput.trim()}>
-                  {!keySaving && <Save aria-hidden="true" className="h-4 w-4" />} {keySaving ? 'Validating…' : 'Save key'}
-                </Button>
-                {serper.has_key && (
-                  <Button id="remove-serper-btn" variant="ghost" className="text-bad hover:text-bad" onClick={() => setConfirm('key')}>
-                    <Trash2 aria-hidden="true" className="h-4 w-4" /> Remove key
+          <div className="space-y-4">
+            <div>
+              <h2 id="api-connections" ref={connectionsHeading} tabIndex={-1} className="scroll-mt-5 text-2xl font-semibold tracking-tight text-ink">API connections</h2>
+              <p className="mt-1 text-sm text-muted">Manage the keys Quarry uses for search and AI work.</p>
+            </div>
+            <Section id="integrations" title="Serper search" description="Lead generation uses your Serper API key and search credits." icon={Search} plain>
+              <form id="serper-key-form" onSubmit={handleSaveKey} noValidate className="space-y-5">
+                <div className="flex flex-wrap items-center gap-2.5 text-sm" aria-live="polite">
+                  {serper.state === 'loading' && <Skeleton className="h-6 w-40" />}
+                  {serper.state === 'error' && (
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-warn">Could not check your key.</span>
+                      <Button size="sm" variant="secondary" onClick={loadKey}>
+                        Try again
+                      </Button>
+                    </span>
+                  )}
+                  {serper.state === 'ready' && serper.has_key && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-ok-soft px-3 py-1 font-semibold text-ok ring-1 ring-inset ring-ok/20">
+                      <CheckCircle2 aria-hidden="true" className="h-4 w-4" /> Key saved (unverified)
+                      {serper.masked && <code className="ml-1 break-all rounded bg-surface/70 px-1.5 py-0.5 font-mono text-xs text-ink">{serper.masked}</code>}
+                    </span>
+                  )}
+                  {serper.state === 'ready' && !serper.has_key && <span className="rounded-full bg-warn-soft px-3 py-1 font-semibold text-warn ring-1 ring-inset ring-warn/20">Not set. Required to launch lead generation.</span>}
+                </div>
+                <Field
+                  id="serperKey"
+                  label="Serper API key"
+                  type="password"
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  className="sm:max-w-md"
+                  value={keyInput}
+                  disabled={keySaving}
+                  placeholder={serper.has_key ? 'Enter a new key to replace' : 'Paste your Serper.dev API key'}
+                  hint="Get a key at serper.dev. Stored encrypted. Saving does not run a search or verify the key; your next requested search may use credits."
+                  error={keyError}
+                  onChange={(e) => {
+                    setKeyInput(e.target.value)
+                    setKeyError('')
+                  }}
+                />
+                <div id="serper-key-actions" className="flex flex-wrap items-center gap-3 border-t border-line pt-5">
+                  <Button id="save-serper-btn" type="submit" variant="solid" loading={keySaving} disabled={!keyInput.trim()}>
+                    Save key
                   </Button>
-                )}
-              </div>
-            </form>
-          </Section>
+                  {serper.has_key && (
+                    <Button id="remove-serper-btn" variant="ghost" className="text-bad hover:text-bad" onClick={() => setConfirm('key')}>
+                      <Trash2 aria-hidden="true" className="h-4 w-4" /> Remove key
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </Section>
+            <AIConnectionSettings />
+          </div>
 
           <VerifierSettings />
 
-          <div data-reveal><UsageCard /></div>
+          <div id="usage" ref={usageSection} tabIndex={-1} data-reveal><UsageCard /></div>
 
           <Section id="privacy-compliance" title="Privacy and compliance" description="Manage your suppression list, erase a person's data, and read how Quarry handles personal data." icon={ShieldAlert}>
             <div className="flex flex-wrap gap-3">

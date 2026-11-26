@@ -9,7 +9,6 @@ from urllib.parse import quote_plus
 
 import httpx
 
-from app.core.config import settings
 from app.core.logger import logger
 from app.core.url_guard import safe_get
 from app.integrations.webhooks import RealPoster
@@ -80,7 +79,7 @@ def keyword_label(title: str) -> str:
 
 
 class LlmClassifier:
-    """LLM classification through the app's existing LiteLLM helper; falls back to keywords if the call fails."""
+    """LLM classification through the app's owner-scoped direct provider helper; falls back to keywords if the call fails."""
 
     async def classify(self, company: str, items: list[dict]) -> list[str]:
         from app.services.llm import _llm_json_completion
@@ -88,7 +87,7 @@ class LlmClassifier:
         headlines = "\n".join(f"{i}. {it['title']}" for i, it in enumerate(items))
         try:
             data = await _llm_json_completion(
-                model=settings.LITELLM_MODEL_MINI,
+                model="fast",
                 system_prompt="Classify each news headline about a company. Labels: funding, acquisition, launch, "
                               "layoffs, other. Reply JSON: {\"labels\": [label per headline, same order]}.",
                 user_prompt=f"Company: {company}\n{headlines}",
